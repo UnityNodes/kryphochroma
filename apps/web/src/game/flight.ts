@@ -102,7 +102,8 @@ export async function animateEvents(before: GameState, after: GameState, events:
       if (!zone) continue;
       const scale = event.seat === me ? 1 : MINI_SCALE;
       const target = centered(zone, deck.width * scale, deck.height * scale);
-      const card = event.seat === me ? (after.hands[me]?.[event.slot] ?? null) : null;
+      const value = event.seat === me ? (after.hands[me]?.[event.slot] ?? null) : null;
+      const card = value !== null && value >= 0 ? value : null;
       draws.push(
         fly({
           front: card === null ? null : cardFace(card, { colorBlind }),

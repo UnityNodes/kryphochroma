@@ -1,7 +1,7 @@
 {
   "chainId": 11155111,
-  "KryphoTable": "0xa4B6DFcd00fb74Df0F83f8e4d2718B84ad89CD08",
+  "KryphoTable": "0x6b7cf9459197B28b68e15312C9fFC7a651f650a1",
   "deployer": "0xf276351F80496E335Cc185B899cb9fe31A958B17",
-  "tx": "0xb89e9d879a0ad42aa75ec7d65a24aa5caf3b69ebd7ef98ad50412f60f93b08cb",
-  "block": 12105331
+  "tx": "0x2d1dec0c2b4e19fb5bbfb53d66779ff0b1a55943aa65bd488b3a80b965133a93",
+  "block": 12105661
 }

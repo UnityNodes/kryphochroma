@@ -3,7 +3,7 @@
 import { type Card, cardLabel, colorOf, rankOf } from "@kryphochroma/rules";
 import { useCallback, useLayoutEffect, useState } from "react";
 import { cn } from "@/lib/utils";
-import { CardFace } from "./CardSvg";
+import { CardBack, CardFace } from "./CardSvg";
 
 const STEP_RATIO = 0.7;
 const EDGE_RATIO = 1.7;
@@ -49,7 +49,7 @@ export function Hand({ hand, mine, playable, colorBlind, onPlay, slotRef, boxRef
   const entries = hand
     .map((card, slot) => ({ card, slot }))
     .filter((e): e is { card: Card; slot: number } => e.card !== null)
-    .sort((a, b) => colorOf(a.card) - colorOf(b.card) || rankOf(a.card) - rankOf(b.card));
+    .sort((a, b) => (a.card < 0 ? 1 : 0) - (b.card < 0 ? 1 : 0) || colorOf(a.card) - colorOf(b.card) || rankOf(a.card) - rankOf(b.card));
   const n = entries.length;
   const step = n > 1 ? Math.max(0, Math.min(size.card * STEP_RATIO, (size.width - size.card * EDGE_RATIO) / (n - 1))) : 0;
   const spread = Math.min(MAX_SPREAD_DEG, TOTAL_SPREAD_DEG / Math.max(n, 1));
@@ -58,7 +58,8 @@ export function Hand({ hand, mine, playable, colorBlind, onPlay, slotRef, boxRef
     <div className="kc-hand" ref={setBox} role="group" aria-label={`Your hand, ${n} cards`}>
       {entries.map(({ card, slot }, i) => {
         const k = i - (n - 1) / 2;
-        const ok = mine && playable(slot);
+        const sealed = card < 0;
+        const ok = mine && !sealed && playable(slot);
         return (
           <button
             key={`${slot}:${card}`}
@@ -66,11 +67,11 @@ export function Hand({ hand, mine, playable, colorBlind, onPlay, slotRef, boxRef
             type="button"
             className={cn("kc-card", ok && "kc-ok", mine && !ok && "kc-no")}
             style={{ "--x": `${k * step}px`, "--r": `${k * spread}deg`, "--y": `${k * k * ARC}px`, zIndex: i } as React.CSSProperties}
-            aria-label={`${cardLabel(card)}${ok ? ", playable" : ""}`}
+            aria-label={sealed ? "Card being decrypted" : `${cardLabel(card)}${ok ? ", playable" : ""}`}
             aria-disabled={!ok}
             onClick={() => ok && onPlay(slot)}
           >
-            <CardFace card={card} colorBlind={colorBlind} />
+            {sealed ? <CardBack /> : <CardFace card={card} colorBlind={colorBlind} />}
           </button>
         );
       })}

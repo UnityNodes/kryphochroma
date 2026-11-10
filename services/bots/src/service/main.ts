@@ -6,11 +6,13 @@ import { privateKeyToAccount } from "viem/accounts";
 import { sepolia } from "viem/chains";
 import { loadKeeperConfig, runKeeper } from "../keeper/run.js";
 import { createBot } from "../player/run.js";
+import { type SignedAction } from "@kryphochroma/abi";
+import { createRelay, encodeMessage } from "../relay/hub.js";
 import { type DripLedger, decideDrip } from "./drip.js";
 
 const ACTIVE_STAGES = new Set([3, 4]);
 const WATCH_WINDOW = 20n;
-const FLEET_POLL_MS = 2500;
+const FLEET_POLL_MS = 1000;
 const BOT_MIN_WEI = parseEther("0.005");
 const BOT_TOPUP_WEI = parseEther("0.02");
 const MAX_BODY_BYTES = 1024;
@@ -41,6 +43,15 @@ const dripWei = BigInt(env("DRIP_WEI", parseEther("0.003").toString()));
 const dripPolicy = { perAddressMs: Number(env("DRIP_PER_ADDRESS_MS", "21600000")), dailyCap: Number(env("DRIP_DAILY_CAP", "200")) };
 let ledger: DripLedger = { lastByAddress: new Map(), dayStart: Date.now(), count: 0 };
 let keeperBusy = Promise.resolve();
+const relayAccount = privateKeyToAccount(env("RELAYER_PRIVATE_KEY", env("DEPLOYER_PRIVATE_KEY")) as Hex, { nonceManager });
+const relay = createRelay({
+  publicClient,
+  relayer: createWalletClient({ account: relayAccount, chain: sepolia, transport: http(rpcUrl) }),
+  table,
+  rpcUrl,
+  botKeys: env("BOT_KEYS").split(",") as Hex[],
+  log,
+});
 
 function withKeeperWallet<T>(task: () => Promise<T>): Promise<T> {
   const run = keeperBusy.then(task, task);
@@ -108,15 +119,55 @@ function reply(res: ServerResponse, status: number, data: unknown): void {
   res.end(JSON.stringify(data, (_, v) => (typeof v === "bigint" ? v.toString() : v)));
 }
 
+function parseAction(raw: Record<string, unknown>): SignedAction {
+  const int = (v: unknown, max: number) => {
+    const n = Number(v);
+    if (!Number.isInteger(n) || n < 0 || n > max) throw new Error("bad field");
+    return n;
+  };
+  const hex = (v: unknown, len: number) => {
+    if (typeof v !== "string" || !new RegExp(`^0x[0-9a-fA-F]{${len}}$`).test(v)) throw new Error("bad hex");
+    return v as `0x${string}`;
+  };
+  return {
+    table: BigInt(String(raw.table ?? "")),
+    seat: int(raw.seat, 3),
+    kind: int(raw.kind, 7),
+    slot: int(raw.slot, 23),
+    card: int(raw.card, 255),
+    color: int(raw.color, 3),
+    seenHandle: hex(raw.seenHandle, 64),
+    nonce: int(raw.nonce, 2 ** 32 - 1),
+    signature: hex(raw.signature, 130),
+  };
+}
+
 const server = createServer(async (req, res) => {
   try {
+    const url = new URL(req.url ?? "/", "http://local");
+    if (req.method === "GET" && url.pathname === "/stream") {
+      const id = BigInt(url.searchParams.get("id") ?? "");
+      res.writeHead(200, { "content-type": "text/event-stream", "cache-control": "no-cache", connection: "keep-alive" });
+      const unsubscribe = relay.subscribe(id, (message) => res.write(`data: ${encodeMessage(message)}\n\n`));
+      const ping = setInterval(() => res.write(": ping\n\n"), 15_000);
+      req.on("close", () => {
+        clearInterval(ping);
+        unsubscribe();
+      });
+      void relay.refresh(id).catch(() => undefined);
+      return;
+    }
     if (req.method !== "POST") return reply(res, 405, { error: "method" });
     const body = await readBody(req);
-    if (req.url === "/fill") {
+    if (url.pathname === "/fill") {
       const id = BigInt(String(body.id ?? ""));
       return reply(res, 200, await fill(id));
     }
-    if (req.url === "/drip") return reply(res, 200, await drip(String(body.address ?? "")));
+    if (url.pathname === "/drip") return reply(res, 200, await drip(String(body.address ?? "")));
+    if (url.pathname === "/act") {
+      const result = await relay.accept(parseAction(body));
+      return reply(res, result.ok ? 200 : 409, result);
+    }
     return reply(res, 404, { error: "not found" });
   } catch (error) {
     log({ event: "http-error", url: req.url, message: (error as Error).message.slice(0, 200) });
@@ -124,22 +175,26 @@ const server = createServer(async (req, res) => {
   }
 });
 
-async function fleet(): Promise<void> {
+async function relayLoop(): Promise<void> {
+  let lastBlock = 0n;
   for (;;) {
     try {
+      const block = await publicClient.getBlockNumber({ cacheTime: 0 });
       const count = (await publicClient.readContract({ address: table, abi: kryphoTableAbi, functionName: "tableCount" })) as bigint;
       for (let id = count > WATCH_WINDOW ? count - WATCH_WINDOW + 1n : 1n; id <= count; id++) {
         const view = (await publicClient.readContract({ address: table, abi: kryphoTableAbi, functionName: "getTable", args: [id] })) as { stage: number };
-        if (!ACTIVE_STAGES.has(view.stage)) continue;
-        for (const bot of bots) await bot.act(id);
+        if (!ACTIVE_STAGES.has(Number(view.stage))) continue;
+        if (block !== lastBlock) await relay.refresh(id);
+        await relay.submit(id);
       }
+      lastBlock = block;
     } catch (error) {
-      log({ event: "fleet-error", message: (error as Error).message.slice(0, 200) });
+      log({ event: "relay-loop-error", message: (error as Error).message.slice(0, 200) });
     }
     await new Promise((resolve) => setTimeout(resolve, FLEET_POLL_MS));
   }
 }
 
 server.listen(Number(env("BOTS_PORT", "3320")), "127.0.0.1", () => log({ event: "listening", table }));
-void fleet();
+void relayLoop();
 await runKeeper({ ...loadKeeperConfig({ ...process.env, TABLE_ADDRESS: table }) }, process.env);

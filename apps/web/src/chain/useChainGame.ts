@@ -1,21 +1,33 @@
 "use client";
 
-import { type ChainSeat, type ChainTable, kryphoTableAbi, toPublicState } from "@kryphochroma/abi";
-import { type GameState, HAND_SLOTS, type Move, initialState } from "@kryphochroma/rules";
+import {
+  ACTION_TYPES,
+  type ChainSeat,
+  type ChainTable,
+  type SignedAction,
+  actionDomain,
+  fieldsFor,
+  kryphoTableAbi,
+  project,
+  projectChain,
+  stepAction,
+} from "@kryphochroma/abi";
+import { type Card, type GameState, type Move, initialState } from "@kryphochroma/rules";
 import { ZamaSDK } from "@zama-fhe/sdk";
 import { sepolia as zamaSepolia } from "@zama-fhe/sdk/chains";
 import { createConfig } from "@zama-fhe/sdk/viem";
 import { web } from "@zama-fhe/sdk/web";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { BaseError, ContractFunctionRevertedError, type Hex, createPublicClient, createWalletClient, http } from "viem";
+import { type Hex, type Log, createPublicClient, createWalletClient, http, toEventSelector } from "viem";
 import { sepolia } from "viem/chains";
 import type { TableController } from "@/game/controller";
 import { useTransitionQueue } from "@/game/useTransitionQueue";
 import { loadBurner } from "./burner";
-import { BURNER_GAS_LIMIT, BURNER_GAS_PRICE, SEPOLIA_RPC_URL, TABLE_ADDRESS } from "./config";
+import { SEPOLIA_RPC_URL, TABLE_ADDRESS } from "./config";
 import { toGameEvents } from "./events";
 
 const POLL_MS = 2000;
+const RELAYED_TOPICS = new Set([toEventSelector("ActionRelayed(uint256,uint8,uint32)"), toEventSelector("ActionRejected(uint256,uint8,uint32,bytes4)")]);
 
 export interface ChainSnapshot {
   readonly table: ChainTable & { readonly setupStep: number; readonly creator: Hex };
@@ -27,32 +39,13 @@ function placeholder(seats: number): GameState {
   return initialState({ seats: Math.max(2, Math.min(4, seats)), mode: "single", targetScore: 500, stackDrawTwo: false }, 1).state;
 }
 
-function revertName(error: unknown): string {
-  if (error instanceof BaseError) {
-    const revert = error.walk((e) => e instanceof ContractFunctionRevertedError);
-    if (revert instanceof ContractFunctionRevertedError) return revert.data?.errorName ?? revert.shortMessage;
-    return error.shortMessage;
-  }
-  return "Transaction failed";
+function keeperLogs(logs: readonly Log[]): Log[] {
+  const relayed = new Set(logs.filter((l) => l.topics[0] && RELAYED_TOPICS.has(l.topics[0])).map((l) => l.transactionHash));
+  return logs.filter((l) => !relayed.has(l.transactionHash));
 }
 
-function contractCall(move: Move, seat: number, handles: readonly Hex[]): { functionName: string; args: readonly unknown[] } {
-  switch (move.type) {
-    case "play":
-      return { functionName: "play", args: [move.slot, move.card, move.color ?? 0, handles[move.slot]] };
-    case "draw":
-      return { functionName: "draw", args: [] };
-    case "pass":
-      return { functionName: "pass", args: [] };
-    case "take":
-      return { functionName: "takeDraws", args: [] };
-    case "mono":
-      return { functionName: "sayMono", args: [seat] };
-    case "accept":
-      return { functionName: "acceptDrawFour", args: [] };
-    case "challenge":
-      return { functionName: "challengeDrawFour", args: [] };
-  }
+function parseAction(raw: SignedAction & { table: string | bigint }): SignedAction {
+  return { ...raw, table: BigInt(raw.table) };
 }
 
 export interface ChainGame extends TableController {
@@ -68,12 +61,12 @@ export function useChainGame(id: bigint, colorBlind: boolean): ChainGame {
     const publicClient = createPublicClient({ chain: sepolia, transport });
     const walletClient = createWalletClient({ account: burner, chain: sepolia, transport });
     const sdk = new ZamaSDK(createConfig({ chains: [zamaSepolia], publicClient, walletClient, relayers: { [zamaSepolia.id]: web() } }));
-    return { publicClient, walletClient, sdk };
+    return { publicClient, sdk };
   }, [burner]);
+  const domain = useMemo(() => actionDomain(sepolia.id, TABLE_ADDRESS), []);
 
   const [snapshot, setSnapshot] = useState<ChainSnapshot | null>(null);
   const [error, setError] = useState<string | null>(null);
-  const [pending, setPending] = useState(false);
   const me = snapshot?.me ?? 0;
   const names = useMemo(() => (snapshot?.seats ?? []).map((s, i) => (i === me ? "You" : `Seat ${i + 1} · ${s.player.slice(2, 6)}`)), [snapshot, me]);
   const queue = useTransitionQueue(placeholder(snapshot?.table.joined ?? 2), me, names, colorBlind);
@@ -81,30 +74,46 @@ export function useChainGame(id: bigint, colorBlind: boolean): ChainGame {
 
   const plain = useRef(new Map<Hex, number>());
   const handles = useRef<readonly Hex[]>([]);
-  const minBlock = useRef(0n);
   const lastBlock = useRef<bigint | null>(null);
-  const lastState = useRef<GameState | null>(null);
+  const chain = useRef<{ state: GameState; nonces: number[] } | null>(null);
+  const actions = useRef<SignedAction[]>([]);
+  const projected = useRef<GameState | null>(null);
   const permitted = useRef(false);
+  const meRef = useRef(0);
+
+  const reconcile = useCallback(
+    (events: Parameters<typeof enqueue>[0]["events"]) => {
+      const base = chain.current;
+      if (!base) return;
+      const target = project(base.state, base.nonces, actions.current).state;
+      const previous = projected.current;
+      projected.current = target;
+      if (!previous) reset(target);
+      else if (events.length > 0 || JSON.stringify(previous.pub) !== JSON.stringify(target.pub) || JSON.stringify(previous.hands[meRef.current]) !== JSON.stringify(target.hands[meRef.current])) {
+        enqueue({ state: target, events });
+      }
+    },
+    [enqueue, reset],
+  );
 
   const poll = useCallback(async () => {
     const { publicClient, sdk } = clients;
     const block = await publicClient.getBlockNumber({ cacheTime: 0 });
-    if (block < minBlock.current) return;
     const read = (functionName: string, args: readonly unknown[]) =>
       publicClient.readContract({ address: TABLE_ADDRESS, abi: kryphoTableAbi, functionName, args, blockNumber: block } as never) as Promise<unknown>;
     const table = (await read("getTable", [id])) as ChainSnapshot["table"];
     const seats = (await Promise.all(Array.from({ length: Number(table.joined) }, (_, i) => read("getSeat", [id, i])))) as ChainSnapshot["seats"];
     const mine = burner.address.toLowerCase();
     const seat = seats.findIndex((s) => s.player.toLowerCase() === mine || s.session.toLowerCase() === mine);
+    meRef.current = Math.max(seat, 0);
     setSnapshot({ table, seats, me: Math.max(seat, 0) });
     if (Number(table.stage) < 3) {
       lastBlock.current = block;
       return;
     }
     const discard = ((await read("discardOf", [id])) as readonly number[]).map(Number);
-    const pub = toPublicState(table, seats, discard);
-    if (!pub) return;
-    let hand: (number | null)[] = Array.from({ length: HAND_SLOTS }, () => null);
+    const nonces = ((await read("noncesOf", [id])) as readonly number[]).map(Number);
+    const known = new Map<number, readonly (Card | null)[]>();
     if (seat >= 0) {
       const slots = Number(seats[seat]?.slots ?? 0);
       const own = (await read("handOf", [id, seat])) as readonly Hex[];
@@ -118,21 +127,17 @@ export function useChainGame(id: bigint, colorBlind: boolean): ChainGame {
         const values = await sdk.decryption.decryptValues(missing.map((encryptedValue) => ({ encryptedValue, contractAddress: TABLE_ADDRESS })));
         for (const [handle, value] of Object.entries(values)) plain.current.set(handle as Hex, Number(value));
       }
-      hand = own.map((h, i) => ((slots & (1 << i)) !== 0 ? (plain.current.get(h) ?? null) : null));
+      known.set(seat, own.map((h, i) => ((slots & (1 << i)) !== 0 ? (plain.current.get(h) ?? null) : null)));
     }
-    const hands = pub.seats.map((_, i) => (i === seat ? hand : Array.from({ length: HAND_SLOTS }, () => null)));
-    const next: GameState = { pub, deck: [], hands, honest: pub.seats.map(() => true), hadColor: null, rng: 0 };
+    const state = projectChain(table, seats, discard, known);
+    if (!state) return;
     const from = lastBlock.current === null ? block : lastBlock.current + 1n;
     const logs = from <= block ? await publicClient.getLogs({ address: TABLE_ADDRESS, fromBlock: from, toBlock: block }) : [];
-    const events = toGameEvents(logs, id);
     lastBlock.current = block;
-    const previous = lastState.current;
-    lastState.current = next;
-    if (!previous) reset(next);
-    else if (events.length > 0 || JSON.stringify(previous.pub) !== JSON.stringify(next.pub) || JSON.stringify(previous.hands[seat]) !== JSON.stringify(hand)) {
-      enqueue({ state: next, events });
-    }
-  }, [clients, burner, id, enqueue, reset]);
+    chain.current = { state, nonces };
+    actions.current = actions.current.filter((a) => a.nonce >= (nonces[a.seat] ?? 0));
+    reconcile(toGameEvents(keeperLogs(logs), id));
+  }, [clients, burner, id, reconcile]);
 
   useEffect(() => {
     let stopped = false;
@@ -153,43 +158,54 @@ export function useChainGame(id: bigint, colorBlind: boolean): ChainGame {
     };
   }, [poll]);
 
-  const send = useCallback(
-    async (functionName: string, args: readonly unknown[]): Promise<string | null> => {
-      const { publicClient, walletClient } = clients;
-      const request = { address: TABLE_ADDRESS, abi: kryphoTableAbi, functionName, args: [id, ...args], account: burner, chain: sepolia } as never;
-      setPending(true);
-      try {
-        await publicClient.simulateContract(request);
-        const hash = await walletClient.writeContract({ ...(request as object), gasPrice: BURNER_GAS_PRICE, gas: BURNER_GAS_LIMIT } as never);
-        queue.note({ icon: "lock", text: "Transaction sent", sub: `${hash.slice(0, 10)}…` });
-        const receipt = await publicClient.waitForTransactionReceipt({ hash });
-        minBlock.current = receipt.blockNumber;
-        return receipt.status === "success" ? null : "Reverted";
-      } catch (e) {
-        return revertName(e);
-      } finally {
-        setPending(false);
+  useEffect(() => {
+    const source = new EventSource(`/api/stream?id=${id}`);
+    source.onmessage = (event) => {
+      const message = JSON.parse(event.data as string) as { type: string; action?: SignedAction & { table: string }; actions?: (SignedAction & { table: string })[] };
+      if (message.type === "backlog" && message.actions) {
+        actions.current = message.actions.map(parseAction);
+        reconcile([]);
+      } else if (message.type === "action" && message.action) {
+        const action = parseAction(message.action);
+        actions.current = [...actions.current, action];
+        const current = projected.current;
+        const next = current ? stepAction(current, action) : null;
+        if (next) {
+          projected.current = next.state;
+          enqueue({ state: next.state, events: next.events });
+        } else {
+          reconcile([]);
+        }
       }
+    };
+    return () => source.close();
+  }, [id, enqueue, reconcile]);
+
+  const submit = useCallback(
+    async (move: Move | { readonly type: "catch"; readonly target: number }): Promise<string | null> => {
+      const base = chain.current;
+      if (!base) return "Table not ready";
+      const seat = meRef.current;
+      const mineQueued = project(base.state, base.nonces, actions.current).valid.filter((a) => a.seat === seat).length;
+      const fields = fieldsFor(id, seat, move, (base.nonces[seat] ?? 0) + mineQueued, handles.current);
+      const signature = await burner.signTypedData({ domain, types: ACTION_TYPES, primaryType: "Action", message: { ...fields } });
+      const res = await fetch("/api/act", { method: "POST", body: JSON.stringify({ ...fields, table: fields.table.toString(), signature }) });
+      if (res.ok) return null;
+      const body = (await res.json().catch(() => ({}))) as { reason?: string; error?: string };
+      return body.reason ?? body.error ?? "Move refused";
     },
-    [clients, burner, id, queue],
+    [burner, domain, id],
   );
 
-  const act = useCallback(
-    async (move: Move) => {
-      const call = contractCall(move, me, handles.current);
-      return send(call.functionName, call.args);
-    },
-    [me, send],
-  );
-
-  const catchSeat = useCallback((target: number) => void send("catchMono", [target]), [send]);
+  const act = useCallback((move: Move) => submit(move), [submit]);
+  const catchSeat = useCallback((target: number) => void submit({ type: "catch", target }), [submit]);
 
   return {
     mode: "chain",
     state: queue.shown,
     me,
     names,
-    busy: queue.busy || pending,
+    busy: queue.busy,
     feed: queue.feed,
     anchors: queue.anchors,
     act,
