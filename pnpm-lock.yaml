@@ -4,6 +4,9 @@ settings:
   autoInstallPeers: true
   excludeLinksFromLockfile: false
 
+overrides:
+  wasm-feature-detect: 1.9.0
+
 importers:
 
   .:
@@ -1921,8 +1924,8 @@ packages:
       jsdom:
         optional: true
 
-  wasm-feature-detect@1.10.0:
-    resolution: {integrity: sha512-u0tkTCCo8s7xa9UoE2rtZGRYXTSqYx3kRPJ2XkbyYl2AbnMggSFmYNiJIispzzCPz7SIFTBTPTk0nI8yXwJgvA==}
+  wasm-feature-detect@1.9.0:
+    resolution: {integrity: sha512-zonE+xlIIYtxPy++L24ow0hAD8CICb4+FgPyROd3buyXIqsJvUEDkBgfCCoXOd1Hu3DUr0GOfnPIdcGV+YpNaA==}
 
   which@2.0.2:
     resolution: {integrity: sha512-BLI3Tl1TW3Pvl70l3yq3Y64i+awpwXqsGBYWkkqMtnbXgrMD+yj7rhW0kuEDxzJaYXGjEW5ogapKNMEKNMjibA==}
@@ -2170,7 +2173,7 @@ snapshots:
     dependencies:
       '@noble/curves': 2.0.1
       '@noble/hashes': 2.0.1
-      wasm-feature-detect: 1.10.0
+      wasm-feature-detect: 1.9.0
     optionalDependencies:
       ethers: 6.17.0
       typescript: 5.9.3
@@ -3670,7 +3673,7 @@ snapshots:
     transitivePeerDependencies:
       - msw
 
-  wasm-feature-detect@1.10.0: {}
+  wasm-feature-detect@1.9.0: {}
 
   which@2.0.2:
     dependencies:
