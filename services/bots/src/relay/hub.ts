@@ -23,7 +23,7 @@ import { sepolia } from "viem/chains";
 const MAX_BATCH = 12;
 const RELAY_GAS = 16_000_000n;
 const GAS_PRICE = 5_000_000n;
-const THINK_MS = [600, 1200] as const;
+const THINK_MS = [250, 600] as const;
 
 export type HubMessage =
   | { readonly type: "action"; readonly action: SignedAction; readonly events: readonly GameEvent[] }
@@ -93,8 +93,12 @@ export function createRelay(deps: RelayDeps) {
         await bot.sdk.permits.grantPermit([deps.table]);
         bot.permitted = true;
       }
-      const values = await bot.sdk.decryption.decryptValues(missing.map((encryptedValue) => ({ encryptedValue, contractAddress: deps.table })));
-      for (const [handle, value] of Object.entries(values)) bot.plain.set(handle as Hex, Number(value));
+      try {
+        const values = await bot.sdk.decryption.decryptValues(missing.map((encryptedValue) => ({ encryptedValue, contractAddress: deps.table })));
+        for (const [handle, value] of Object.entries(values)) bot.plain.set(handle as Hex, Number(value));
+      } catch (error) {
+        deps.log({ event: "bot-decrypt-pending", id, seat, message: (error as Error).message.slice(0, 120) });
+      }
     }
     return handles.map((h, i) => ((slots & (1 << i)) !== 0 ? (bot.plain.get(h) ?? null) : null));
   }

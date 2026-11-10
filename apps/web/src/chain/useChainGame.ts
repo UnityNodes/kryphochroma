@@ -124,8 +124,12 @@ export function useChainGame(id: bigint, colorBlind: boolean): ChainGame {
           await sdk.permits.grantPermit([TABLE_ADDRESS]);
           permitted.current = true;
         }
-        const values = await sdk.decryption.decryptValues(missing.map((encryptedValue) => ({ encryptedValue, contractAddress: TABLE_ADDRESS })));
-        for (const [handle, value] of Object.entries(values)) plain.current.set(handle as Hex, Number(value));
+        try {
+          const values = await sdk.decryption.decryptValues(missing.map((encryptedValue) => ({ encryptedValue, contractAddress: TABLE_ADDRESS })));
+          for (const [handle, value] of Object.entries(values)) plain.current.set(handle as Hex, Number(value));
+        } catch {
+          setError("Waiting for your new card to be decryptable");
+        }
       }
       known.set(seat, own.map((h, i) => ((slots & (1 << i)) !== 0 ? (plain.current.get(h) ?? null) : null)));
     }
