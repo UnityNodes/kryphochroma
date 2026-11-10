@@ -14,4 +14,5 @@ export interface TableController {
   readonly catchSeat: (target: number) => void;
   readonly restart?: () => void;
   readonly chips?: readonly string[];
+  readonly watching?: boolean;
 }

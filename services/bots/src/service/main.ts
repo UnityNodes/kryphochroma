@@ -87,6 +87,16 @@ const POOL_TURN_TIMEOUT = 120;
 const reserved = new Set<string>();
 let poolCreating = false;
 
+async function seatsTakenByBots(id: bigint, joined: number): Promise<number> {
+  const addresses = new Set(bots.map((b) => b.address.toLowerCase()));
+  let count = 0;
+  for (let seat = 0; seat < joined; seat++) {
+    const s = (await publicClient.readContract({ address: table, abi: kryphoTableAbi, functionName: "getSeat", args: [id, seat] })) as { player: string };
+    if (addresses.has(s.player.toLowerCase())) count++;
+  }
+  return count;
+}
+
 async function readLobby(id: bigint): Promise<LobbyView> {
   return (await publicClient.readContract({ address: table, abi: kryphoTableAbi, functionName: "getTable", args: [id] })) as LobbyView;
 }
@@ -96,7 +106,8 @@ async function poolTables(): Promise<{ id: bigint; view: LobbyView }[]> {
   const found: { id: bigint; view: LobbyView }[] = [];
   for (let id = count > WATCH_WINDOW ? count - WATCH_WINDOW + 1n : 1n; id <= count; id++) {
     const view = await readLobby(id);
-    if (Number(view.stage) === 0 && Number(view.joined) === 0 && view.creator.toLowerCase() === keeper.address.toLowerCase()) found.push({ id, view });
+    const open = Number(view.config.seats) - Number(view.joined);
+    if (Number(view.stage) === 0 && open >= 1 && view.creator.toLowerCase() === keeper.address.toLowerCase()) found.push({ id, view });
   }
   return found;
 }
@@ -104,6 +115,9 @@ async function poolTables(): Promise<{ id: bigint; view: LobbyView }[]> {
 async function ensurePool(): Promise<void> {
   if (poolCreating) return;
   const free = (await poolTables()).filter((p) => !reserved.has(p.id.toString()));
+  for (const p of free) {
+    if (Number(p.view.joined) === 0) log({ event: "pool-seated", id: p.id, bots: await seatBots(p.id, Number(p.view.config.seats) - 1) });
+  }
   if (free.length > 0) return;
   poolCreating = true;
   try {
@@ -114,9 +128,14 @@ async function ensurePool(): Promise<void> {
         functionName: "createTable",
         args: [{ seats: POOL_SEATS, turnTimeout: POOL_TURN_TIMEOUT, targetScore: 500, singleRound: true, stackDrawTwo: false }],
       });
-      await publicClient.waitForTransactionReceipt({ hash });
+      const receipt = await publicClient.waitForTransactionReceipt({ hash });
       log({ event: "pool-table", hash });
+      return receipt;
     });
+    await topUpBots();
+    const count = (await publicClient.readContract({ address: table, abi: kryphoTableAbi, functionName: "tableCount" })) as bigint;
+    const seated = await seatBots(count, POOL_SEATS - 1);
+    log({ event: "pool-seated", id: count, bots: seated });
   } finally {
     poolCreating = false;
   }
@@ -124,25 +143,24 @@ async function ensurePool(): Promise<void> {
 
 async function quick(): Promise<{ id?: string; warming?: number }> {
   const ready = (await poolTables()).filter((p) => !reserved.has(p.id.toString()));
-  const shuffled = ready.find((p) => Number(p.view.setupStep) >= 60);
+  const shuffled = ready.find((p) => Number(p.view.setupStep) >= 60 && Number(p.view.config.seats) - Number(p.view.joined) === 1);
   if (!shuffled) return { warming: Math.max(0, ...ready.map((p) => Number(p.view.setupStep))) };
   reserved.add(shuffled.id.toString());
   void ensurePool().catch(() => undefined);
   return { id: shuffled.id.toString() };
 }
 
+async function seatBots(id: bigint, free: number): Promise<number> {
+  const results = await Promise.all(bots.slice(0, Math.max(0, free)).map((bot) => bot.join(id).catch(() => false)));
+  return results.filter(Boolean).length;
+}
+
 async function fill(id: bigint): Promise<{ joined: number }> {
   await topUpBots();
-  let joined = 0;
-  for (const bot of bots) {
-    const view = (await publicClient.readContract({ address: table, abi: kryphoTableAbi, functionName: "getTable", args: [id] })) as {
-      stage: number;
-      joined: number;
-      config: { seats: number };
-    };
-    if (view.stage !== 0 || view.joined >= view.config.seats) break;
-    if (await bot.join(id)) joined++;
-  }
+  const view = await readLobby(id);
+  const seatedBots = await seatsTakenByBots(id, Number(view.joined));
+  const free = Number(view.stage) === 0 ? Math.min(Number(view.config.seats) - Number(view.joined), bots.length - seatedBots) : 0;
+  const joined = free > 0 ? await seatBots(id, free) : 0;
   log({ event: "fill", id, joined });
   const after = await readLobby(id);
   if (Number(after.stage) === 0 && Number(after.joined) >= 2 && after.creator.toLowerCase() === keeper.address.toLowerCase()) {

@@ -193,7 +193,7 @@ export function TableView({ controller: game, colorBlind, onToggleShapes }: Tabl
           pileRef={anchor(anchorKey.pile)}
         />
         {game.feed.length > 0 && <Feed lines={game.feed} title="Table feed" />}
-        <div className="kc-you">
+        <div className="kc-you" hidden={game.watching}>
           <Hand
             hand={hand}
             mine={mine}

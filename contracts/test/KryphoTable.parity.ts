@@ -80,8 +80,8 @@ async function openTable(table: Awaited<ReturnType<typeof deployTable>>, players
   const deck: number[] = [];
   for (let i = 0; i < 108; i++) deck.push(await fhevm.cleartextDb.readUint8({ euint8: hex(await table.deckCardAt(id, i)) }));
   while (Number((await table.getTable(id)).stage) === 2) {
-    const ptr = Number((await table.getTable(id)).deckPtr);
-    const { checkSignaturesArgs } = await fhevm.helpers.decryptPublicUint8WithSignatures({ euint8: hex(await table.deckCardAt(id, ptr)) });
+    const handles = (await table.starterHandles(id)).map(hex);
+    const { checkSignaturesArgs } = await fhevm.client.decryptPublicValuesWithSignatures({ encryptedValues: handles });
     await (await table.setStarter(id, checkSignaturesArgs.abiEncodedCleartexts, checkSignaturesArgs.decryptionProof)).wait();
   }
   return { id, deck };

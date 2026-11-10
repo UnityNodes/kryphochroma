@@ -7,6 +7,7 @@ import { useState } from "react";
 import { createPublicClient, createWalletClient, http, parseEventLogs } from "viem";
 import { sepolia } from "viem/chains";
 import { loadBurner } from "@/chain/burner";
+import { confirm } from "@/chain/confirm";
 import { BURNER_GAS_LIMIT, BURNER_GAS_PRICE, SEPOLIA_RPC_URL, TABLE_ADDRESS } from "@/chain/config";
 import { cn } from "@/lib/utils";
 
@@ -54,7 +55,9 @@ export function NewTable() {
       const { account, publicClient, wallet } = await prepare();
       setDone(2);
       const joinHash = await wallet.writeContract({ address: TABLE_ADDRESS, abi: kryphoTableAbi, functionName: "join", args: [BigInt(pool.id), account.address], gasPrice: BURNER_GAS_PRICE, gas: BURNER_GAS_LIMIT });
-      await publicClient.waitForTransactionReceipt({ hash: joinHash });
+      const joined = await confirm(publicClient, joinHash, "Taking a seat");
+      const seated = parseEventLogs({ abi: kryphoTableAbi, logs: joined.logs, eventName: "Joined" }).some((l) => (l.args as { player: string }).player.toLowerCase() === account.address.toLowerCase());
+      if (!seated) throw new Error("Could not take a seat, please try again");
       setDone(3);
       const fill = await fetch("/api/fill", { method: "POST", body: JSON.stringify({ id: pool.id }) });
       if (!fill.ok) throw new Error("Could not seat the bots");
@@ -88,20 +91,19 @@ export function NewTable() {
         args: [{ seats, turnTimeout: TURN_TIMEOUT_S, targetScore: 500, singleRound: true, stackDrawTwo: stack }],
         gasPrice: BURNER_GAS_PRICE, gas: BURNER_GAS_LIMIT,
       });
-      const receipt = await publicClient.waitForTransactionReceipt({ hash: createHash });
+      const receipt = await confirm(publicClient, createHash, "Opening the table");
       const created = parseEventLogs({ abi: kryphoTableAbi, logs: receipt.logs, eventName: "TableCreated" })[0];
       const id = created ? (created.args as { id: bigint }).id : null;
       if (id === null) throw new Error("Table was not created");
       setDone(2);
       const joinHash = await wallet.writeContract({ address: TABLE_ADDRESS, abi: kryphoTableAbi, functionName: "join", args: [id, account.address], gasPrice: BURNER_GAS_PRICE, gas: BURNER_GAS_LIMIT });
-      await publicClient.waitForTransactionReceipt({ hash: joinHash });
+      await confirm(publicClient, joinHash, "Taking a seat");
       setDone(3);
       const fill = await fetch("/api/fill", { method: "POST", body: JSON.stringify({ id: id.toString() }) });
       if (!fill.ok) throw new Error("Could not seat the bots");
       setDone(4);
       const startHash = await wallet.writeContract({ address: TABLE_ADDRESS, abi: kryphoTableAbi, functionName: "start", args: [id], gasPrice: BURNER_GAS_PRICE, gas: BURNER_GAS_LIMIT });
-      const started = await publicClient.waitForTransactionReceipt({ hash: startHash });
-      if (started.status !== "success") throw new Error("Start failed, open the table and press Start");
+      await confirm(publicClient, startHash, "Starting the shuffle");
       setDone(5);
       router.push(`/t/${id}`);
     } catch (e) {

@@ -113,10 +113,8 @@ export async function runKeeper(config: KeeperConfig, env: NodeJS.ProcessEnv, un
         return pipelineSetup(id, action.remaining);
       case "dealSeat":
         return pipelineDeals(id, action.seats);
-      case "revealStarter": {
-        const table = (await read("getTable", [id])) as { deckPtr: number };
-        return revealAndSend("setStarter", id, [(await read("deckCardAt", [id, table.deckPtr])) as Hex]);
-      }
+      case "revealStarter":
+        return revealAndSend("setStarter", id, (await read("starterHandles", [id])) as Hex[]);
       case "resolveChallenge":
         return revealAndSend("resolveChallenge", id, [(await read("hadColorOf", [id])) as Hex]);
       case "prepareReveal":

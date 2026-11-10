@@ -67,8 +67,9 @@ export function useChainGame(id: bigint, colorBlind: boolean): ChainGame {
 
   const [snapshot, setSnapshot] = useState<ChainSnapshot | null>(null);
   const [error, setError] = useState<string | null>(null);
-  const me = snapshot?.me ?? 0;
-  const names = useMemo(() => (snapshot?.seats ?? []).map((s, i) => (i === me ? "You" : `Seat ${i + 1} · ${s.player.slice(2, 6)}`)), [snapshot, me]);
+  const seated = (snapshot?.me ?? -1) >= 0;
+  const me = Math.max(snapshot?.me ?? 0, 0);
+  const names = useMemo(() => (snapshot?.seats ?? []).map((s, i) => (seated && i === me ? "You" : `Seat ${i + 1} · ${s.player.slice(2, 6)}`)), [snapshot, me, seated]);
   const queue = useTransitionQueue(placeholder(snapshot?.table.joined ?? 2), me, names, colorBlind);
   const { enqueue, reset } = queue;
 
@@ -80,12 +81,17 @@ export function useChainGame(id: bigint, colorBlind: boolean): ChainGame {
   const projected = useRef<GameState | null>(null);
   const permitted = useRef(false);
   const meRef = useRef(0);
+  const settled = useRef<GameState["pub"]["lastResult"]>(null);
+  const [sending, setSending] = useState(false);
 
   const reconcile = useCallback(
     (events: Parameters<typeof enqueue>[0]["events"]) => {
       const base = chain.current;
       if (!base) return;
-      const target = project(base.state, base.nonces, actions.current).state;
+      for (const e of events) if (e.type === "RoundSettled") settled.current = { winner: e.winner, points: e.points, cheaters: e.cheaters };
+      const projectedState = project(base.state, base.nonces, actions.current).state;
+      const over = projectedState.pub.stage === "RoundOver" || projectedState.pub.stage === "MatchOver";
+      const target = over && settled.current ? { ...projectedState, pub: { ...projectedState.pub, lastResult: settled.current } } : projectedState;
       const previous = projected.current;
       projected.current = target;
       if (!previous) reset(target);
@@ -106,7 +112,7 @@ export function useChainGame(id: bigint, colorBlind: boolean): ChainGame {
     const mine = burner.address.toLowerCase();
     const seat = seats.findIndex((s) => s.player.toLowerCase() === mine || s.session.toLowerCase() === mine);
     meRef.current = Math.max(seat, 0);
-    setSnapshot({ table, seats, me: Math.max(seat, 0) });
+    setSnapshot({ table, seats, me: seat });
     if (Number(table.stage) < 3) {
       lastBlock.current = block;
       return;
@@ -187,8 +193,12 @@ export function useChainGame(id: bigint, colorBlind: boolean): ChainGame {
 
   const submit = useCallback(
     async (move: Move | { readonly type: "catch"; readonly target: number }): Promise<string | null> => {
+      if (!seated) return "You are watching this table";
+      if (sending) return "Wait for the table";
       const base = chain.current;
       if (!base) return "Table not ready";
+      setSending(true);
+      try {
       const seat = meRef.current;
       const mineQueued = project(base.state, base.nonces, actions.current).valid.filter((a) => a.seat === seat).length;
       const fields = fieldsFor(id, seat, move, (base.nonces[seat] ?? 0) + mineQueued, handles.current);
@@ -197,8 +207,11 @@ export function useChainGame(id: bigint, colorBlind: boolean): ChainGame {
       if (res.ok) return null;
       const body = (await res.json().catch(() => ({}))) as { reason?: string; error?: string };
       return body.reason ?? body.error ?? "Move refused";
+      } finally {
+        setSending(false);
+      }
     },
-    [burner, domain, id],
+    [burner, domain, id, seated, sending],
   );
 
   const act = useCallback((move: Move) => submit(move), [submit]);
@@ -209,12 +222,13 @@ export function useChainGame(id: bigint, colorBlind: boolean): ChainGame {
     state: queue.shown,
     me,
     names,
-    busy: queue.busy,
+    busy: queue.busy || sending,
     feed: queue.feed,
     anchors: queue.anchors,
     act,
     catchSeat,
-    chips: [`Table #${id}`],
+    chips: seated ? [`Table #${id}`] : [`Table #${id}`, "Watching"],
+    watching: !seated,
     snapshot,
     address: burner.address,
     error,

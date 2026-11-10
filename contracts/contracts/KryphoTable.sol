@@ -14,6 +14,7 @@ contract KryphoTable is IKryphoTable, ZamaEthereumConfig {
     uint8 internal constant HAND_START = 7;
     uint8 internal constant NONE = type(uint8).max;
     uint8 internal constant MAX_TIMEOUTS = 3;
+    uint256 internal constant STARTER_BATCH = 3;
     uint32 internal constant MIN_TURN_TIMEOUT = 30;
     uint16 internal constant MAX_TARGET_SCORE = 10_000;
     uint16 internal constant CHEAT_PENALTY = 100;
@@ -218,29 +219,47 @@ contract KryphoTable is IKryphoTable, ZamaEthereumConfig {
         t.dealtMask |= uint8(1) << seat;
         if (t.dealtMask == (uint8(1) << t.joined) - 1) {
             t.deckPtr = HAND_START * t.joined;
-            FHE.makePubliclyDecryptable(_deck[id][t.deckPtr]);
+            _exposeStarters(id, t);
         }
     }
 
     function setStarter(uint256 id, bytes calldata cleartexts, bytes calldata proof) external {
         Table storage t = _requireStage(id, Stage.Dealing);
         if (t.dealtMask != (uint8(1) << t.joined) - 1) revert NotDealt();
-        bytes32[] memory handles = new bytes32[](1);
-        handles[0] = FHE.toBytes32(_deck[id][t.deckPtr]);
+        bytes32[] memory handles = _starterHandles(id, t);
         FHE.checkSignatures(handles, cleartexts, proof);
-        uint8 card = uint8(uint256(bytes32(cleartexts[0:32])));
-        t.deckPtr++;
-        _discard[id].push(card);
-        if (!card.isNumber()) {
-            FHE.makePubliclyDecryptable(_deck[id][t.deckPtr]);
-            return;
+        for (uint256 k = 0; k < handles.length; k++) {
+            uint8 card = uint8(uint256(bytes32(cleartexts[k * 32:(k + 1) * 32])));
+            t.deckPtr++;
+            _discard[id].push(card);
+            if (card.isNumber()) {
+                t.topCard = card;
+                t.color = card.colorOf();
+                t.stage = Stage.Playing;
+                t.turn = uint8(t.round % t.joined);
+                _refreshDeadline(t);
+                emit Dealt(id, t.round, t.turn, card);
+                return;
+            }
         }
-        t.topCard = card;
-        t.color = card.colorOf();
-        t.stage = Stage.Playing;
-        t.turn = uint8(t.round % t.joined);
-        _refreshDeadline(t);
-        emit Dealt(id, t.round, t.turn, card);
+        _exposeStarters(id, t);
+    }
+
+    function starterHandles(uint256 id) external view returns (bytes32[] memory) {
+        return _starterHandles(id, _tables[id]);
+    }
+
+    function _starterHandles(uint256 id, Table storage t) internal view returns (bytes32[] memory handles) {
+        uint256 left = KryphoDeck.DECK_SIZE - t.deckPtr;
+        uint256 n = left < STARTER_BATCH ? left : STARTER_BATCH;
+        handles = new bytes32[](n);
+        for (uint256 k = 0; k < n; k++) handles[k] = FHE.toBytes32(_deck[id][t.deckPtr + k]);
+    }
+
+    function _exposeStarters(uint256 id, Table storage t) internal {
+        for (uint256 k = 0; k < STARTER_BATCH && t.deckPtr + k < KryphoDeck.DECK_SIZE; k++) {
+            FHE.makePubliclyDecryptable(_deck[id][t.deckPtr + k]);
+        }
     }
 
     function play(uint256 id, uint8 slot, uint8 card, uint8 chosenColor, bytes32 seenHandle) public {

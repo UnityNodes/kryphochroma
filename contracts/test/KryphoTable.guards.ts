@@ -25,8 +25,9 @@ async function ready(players: Signer[]) {
 }
 
 async function starter(table: Awaited<ReturnType<typeof ready>>["table"], id: bigint) {
-  const ptr = Number((await table.getTable(id)).deckPtr);
-  return fhevm.helpers.decryptPublicUint8WithSignatures({ euint8: hex(await table.deckCardAt(id, ptr)) });
+  const handles = (await table.starterHandles(id)).map(hex);
+  const { clearValues, checkSignaturesArgs } = await fhevm.client.decryptPublicValuesWithSignatures({ encryptedValues: handles });
+  return { clearValue: Number((clearValues[0] as { value: unknown }).value), checkSignaturesArgs };
 }
 
 describe("KryphoTable guards", function () {
@@ -92,7 +93,8 @@ describe("KryphoTable guards", function () {
   it("rejects a forged starter and replays of the starter proof", async function () {
     const { table, id } = await ready([s[0]!, s[1]!]);
     const first = await starter(table, id);
-    const forged = ethers.AbiCoder.defaultAbiCoder().encode(["uint8"], [(first.clearValue + 1) % 10]);
+    const real = first.checkSignaturesArgs.abiEncodedCleartexts;
+    const forged = `${ethers.AbiCoder.defaultAbiCoder().encode(["uint8"], [(first.clearValue + 1) % 10])}${real.slice(66)}`;
     let forgedFailed = false;
     try {
       await (await table.setStarter(id, forged, first.checkSignaturesArgs.decryptionProof)).wait();
