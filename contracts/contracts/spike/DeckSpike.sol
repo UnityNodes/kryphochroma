@@ -31,6 +31,37 @@ contract DeckSpike is ZamaEthereumConfig {
         FHE.allowThis(_honest);
     }
 
+    function initChunk(uint8 start, uint8[] calldata ids) external {
+        for (uint8 k = 0; k < ids.length; k++) {
+            uint8 i = start + k;
+            _deck[i] = FHE.asEuint8(ids[k]);
+            FHE.allowThis(_deck[i]);
+        }
+        if (start == 0) {
+            _honest = FHE.asEbool(true);
+            FHE.allowThis(_honest);
+        }
+    }
+
+    function shufflePairs(uint16 layer, uint8 firstPair, uint8 pairCount) external {
+        uint8 distance = uint8(1) << uint8(layer % LAYERS_PER_PASS);
+        uint8 pair = 0;
+        uint8 done = 0;
+        for (uint8 i = 0; i < DECK_SIZE && done < pairCount; i++) {
+            uint8 j = i | distance;
+            if (i & distance != 0 || j >= DECK_SIZE) continue;
+            if (pair++ < firstPair) continue;
+            ebool swap = FHE.randEbool();
+            euint8 a = FHE.select(swap, _deck[j], _deck[i]);
+            euint8 b = FHE.select(swap, _deck[i], _deck[j]);
+            _deck[i] = a;
+            _deck[j] = b;
+            FHE.allowThis(a);
+            FHE.allowThis(b);
+            done++;
+        }
+    }
+
     function shuffle(uint8 fromLayer, uint8 count) external {
         for (uint8 l = fromLayer; l < fromLayer + count; l++) {
             uint8 distance = uint8(1) << (l % LAYERS_PER_PASS);

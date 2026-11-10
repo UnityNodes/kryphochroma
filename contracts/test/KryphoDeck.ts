@@ -20,10 +20,17 @@ describe("KryphoDeck", function () {
     expect(onChain).to.deep.equal(fullDeck());
   });
 
-  it("stays a permutation after shuffle layers", async function () {
+  it("counts the switch pairs of every layer", async function () {
+    const harness = await ethers.deployContract("DeckHarness");
+    const pairs: number[] = [];
+    for (let l = 0; l < 7; l++) pairs.push(Number(await harness.pairsIn(1 << l)));
+    expect(pairs).to.deep.equal([54, 54, 52, 52, 48, 44, 44]);
+  });
+
+  it("stays a permutation after a full pass of half layer steps", async function () {
     const harness = await ethers.deployContract("DeckHarness");
     await (await harness.fill()).wait();
-    for (let l = 0; l < 7; l++) await (await harness.shuffleLayer(l, { gasLimit: 16_700_000 })).wait();
+    for (let step = 0; step < 14; step++) await (await harness.shuffleStep(step, { gasLimit: 16_700_000 })).wait();
     const cards: number[] = [];
     for (let i = 0; i < 108; i++) cards.push(await fhevm.cleartextDb.readUint8({ euint8: hex(await harness.deckAt(i)) }));
     expect([...cards].sort((a, b) => a - b)).to.deep.equal([...fullDeck()].sort((a, b) => a - b));
