@@ -201,7 +201,9 @@ describe("reveal and scoring", () => {
     const played = applyPlay(s, 0, 0, R(9)).state;
     expect(played.honest[0]).toBe(false);
     const { state } = applyReveal(played);
-    expect(state.pub.lastResult).toEqual({ winner: 2, points: 1 + 2 + 3 + 20 + 50 + 6 + 7, cheaters: [0] });
+    expect(state.pub.lastResult).toEqual({ winner: 2, points: 1 + 2 + 3 + 20 + 50 + 6 + 7 + 100, cheaters: [0] });
+    expect(state.pub.seats[2]?.score).toBe(189);
+    expect(state.pub.seats[0]?.score).toBe(0);
   });
 
   it("applies a pending draw two or four from the winning card", () => {
@@ -219,5 +221,16 @@ describe("reveal and scoring", () => {
     const { state } = applyReveal(played, { honest: [false, false], hands: [[], [Y(1)]] });
     expect(state.pub.lastResult).toEqual({ winner: null, points: 0, cheaters: [0, 1] });
     expect(state.pub.stage).toBe("MatchOver");
+  });
+});
+
+describe("cheat penalty", () => {
+  it("takes points from a cheater who already scored", () => {
+    const s = withHandSize(game([[B(9), WILD, B(3), B(4), B(5), B(6), B(7)], [Y(1), Y(2), Y(3), Y(10), WILD, Y(6), Y(7)]], R(5), "match"), 0, 1);
+    const scored = { ...s, pub: { ...s.pub, seats: s.pub.seats.map((x, i) => (i === 0 ? { ...x, score: 150 } : x)) } };
+    const { state } = applyReveal(applyPlay(scored, 0, 0, R(9)).state);
+    expect(state.pub.seats[0]?.score).toBe(50);
+    expect(state.pub.lastResult?.winner).toBe(1);
+    expect(state.pub.lastResult?.points).toBe(100);
   });
 });

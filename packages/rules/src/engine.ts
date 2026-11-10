@@ -33,14 +33,16 @@ import {
   toDraft,
 } from "./draft.js";
 import { shuffle } from "./rng.js";
-import { type RevealedHand, scoreRound } from "./score.js";
+import { CHEAT_PENALTY, type RevealedHand, scoreRound } from "./score.js";
+
+export const MAX_TARGET_SCORE = 10_000;
 import { type GameState, type PublicSeat, RuleError, type TableConfig, type Transition } from "./types.js";
 
 export function validateConfig(config: TableConfig): void {
   if (!Number.isInteger(config.seats) || config.seats < MIN_SEATS || config.seats > MAX_SEATS) {
     throw new RuleError("BadConfig", "seats must be 2..4");
   }
-  if (!Number.isInteger(config.targetScore) || config.targetScore < 1) {
+  if (!Number.isInteger(config.targetScore) || config.targetScore < 1 || config.targetScore > MAX_TARGET_SCORE) {
     throw new RuleError("BadConfig", "targetScore must be a positive integer");
   }
   if (typeof config.stackDrawTwo !== "boolean") throw new RuleError("BadConfig", "stackDrawTwo must be a boolean");
@@ -388,6 +390,10 @@ export function applyReveal(state: GameState, reveal?: Reveal): Transition {
   }
   const result = scoreRound(data.hands, data.honest, candidate);
   if (result.winner !== null) seatOf(d, result.winner).score += result.points;
+  for (const cheater of result.cheaters) {
+    const s = seatOf(d, cheater);
+    s.score = Math.max(0, s.score - CHEAT_PENALTY);
+  }
   d.pub.lastResult = { ...result, cheaters: [...result.cheaters] };
   d.pub.candidate = null;
   d.events.push({ type: "RoundSettled", ...result });

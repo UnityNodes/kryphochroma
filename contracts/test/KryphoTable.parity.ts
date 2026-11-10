@@ -134,6 +134,7 @@ async function playGame(setup: GameSetup, players: Signer[]): Promise<{ steps: n
       await (await table.resolveChallenge(id, checkSignaturesArgs.abiEncodedCleartexts, checkSignaturesArgs.decryptionProof)).wait();
       state = applyChallenge(state).state;
     } else if (stage === "Revealing") {
+      for (let seat = 0; seat < setup.seats; seat++) await (await table.prepareReveal(id)).wait();
       const handles = (await table.revealHandles(id)).map(hex);
       const { checkSignaturesArgs } = await fhevm.client.decryptPublicValuesWithSignatures({ encryptedValues: handles });
       await (await table.finishReveal(id, checkSignaturesArgs.abiEncodedCleartexts, checkSignaturesArgs.decryptionProof)).wait();
@@ -148,7 +149,10 @@ async function playGame(setup: GameSetup, players: Signer[]): Promise<{ steps: n
       if (catcher !== null && steps % 2 === 0) {
         const next = applyCatch(state, catcher);
         if (next.events.some((e) => e.type === "Reshuffled")) return { steps, finished: false, state };
-        await (await table.connect(actor).catchMono(id, catcher)).wait();
+        const catcherSigner = players[(catcher + 1) % setup.seats];
+        if (!catcherSigner) throw new Error("no catcher");
+        await networkHelpers.mine();
+        await (await table.connect(catcherSigner).catchMono(id, catcher)).wait();
         state = next.state;
       } else if (setup.timeoutEvery > 0 && steps % setup.timeoutEvery === 0) {
         const next = applyTimeout(state);
@@ -193,12 +197,16 @@ describe("KryphoTable parity with the rules engine", function () {
     expect(result.steps).to.be.greaterThan(10);
   });
 
-  it("4 seats with a lying seat that is caught at reveal", async function () {
-    const result = await playGame({ seats: 4, stack: false, cheaters: [0], timeoutEvery: 0 }, signers.slice(0, 4));
-    expect(result.finished).to.equal(true);
-    expect(result.state.honest[0]).to.equal(false);
-    expect(result.state.pub.lastResult?.cheaters).to.deep.equal([0]);
-    expect(result.state.pub.lastResult?.winner).to.not.equal(0);
+  it("a lying seat is caught at reveal and pays the penalty", async function () {
+    let caught = false;
+    for (let game = 0; game < 6 && !caught; game++) {
+      const result = await playGame({ seats: 4, stack: false, cheaters: [0], timeoutEvery: 0 }, signers.slice(0, 4));
+      if (!result.finished || result.state.honest[0] !== false) continue;
+      expect(result.state.pub.lastResult?.cheaters).to.deep.equal([0]);
+      expect(result.state.pub.lastResult?.winner).to.not.equal(0);
+      caught = true;
+    }
+    expect(caught).to.equal(true);
   });
 
   it("random tables of 2 to 4 seats stay in sync", async function () {

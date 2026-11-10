@@ -3,6 +3,8 @@ import type { RoundResult } from "./types.js";
 
 export type RevealedHand = readonly (Card | null)[];
 
+export const CHEAT_PENALTY = 100;
+
 export function handPoints(hand: RevealedHand): number {
   return hand.reduce<number>((sum, card) => (card === null ? sum : sum + points(card)), 0);
 }
@@ -16,7 +18,7 @@ export function scoreRound(
   const winner = pickWinner(hands, honest, candidate);
   if (winner === null) return { winner, points: 0, cheaters };
   const total = hands.reduce<number>((sum, hand, seat) => (seat === winner ? sum : sum + handPoints(hand)), 0);
-  return { winner, points: total, cheaters };
+  return { winner, points: total + CHEAT_PENALTY * cheaters.length, cheaters };
 }
 
 function pickWinner(hands: readonly RevealedHand[], honest: readonly boolean[], candidate: number): number | null {

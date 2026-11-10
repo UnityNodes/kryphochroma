@@ -56,6 +56,11 @@ export const kryphoTableAbi = [
   },
   {
     "inputs": [],
+    "name": "CatchTooEarly",
+    "type": "error"
+  },
+  {
+    "inputs": [],
     "name": "DrawFourPending",
     "type": "error"
   },
@@ -107,6 +112,11 @@ export const kryphoTableAbi = [
   {
     "inputs": [],
     "name": "NotYourTurn",
+    "type": "error"
+  },
+  {
+    "inputs": [],
+    "name": "RevealNotReady",
     "type": "error"
   },
   {
@@ -553,6 +563,19 @@ export const kryphoTableAbi = [
         "internalType": "uint256",
         "name": "id",
         "type": "uint256"
+      }
+    ],
+    "name": "TableCancelled",
+    "type": "event"
+  },
+  {
+    "anonymous": false,
+    "inputs": [
+      {
+        "indexed": true,
+        "internalType": "uint256",
+        "name": "id",
+        "type": "uint256"
       },
       {
         "indexed": true,
@@ -625,6 +648,19 @@ export const kryphoTableAbi = [
       }
     ],
     "name": "acceptDrawFour",
+    "outputs": [],
+    "stateMutability": "nonpayable",
+    "type": "function"
+  },
+  {
+    "inputs": [
+      {
+        "internalType": "uint256",
+        "name": "id",
+        "type": "uint256"
+      }
+    ],
+    "name": "cancel",
     "outputs": [],
     "stateMutability": "nonpayable",
     "type": "function"
@@ -1028,6 +1064,16 @@ export const kryphoTableAbi = [
             "internalType": "uint8",
             "name": "candidate",
             "type": "uint8"
+          },
+          {
+            "internalType": "uint8",
+            "name": "revealPrepared",
+            "type": "uint8"
+          },
+          {
+            "internalType": "uint64",
+            "name": "monoBlock",
+            "type": "uint64"
           }
         ],
         "internalType": "struct KryphoTable.Table",
@@ -1173,6 +1219,19 @@ export const kryphoTableAbi = [
       }
     ],
     "name": "play",
+    "outputs": [],
+    "stateMutability": "nonpayable",
+    "type": "function"
+  },
+  {
+    "inputs": [
+      {
+        "internalType": "uint256",
+        "name": "id",
+        "type": "uint256"
+      }
+    ],
+    "name": "prepareReveal",
     "outputs": [],
     "stateMutability": "nonpayable",
     "type": "function"

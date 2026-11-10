@@ -47,6 +47,8 @@ interface IKryphoTable {
     error BadSession();
     error TransferFailed();
     error NotDealt();
+    error CatchTooEarly();
+    error RevealNotReady();
 
     event TableCreated(uint256 indexed id, address indexed creator, Config config);
     event Joined(uint256 indexed id, uint8 seat, address indexed player, address session);
@@ -66,4 +68,5 @@ interface IKryphoTable {
     event RevealStarted(uint256 indexed id, uint8 candidate);
     event RoundSettled(uint256 indexed id, int8 winner, uint16 points, uint8 cheaters);
     event MatchOver(uint256 indexed id, int8 winner);
+    event TableCancelled(uint256 indexed id);
 }

@@ -42,6 +42,7 @@ describe("KryphoTable guards", function () {
     await expect(table.createTable({ ...config, seats: 5 })).to.be.revertedWithCustomError(table, "BadConfig");
     await expect(table.createTable({ ...config, turnTimeout: 5 })).to.be.revertedWithCustomError(table, "BadConfig");
     await expect(table.createTable({ ...config, targetScore: 0 })).to.be.revertedWithCustomError(table, "BadConfig");
+    await expect(table.createTable({ ...config, targetScore: 10_001 })).to.be.revertedWithCustomError(table, "BadConfig");
     await (await table.createTable(config)).wait();
     const id = await table.tableCount();
     await expect(table.join(id, ethers.ZeroAddress)).to.be.revertedWithCustomError(table, "BadSession");
@@ -143,5 +144,22 @@ describe("KryphoTable guards", function () {
     await expect(table.finishReveal(id, "0x", "0x")).to.be.revertedWithCustomError(table, "WrongStage");
     await expect(table.resolveChallenge(id, "0x", "0x")).to.be.revertedWithCustomError(table, "WrongStage");
     await expect(table.nextRound(id)).to.be.revertedWithCustomError(table, "WrongStage");
+  });
+
+  it("lets only the creator cancel a table in the lobby", async function () {
+    const table = await ethers.deployContract("KryphoTable");
+    await (await table.createTable(config)).wait();
+    const id = await table.tableCount();
+    await expect(table.connect(s[1]!).cancel(id)).to.be.revertedWithCustomError(table, "NotCreator");
+    await expect(table.cancel(id)).to.emit(table, "TableCancelled");
+    await expect(table.join(id, s[0]!.address)).to.be.revertedWithCustomError(table, "WrongStage");
+    await expect(table.cancel(id)).to.be.revertedWithCustomError(table, "WrongStage");
+  });
+
+  it("needs every seat prepared before the final reveal", async function () {
+    const table = await ethers.deployContract("KryphoTable");
+    await (await table.createTable(config)).wait();
+    const id = await table.tableCount();
+    await expect(table.prepareReveal(id)).to.be.revertedWithCustomError(table, "WrongStage");
   });
 });

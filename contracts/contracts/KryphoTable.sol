@@ -15,6 +15,9 @@ contract KryphoTable is IKryphoTable, ZamaEthereumConfig {
     uint8 internal constant NONE = type(uint8).max;
     uint8 internal constant MAX_TIMEOUTS = 3;
     uint32 internal constant MIN_TURN_TIMEOUT = 30;
+    uint16 internal constant MAX_TARGET_SCORE = 10_000;
+    uint16 internal constant CHEAT_PENALTY = 100;
+    uint64 internal constant CATCH_DELAY_BLOCKS = 2;
     uint16 internal constant SETUP_STEPS = uint16(KryphoDeck.FILL_STEPS) + KryphoDeck.SHUFFLE_STEPS;
 
     struct Seat {
@@ -48,6 +51,8 @@ contract KryphoTable is IKryphoTable, ZamaEthereumConfig {
         uint8 drawFourBy;
         uint8 prevColor;
         uint8 candidate;
+        uint8 revealPrepared;
+        uint64 monoBlock;
     }
 
     uint256 public tableCount;
@@ -62,7 +67,7 @@ contract KryphoTable is IKryphoTable, ZamaEthereumConfig {
     mapping(uint256 => bytes32[]) internal _revealHandles;
 
     function createTable(Config calldata config) external returns (uint256 id) {
-        if (config.seats < 2 || config.seats > 4 || config.turnTimeout < MIN_TURN_TIMEOUT || config.targetScore == 0) {
+        if (config.seats < 2 || config.seats > 4 || config.turnTimeout < MIN_TURN_TIMEOUT || config.targetScore == 0 || config.targetScore > MAX_TARGET_SCORE) {
             revert BadConfig();
         }
         id = ++tableCount;
@@ -88,6 +93,13 @@ contract KryphoTable is IKryphoTable, ZamaEthereumConfig {
             (bool ok, ) = session.call{value: msg.value}("");
             if (!ok) revert TransferFailed();
         }
+    }
+
+    function cancel(uint256 id) external {
+        Table storage t = _requireStage(id, Stage.Lobby);
+        if (msg.sender != t.creator) revert NotCreator();
+        t.stage = Stage.MatchOver;
+        emit TableCancelled(id);
     }
 
     function start(uint256 id) external {
@@ -183,7 +195,10 @@ contract KryphoTable is IKryphoTable, ZamaEthereumConfig {
             _beginReveal(id, t, seat);
             return;
         }
-        if (s.handSize == 1 && !s.saidMono) t.monoWindow = seat;
+        if (s.handSize == 1 && !s.saidMono) {
+            t.monoWindow = seat;
+            t.monoBlock = uint64(block.number);
+        }
         _applyEffect(id, t, card, seat, prevColor);
     }
 
@@ -241,7 +256,8 @@ contract KryphoTable is IKryphoTable, ZamaEthereumConfig {
         Table storage t = _requireStage(id, Stage.Playing);
         if (target >= t.joined || t.monoWindow != target) revert CannotCatch();
         Seat storage s = _seats[id][target];
-        if (s.handSize != 1 || s.saidMono) revert CannotCatch();
+        if (s.handSize != 1 || s.saidMono || !_isOtherSeat(id, t, target)) revert CannotCatch();
+        if (block.number < t.monoBlock + CATCH_DELAY_BLOCKS) revert CatchTooEarly();
         t.monoWindow = NONE;
         emit MonoCaught(id, target);
         _drawInto(id, t, target, 2);
@@ -313,11 +329,33 @@ contract KryphoTable is IKryphoTable, ZamaEthereumConfig {
         _advance(t, 1);
     }
 
+    function prepareReveal(uint256 id) external {
+        Table storage t = _requireStage(id, Stage.Revealing);
+        uint8 seat = t.revealPrepared;
+        if (seat >= t.joined) revert RevealNotReady();
+        bytes32[] storage handles = _revealHandles[id];
+        FHE.makePubliclyDecryptable(_honest[id][seat]);
+        handles.push(FHE.toBytes32(_honest[id][seat]));
+        uint32 slots = _seats[id][seat].slots;
+        for (uint8 i = 0; i < HAND_SLOTS; i++) {
+            if (slots & (uint32(1) << i) == 0) continue;
+            FHE.makePubliclyDecryptable(_hands[id][seat][i]);
+            handles.push(FHE.toBytes32(_hands[id][seat][i]));
+        }
+        t.revealPrepared = seat + 1;
+    }
+
     function finishReveal(uint256 id, bytes calldata cleartexts, bytes calldata proof) external {
         Table storage t = _requireStage(id, Stage.Revealing);
+        if (t.revealPrepared != t.joined) revert RevealNotReady();
         FHE.checkSignatures(_revealHandles[id], cleartexts, proof);
         (int8 winner, uint16 points, uint8 cheaters) = _score(id, t, cleartexts);
         if (winner >= 0) _seats[id][uint8(winner)].score += points;
+        for (uint8 seat = 0; seat < t.joined; seat++) {
+            if (cheaters & (uint8(1) << seat) == 0) continue;
+            Seat storage c = _seats[id][seat];
+            c.score = c.score > CHEAT_PENALTY ? c.score - CHEAT_PENALTY : 0;
+        }
         emit RoundSettled(id, winner, points, cheaters);
         bool over = t.config.singleRound || (winner >= 0 && _seats[id][uint8(winner)].score >= t.config.targetScore);
         t.stage = over ? Stage.MatchOver : Stage.RoundOver;
@@ -369,6 +407,13 @@ contract KryphoTable is IKryphoTable, ZamaEthereumConfig {
 
     function _isActor(Seat storage s) internal view returns (bool) {
         return msg.sender == s.session || msg.sender == s.player;
+    }
+
+    function _isOtherSeat(uint256 id, Table storage t, uint8 target) internal view returns (bool) {
+        for (uint8 seat = 0; seat < t.joined; seat++) {
+            if (seat != target && _isActor(_seats[id][seat])) return true;
+        }
+        return false;
     }
 
     function _requireTurn(uint256 id, Table storage t) internal view returns (uint8) {
@@ -477,19 +522,7 @@ contract KryphoTable is IKryphoTable, ZamaEthereumConfig {
         t.drawFourBy = NONE;
         t.drawnSlot = NONE;
         t.monoWindow = NONE;
-        bytes32[] storage handles = _revealHandles[id];
-        for (uint8 seat = 0; seat < t.joined; seat++) {
-            FHE.makePubliclyDecryptable(_honest[id][seat]);
-            handles.push(FHE.toBytes32(_honest[id][seat]));
-        }
-        for (uint8 seat = 0; seat < t.joined; seat++) {
-            uint32 slots = _seats[id][seat].slots;
-            for (uint8 i = 0; i < HAND_SLOTS; i++) {
-                if (slots & (uint32(1) << i) == 0) continue;
-                FHE.makePubliclyDecryptable(_hands[id][seat][i]);
-                handles.push(FHE.toBytes32(_hands[id][seat][i]));
-            }
-        }
+        t.revealPrepared = 0;
         emit RevealStarted(id, candidate);
     }
 
@@ -503,10 +536,8 @@ contract KryphoTable is IKryphoTable, ZamaEthereumConfig {
         uint256 word = 0;
         for (uint8 seat = 0; seat < t.joined; seat++) {
             honest[seat] = uint256(bytes32(cleartexts[word * 32:(word + 1) * 32])) != 0;
-            if (!honest[seat]) cheaters |= uint8(1) << seat;
             word++;
-        }
-        for (uint8 seat = 0; seat < t.joined; seat++) {
+            if (!honest[seat]) cheaters |= uint8(1) << seat;
             uint32 slots = _seats[id][seat].slots;
             for (uint8 i = 0; i < HAND_SLOTS; i++) {
                 if (slots & (uint32(1) << i) == 0) continue;
@@ -529,6 +560,7 @@ contract KryphoTable is IKryphoTable, ZamaEthereumConfig {
         if (winner < 0) return (winner, 0, cheaters);
         for (uint8 seat = 0; seat < t.joined; seat++) {
             if (int8(seat) != winner) total += handPoints[seat];
+            if (cheaters & (uint8(1) << seat) != 0) total += CHEAT_PENALTY;
         }
     }
 

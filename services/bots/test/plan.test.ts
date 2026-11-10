@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { nextKeeperAction, type TableView } from "../src/keeper/plan.js";
 
-const base: TableView = { stage: 3, joined: 3, setupStep: 0, dealtMask: 0, turnDeadline: 100n, candidate: 255 };
+const base: TableView = { stage: 3, joined: 3, setupStep: 0, dealtMask: 0, turnDeadline: 100n, candidate: 255, revealPrepared: 0 };
 
 describe("keeper plan", () => {
   it("drives the setup until all steps are sent", () => {
@@ -15,7 +15,8 @@ describe("keeper plan", () => {
 
   it("resolves challenges and reveals", () => {
     expect(nextKeeperAction({ ...base, stage: 4 }, 0n)).toEqual({ kind: "resolveChallenge" });
-    expect(nextKeeperAction({ ...base, stage: 5, candidate: 1 }, 0n)).toEqual({ kind: "finishReveal" });
+    expect(nextKeeperAction({ ...base, stage: 5, candidate: 1 }, 0n)).toEqual({ kind: "prepareReveal" });
+    expect(nextKeeperAction({ ...base, stage: 5, candidate: 1, revealPrepared: 3 }, 0n)).toEqual({ kind: "finishReveal" });
     expect(nextKeeperAction({ ...base, stage: 5 }, 0n)).toEqual({ kind: "idle" });
   });
 

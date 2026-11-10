@@ -7,6 +7,7 @@ export interface TableView {
   readonly dealtMask: number;
   readonly turnDeadline: bigint;
   readonly candidate: number;
+  readonly revealPrepared: number;
 }
 
 export type KeeperAction =
@@ -14,6 +15,7 @@ export type KeeperAction =
   | { readonly kind: "dealSeat"; readonly seat: number }
   | { readonly kind: "revealStarter" }
   | { readonly kind: "resolveChallenge" }
+  | { readonly kind: "prepareReveal" }
   | { readonly kind: "finishReveal" }
   | { readonly kind: "forceTimeout" }
   | { readonly kind: "idle" };
@@ -33,7 +35,8 @@ export function nextKeeperAction(table: TableView, nowSeconds: bigint): KeeperAc
     case "AwaitChallenge":
       return { kind: "resolveChallenge" };
     case "Revealing":
-      return table.candidate === NO_SEAT ? { kind: "idle" } : { kind: "finishReveal" };
+      if (table.candidate === NO_SEAT) return { kind: "idle" };
+      return table.revealPrepared < table.joined ? { kind: "prepareReveal" } : { kind: "finishReveal" };
     case "Playing":
       return nowSeconds > table.turnDeadline ? { kind: "forceTimeout" } : { kind: "idle" };
     default:

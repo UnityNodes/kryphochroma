@@ -31,6 +31,7 @@ describe("setup", () => {
     expectRule(() => validateConfig({ seats: 1, mode: "single", targetScore: 500, stackDrawTwo: false }), "BadConfig");
     expectRule(() => validateConfig({ seats: 5, mode: "single", targetScore: 500, stackDrawTwo: false }), "BadConfig");
     expectRule(() => validateConfig({ seats: 2, mode: "match", targetScore: 0, stackDrawTwo: false }), "BadConfig");
+    expectRule(() => validateConfig({ seats: 2, mode: "match", targetScore: 10_001, stackDrawTwo: false }), "BadConfig");
   });
 
   it("rejects decks with the wrong composition", () => {
