@@ -3,7 +3,7 @@ import { ZamaSDK } from "@zama-fhe/sdk";
 import { sepolia as zamaSepolia } from "@zama-fhe/sdk/chains";
 import { node } from "@zama-fhe/sdk/node";
 import { createConfig } from "@zama-fhe/sdk/viem";
-import { type Hex, createPublicClient, createWalletClient, http } from "viem";
+import { type Hex, createPublicClient, createWalletClient, http, nonceManager } from "viem";
 import { privateKeyToAccount } from "viem/accounts";
 import { sepolia } from "viem/chains";
 import { type KeeperAction, type TableView, nextKeeperAction } from "./plan.js";
@@ -46,7 +46,7 @@ const log = (entry: Record<string, unknown>) =>
 
 export async function runKeeper(config: KeeperConfig, env: NodeJS.ProcessEnv, until: () => Promise<boolean> = async () => false): Promise<void> {
   const transport = http(config.rpcUrl);
-  const account = privateKeyToAccount(config.privateKey);
+  const account = privateKeyToAccount(config.privateKey, { nonceManager });
   const publicClient = createPublicClient({ chain: sepolia, transport });
   const walletClient = createWalletClient({ account, chain: sepolia, transport });
   const sdk = new ZamaSDK(createConfig({ chains: [zamaSepolia], publicClient, walletClient, relayers: { [zamaSepolia.id]: node() } }));
@@ -60,7 +60,7 @@ export async function runKeeper(config: KeeperConfig, env: NodeJS.ProcessEnv, un
 
   async function send(functionName: string, args: readonly unknown[], gas?: bigint): Promise<void> {
     const request = { address, abi: kryphoTableAbi, functionName, args, account, chain: sepolia } as never;
-    const estimate = gas ?? (await publicClient.estimateContractGas(request));
+    const estimate = gas ?? ((await publicClient.estimateContractGas(request)) * 3n) / 2n + 100_000n;
     if (!canSpend(budget, estimate)) throw new Error("daily gas budget exhausted");
     await publicClient.simulateContract({ ...(request as object), blockNumber: snapshot } as never);
     const hash = await walletClient.writeContract({ ...(request as object), gas: estimate } as never);
@@ -75,10 +75,9 @@ export async function runKeeper(config: KeeperConfig, env: NodeJS.ProcessEnv, un
     if (!canSpend(budget, SETUP_GAS * BigInt(count))) throw new Error("daily gas budget exhausted");
     const request = { address, abi: kryphoTableAbi, functionName: "setupStep", args: [id], account, chain: sepolia } as never;
     await publicClient.simulateContract({ ...(request as object), blockNumber: snapshot } as never);
-    let nonce = await publicClient.getTransactionCount({ address: account.address, blockTag: "pending" });
     const hashes: Hex[] = [];
     for (let i = 0; i < count; i++) {
-      hashes.push(await walletClient.writeContract({ ...(request as object), gas: SETUP_GAS, nonce: nonce++ } as never));
+      hashes.push(await walletClient.writeContract({ ...(request as object), gas: SETUP_GAS } as never));
     }
     for (const hash of hashes) {
       const receipt = await publicClient.waitForTransactionReceipt({ hash });
@@ -122,26 +121,27 @@ export async function runKeeper(config: KeeperConfig, env: NodeJS.ProcessEnv, un
       log({ event: "stopped" });
       return;
     }
-    budget = rollBudget(budget, Date.now());
-    const balance = await publicClient.getBalance({ address: account.address });
-    if (belowAlert(balance, config.alertBalance)) log({ event: "low-balance", balance });
-    const latest = await publicClient.getBlock({ blockTag: "latest" });
-    if (latest.number < minBlock) {
-      await new Promise((resolve) => setTimeout(resolve, config.pollMs));
-      continue;
-    }
-    snapshot = latest.number;
-    const count = (await read("tableCount", [])) as bigint;
-    const now = latest.timestamp;
-    for (let id = count > WATCH_WINDOW ? count - WATCH_WINDOW + 1n : 1n; id <= count; id++) {
-      const view = (await read("getTable", [id])) as TableView;
-      const action = nextKeeperAction(view, now);
-      if (action.kind === "idle") continue;
-      try {
-        await act(id, action);
-      } catch (error) {
-        log({ event: "error", id, action: action.kind, message: (error as Error).message.slice(0, 300) });
+    try {
+      budget = rollBudget(budget, Date.now());
+      const balance = await publicClient.getBalance({ address: account.address });
+      if (belowAlert(balance, config.alertBalance)) log({ event: "low-balance", balance });
+      const latest = await publicClient.getBlock({ blockTag: "latest" });
+      if (latest.number < minBlock) throw new Error("rpc behind own transactions");
+      snapshot = latest.number;
+      const count = (await read("tableCount", [])) as bigint;
+      const now = latest.timestamp;
+      for (let id = count > WATCH_WINDOW ? count - WATCH_WINDOW + 1n : 1n; id <= count; id++) {
+        const view = (await read("getTable", [id])) as TableView;
+        const action = nextKeeperAction(view, now);
+        if (action.kind === "idle") continue;
+        try {
+          await act(id, action);
+        } catch (error) {
+          log({ event: "error", id, action: action.kind, message: (error as Error).message.slice(0, 300) });
+        }
       }
+    } catch (error) {
+      log({ event: "loop-error", message: (error as Error).message.slice(0, 200) });
     }
     await new Promise((resolve) => setTimeout(resolve, config.pollMs));
   }

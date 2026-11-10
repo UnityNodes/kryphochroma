@@ -5,7 +5,8 @@
   "type": "module",
   "scripts": {
     "typecheck": "tsc -p tsconfig.json --noEmit",
-    "test": "pnpm --filter @kryphochroma/rules --filter @kryphochroma/abi build && vitest run"
+    "test": "pnpm --filter @kryphochroma/rules --filter @kryphochroma/abi build && vitest run",
+    "start": "tsx src/service/main.ts"
   },
   "dependencies": {
     "@kryphochroma/rules": "workspace:*",

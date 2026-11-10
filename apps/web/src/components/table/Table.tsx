@@ -7,7 +7,8 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { toast } from "sonner";
 import { Dialog, DialogContent, DialogDescription, DialogTitle } from "@/components/ui/dialog";
 import { anchorKey } from "@/game/flight";
-import { HUMAN, SEAT_COLORS, SEAT_NAMES } from "@/game/offline";
+import type { TableController } from "@/game/controller";
+import { SEAT_COLORS } from "@/game/offline";
 import { useOfflineGame } from "@/game/useOfflineGame";
 import { cn } from "@/lib/utils";
 import { Center } from "./Center";
@@ -29,19 +30,34 @@ export interface TableProps {
   readonly stackDrawTwo: boolean;
 }
 
-export function Table({ seats, stackDrawTwo }: TableProps) {
+export function useColorBlind(): [boolean, (update: (v: boolean) => boolean) => void] {
   const [colorBlind, setColorBlind] = useState(false);
-  const game = useOfflineGame(seats, stackDrawTwo, colorBlind);
-  const { state, busy, anchors, act } = game;
+  useEffect(() => {
+    if (window.matchMedia("(prefers-contrast: more)").matches) setColorBlind(true);
+  }, []);
+  return [colorBlind, setColorBlind];
+}
+
+export function Table({ seats, stackDrawTwo }: TableProps) {
+  const [colorBlind, setColorBlind] = useColorBlind();
+  const controller = useOfflineGame(seats, stackDrawTwo, colorBlind);
+  return <TableView controller={controller} colorBlind={colorBlind} onToggleShapes={() => setColorBlind((v) => !v)} />;
+}
+
+export interface TableViewProps {
+  readonly controller: TableController;
+  readonly colorBlind: boolean;
+  readonly onToggleShapes: () => void;
+}
+
+export function TableView({ controller: game, colorBlind, onToggleShapes }: TableViewProps) {
+  const { state, busy, anchors, act, me, names } = game;
+  const HUMAN = me;
   const pub = state.pub;
   const hand = state.hands[HUMAN] ?? [];
   const mine = pub.turn === HUMAN && !busy && pub.stage === "Playing";
   const moves = useMemo(() => legalMoves(pub, HUMAN, hand), [pub, hand]);
   const [pickingSlot, setPickingSlot] = useState<number | null>(null);
-
-  useEffect(() => {
-    if (window.matchMedia("(prefers-contrast: more)").matches) setColorBlind(true);
-  }, []);
 
   const anchorCache = useRef(new Map<string, (el: HTMLElement | null) => void>());
   const anchor = useCallback(
@@ -60,8 +76,9 @@ export function Table({ seats, stackDrawTwo }: TableProps) {
 
   const run = useCallback(
     (move: Parameters<typeof act>[0]) => {
-      const error = act(move);
-      if (error) toast.error(ERROR_TEXT[error] ?? error);
+      void act(move).then((error) => {
+        if (error) toast.error(ERROR_TEXT[error] ?? error);
+      });
     },
     [act],
   );
@@ -90,7 +107,8 @@ export function Table({ seats, stackDrawTwo }: TableProps) {
   const onDraw = () => run({ type: drawLabel === "Pass" ? "pass" : "draw" });
   const monoHot = canSayMono(pub, HUMAN) && hand.some((c) => c !== null && isPlayable(pub, c));
   const catchable = botCatchTarget(pub, HUMAN);
-  const status = statusText(pub.stage, pub.turn, busy, drawn, pub.drawFour !== null, pub.pendingDraw);
+  const status = statusText(pub.stage, pub.turn, HUMAN, names, busy, drawn, pub.drawFour !== null, pub.pendingDraw);
+  const seats = pub.config.seats;
   const opponents = POSITIONS[seats] ?? [];
   const result = pub.lastResult;
 
@@ -116,15 +134,27 @@ export function Table({ seats, stackDrawTwo }: TableProps) {
           </div>
         </div>
         <div className="kc-chips">
-          <span className="kc-chip kc-hide-s">
-            <WifiOff aria-hidden />
-            Practice · local bots
-          </span>
+          {game.mode === "practice" ? (
+            <span className="kc-chip kc-hide-s">
+              <WifiOff aria-hidden />
+              Practice · local bots
+            </span>
+          ) : (
+            <span className="kc-chip kc-hide-s">
+              <span className="kc-dot" />
+              Sepolia · Zama FHE
+            </span>
+          )}
+          {(game.chips ?? []).map((chip) => (
+            <span key={chip} className="kc-chip kc-hide-s">
+              {chip}
+            </span>
+          ))}
           <span className="kc-chip">
             <Trophy aria-hidden />
             Round {pub.round + 1}
           </span>
-          <button type="button" className={cn("kc-chip", colorBlind && "kc-chip-on")} aria-pressed={colorBlind} onClick={() => setColorBlind((v) => !v)}>
+          <button type="button" className={cn("kc-chip", colorBlind && "kc-chip-on")} aria-pressed={colorBlind} onClick={onToggleShapes}>
             <Shapes aria-hidden />
             <span className="kc-hide-s">Shapes</span>
           </button>
@@ -134,14 +164,14 @@ export function Table({ seats, stackDrawTwo }: TableProps) {
         <div className="kc-rays" />
         <div className="kc-grain" />
         {opponents.map((position, i) => {
-          const seat = i + 1;
+          const seat = (HUMAN + i + 1) % seats;
           const s = pub.seats[seat];
           if (!s) return null;
           return (
             <Seat
               key={seat}
               position={position}
-              name={SEAT_NAMES[seat] ?? `Seat ${seat}`}
+              name={names[seat] ?? `Seat ${seat}`}
               color={SEAT_COLORS[seat] ?? "var(--y)"}
               handSize={s.handSize}
               active={pub.turn === seat}
@@ -175,7 +205,7 @@ export function Table({ seats, stackDrawTwo }: TableProps) {
           />
           <div className="kc-actions">
             <div className={cn("kc-who kc-me", mine && "kc-active")}>
-              <div className="kc-avatar" style={{ "--c": SEAT_COLORS[HUMAN] } as React.CSSProperties}>
+              <div className="kc-avatar" style={{ "--c": SEAT_COLORS[HUMAN] ?? "var(--y)" } as React.CSSProperties}>
                 Y
               </div>
               <div className="kc-meta">
@@ -209,7 +239,7 @@ export function Table({ seats, stackDrawTwo }: TableProps) {
               </button>
             )}
             {catchable !== null ? (
-              <button type="button" className="kc-btn kc-mono kc-hot" onClick={game.catchBot}>
+              <button type="button" className="kc-btn kc-mono kc-hot" onClick={() => game.catchSeat(catchable)}>
                 Catch!
               </button>
             ) : (
@@ -234,15 +264,17 @@ export function Table({ seats, stackDrawTwo }: TableProps) {
       <Dialog open={pub.stage === "MatchOver" && !busy}>
         <DialogContent className="kc-box border-2 border-cream bg-ink sm:max-w-[360px]" showCloseButton={false}>
           <DialogTitle className="font-display text-[30px] font-normal text-sun">
-            {result?.winner === HUMAN ? "You win!" : result?.winner === null ? "No winner" : `${SEAT_NAMES[result?.winner ?? 0]} wins`}
+            {result?.winner === HUMAN ? "You win!" : result?.winner === null ? "No winner" : `${names[result?.winner ?? 0] ?? "Seat"} wins`}
           </DialogTitle>
           <DialogDescription className="text-muted">
-            {result ? `${result.points} points · every honesty bit checked${result.cheaters.length > 0 ? ` · liars: ${result.cheaters.map((s) => SEAT_NAMES[s]).join(", ")}` : ""}` : ""}
+            {result ? `${result.points} points · every honesty bit checked${result.cheaters.length > 0 ? ` · liars: ${result.cheaters.map((s) => (s === HUMAN ? "you" : names[s])).join(", ")}` : ""}` : ""}
           </DialogDescription>
-          <button type="button" className="kc-btn justify-self-center" onClick={game.restart}>
-            <Shuffle aria-hidden />
-            Deal again
-          </button>
+          {game.restart && (
+            <button type="button" className="kc-btn justify-self-center" onClick={game.restart}>
+              <Shuffle aria-hidden />
+              Deal again
+            </button>
+          )}
         </DialogContent>
       </Dialog>
     </div>
@@ -263,11 +295,11 @@ function Logo() {
   );
 }
 
-function statusText(stage: string, turn: number, busy: boolean, drawn: boolean, drawFour: boolean, pending: number): string {
+function statusText(stage: string, turn: number, me: number, names: readonly string[], busy: boolean, drawn: boolean, drawFour: boolean, pending: number): string {
   if (stage === "AwaitChallenge") return "Revealing one bit…";
   if (stage === "Revealing") return "Revealing hands…";
   if (stage === "MatchOver") return "Round over";
-  if (turn !== HUMAN) return `${SEAT_NAMES[turn] ?? "Bot"} is playing…`;
+  if (turn !== me) return `${names[turn] ?? "Bot"} is playing…`;
   if (busy) return "Waiting for the table…";
   if (drawFour) return "Wild +4 on you: take 4 or challenge";
   if (pending > 0) return `Stack a +2 or take ${pending}`;

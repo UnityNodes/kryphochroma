@@ -1,4 +1,4 @@
-import { NO_SEAT } from "@kryphochroma/abi";
+import { NO_SEAT } from "./constants.js";
 import { type Color, HAND_SLOTS, type PublicSeat, type PublicState, type Stage } from "@kryphochroma/rules";
 
 export interface ChainTable {
@@ -16,7 +16,7 @@ export interface ChainTable {
   readonly drawFourBy: number;
   readonly prevColor: number;
   readonly candidate: number;
-  readonly config: { readonly targetScore: number; readonly singleRound: boolean; readonly stackDrawTwo: boolean };
+  readonly config: { readonly seats?: number; readonly targetScore: number; readonly singleRound: boolean; readonly stackDrawTwo: boolean };
 }
 
 export interface ChainSeat {

@@ -7,13 +7,16 @@ import { createConfig } from "@zama-fhe/sdk/viem";
 import { type Hex, type PublicClient, createWalletClient, http } from "viem";
 import { privateKeyToAccount } from "viem/accounts";
 import { sepolia } from "viem/chains";
-import { type ChainSeat, type ChainTable, toPublicState } from "./view.js";
+import { type ChainSeat, type ChainTable, toPublicState } from "@kryphochroma/abi";
 
 const THINK_MS = [600, 1500] as const;
+const BOT_GAS_LIMIT = 4_000_000n;
+const BOT_GAS_PRICE = 5_000_000n;
 
 export interface BotPlayer {
   readonly address: Hex;
   readonly act: (id: bigint) => Promise<"acted" | "waiting" | "done">;
+  readonly join: (id: bigint) => Promise<boolean>;
 }
 
 const log = (entry: Record<string, unknown>) =>
@@ -65,7 +68,7 @@ export function createBot(privateKey: Hex, table: Hex, publicClient: PublicClien
       log({ event: "skip", bot: account.address, functionName, reason: (error as Error).message.slice(0, 160) });
       return false;
     }
-    const hash = await walletClient.writeContract(request);
+    const hash = await walletClient.writeContract({ ...(request as object), gas: BOT_GAS_LIMIT, gasPrice: BOT_GAS_PRICE } as never);
     const receipt = await publicClient.waitForTransactionReceipt({ hash });
     minBlock = receipt.blockNumber;
     log({ event: "tx", bot: account.address, functionName, args, hash, status: receipt.status });
@@ -110,5 +113,10 @@ export function createBot(privateKey: Hex, table: Hex, publicClient: PublicClien
     return (await send(call.functionName, call.args(id))) ? "acted" : "waiting";
   }
 
-  return { address: account.address, act };
+  async function join(id: bigint): Promise<boolean> {
+    if (!(await pinSnapshot())) return false;
+    return send("join", [id, account.address]);
+  }
+
+  return { address: account.address, act, join };
 }

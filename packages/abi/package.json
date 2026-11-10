@@ -16,5 +16,8 @@
     "generate": "node scripts/generate.mjs",
     "build": "tsc -p tsconfig.json",
     "typecheck": "tsc -p tsconfig.json --noEmit"
+  },
+  "dependencies": {
+    "@kryphochroma/rules": "workspace:*"
   }
 }

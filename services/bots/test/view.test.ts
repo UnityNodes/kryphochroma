@@ -1,6 +1,6 @@
 import { chooseMove, initialState } from "@kryphochroma/rules";
 import { describe, expect, it } from "vitest";
-import { type ChainSeat, type ChainTable, toPublicState } from "../src/player/view.js";
+import { type ChainSeat, type ChainTable, toPublicState } from "@kryphochroma/abi";
 
 describe("chain view", () => {
   it("rebuilds the engine public state from contract reads", () => {

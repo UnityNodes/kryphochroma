@@ -54,7 +54,6 @@ export function humanMove(state: GameState, move: Move): Transition {
   return applyMove(state, HUMAN, move);
 }
 
-const name = (seat: number): string => SEAT_NAMES[seat] ?? `Seat ${seat}`;
 
 export interface FeedLine {
   readonly icon: "play" | "draw" | "pass" | "mono" | "challenge" | "lock" | "trophy" | "shuffle";
@@ -62,12 +61,13 @@ export interface FeedLine {
   readonly sub: string;
 }
 
-export function describe(event: GameEvent): FeedLine | null {
+export function describe(event: GameEvent, names: readonly string[] = SEAT_NAMES, me = HUMAN): FeedLine | null {
+  const name = (seat: number): string => (seat === me ? "You" : (names[seat] ?? `Seat ${seat}`));
   switch (event.type) {
     case "Played":
       return { icon: "play", text: `${name(event.seat)} played ${cardLabel(event.card)}`, sub: "honesty bit updated · FHE.eq" };
     case "Drew":
-      return { icon: "draw", text: `${name(event.seat)} drew a card`, sub: event.seat === HUMAN ? "decrypted for you only" : "sealed · FHE.allow" };
+      return { icon: "draw", text: `${name(event.seat)} drew a card`, sub: event.seat === me ? "decrypted for you only" : "sealed · FHE.allow" };
     case "Passed":
       return { icon: "pass", text: `${name(event.seat)} passed`, sub: "turn moves on" };
     case "MonoSaid":

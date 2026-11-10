@@ -1,7 +1,6 @@
 import { cardBack, cardFace } from "@kryphochroma/cards";
 import { type GameEvent, type GameState } from "@kryphochroma/rules";
 import { animate } from "motion";
-import { HUMAN } from "./offline";
 
 export const MS = { deal: 380, stagger: 70, play: 540, draw: 440 } as const;
 const ARC_PX = 50;
@@ -73,7 +72,7 @@ function centered(rect: DOMRect, width: number, height: number): DOMRect {
 
 const MINI_SCALE = 0.55;
 
-export async function animateEvents(before: GameState, after: GameState, events: readonly GameEvent[], anchors: Anchors, colorBlind: boolean): Promise<void> {
+export async function animateEvents(before: GameState, after: GameState, events: readonly GameEvent[], anchors: Anchors, colorBlind: boolean, me: number): Promise<void> {
   const deck = rectOf(anchors, anchorKey.deck);
   const pile = rectOf(anchors, anchorKey.pile);
   if (!deck || !pile) return;
@@ -83,27 +82,27 @@ export async function animateEvents(before: GameState, after: GameState, events:
   for (const event of events) {
     if (event.type === "Played") {
       await Promise.all(draws.splice(0));
-      const source = event.seat === HUMAN ? anchors.get(anchorKey.hand(event.slot)) : anchors.get(anchorKey.fan(event.seat));
+      const source = event.seat === me ? anchors.get(anchorKey.hand(event.slot)) : anchors.get(anchorKey.fan(event.seat));
       const raw = source?.getBoundingClientRect();
       if (!raw) continue;
-      const from = event.seat === HUMAN ? raw : centered(raw, pile.width * MINI_SCALE, pile.height * MINI_SCALE);
-      if (event.seat === HUMAN && source) source.style.visibility = "hidden";
+      const from = event.seat === me ? raw : centered(raw, pile.width * MINI_SCALE, pile.height * MINI_SCALE);
+      if (event.seat === me && source) source.style.visibility = "hidden";
       await fly({
         front: cardFace(event.card, { colorBlind }),
-        back: event.seat === HUMAN ? null : cardBack(),
+        back: event.seat === me ? null : cardBack(),
         from,
         to: pile,
         rotateTo: pileTilt(pileIndex++),
-        flip: event.seat !== HUMAN,
+        flip: event.seat !== me,
         duration: MS.play,
         delay: 0,
       });
     } else if (event.type === "Drew") {
-      const zone = event.seat === HUMAN ? rectOf(anchors, anchorKey.handBox) : rectOf(anchors, anchorKey.fan(event.seat));
+      const zone = event.seat === me ? rectOf(anchors, anchorKey.handBox) : rectOf(anchors, anchorKey.fan(event.seat));
       if (!zone) continue;
-      const scale = event.seat === HUMAN ? 1 : MINI_SCALE;
+      const scale = event.seat === me ? 1 : MINI_SCALE;
       const target = centered(zone, deck.width * scale, deck.height * scale);
-      const card = event.seat === HUMAN ? (after.hands[HUMAN]?.[event.slot] ?? null) : null;
+      const card = event.seat === me ? (after.hands[me]?.[event.slot] ?? null) : null;
       draws.push(
         fly({
           front: card === null ? null : cardFace(card, { colorBlind }),

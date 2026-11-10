@@ -13,8 +13,8 @@ describe("useOfflineGame", () => {
     const move = moves.find((m) => m.type === "play") ?? moves.find((m) => m.type === "draw");
     if (!move) throw new Error("no move");
     let error: string | null = "unset";
-    act(() => {
-      error = result.current.act(move);
+    await act(async () => {
+      error = await result.current.act(move);
     });
     expect(error).toBeNull();
     await waitFor(() => expect(result.current.state).not.toBe(before), { timeout: 5_000 });
