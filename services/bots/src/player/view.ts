@@ -1,0 +1,68 @@
+import { NO_SEAT } from "@kryphochroma/abi";
+import { type Color, HAND_SLOTS, type PublicSeat, type PublicState, type Stage } from "@kryphochroma/rules";
+
+export interface ChainTable {
+  readonly stage: number;
+  readonly joined: number;
+  readonly turn: number;
+  readonly dir: number;
+  readonly topCard: number;
+  readonly color: number;
+  readonly round: number;
+  readonly deckPtr: number;
+  readonly drawnSlot: number;
+  readonly pendingDraw: number;
+  readonly monoWindow: number;
+  readonly drawFourBy: number;
+  readonly prevColor: number;
+  readonly candidate: number;
+  readonly config: { readonly targetScore: number; readonly singleRound: boolean; readonly stackDrawTwo: boolean };
+}
+
+export interface ChainSeat {
+  readonly handSize: number;
+  readonly slots: number;
+  readonly saidMono: boolean;
+  readonly timeouts: number;
+  readonly abandoned: boolean;
+  readonly score: number;
+}
+
+const STAGES: Record<number, Stage> = { 3: "Playing", 4: "AwaitChallenge", 5: "Revealing", 6: "RoundOver", 7: "MatchOver" };
+const orNull = (value: number): number | null => (value === NO_SEAT ? null : value);
+
+export function toPublicState(table: ChainTable, seats: readonly ChainSeat[], discard: readonly number[]): PublicState | null {
+  const stage = STAGES[table.stage];
+  if (!stage) return null;
+  const publicSeats: PublicSeat[] = seats.map((s) => ({
+    handSize: s.handSize,
+    slots: Array.from({ length: HAND_SLOTS }, (_, i) => (s.slots & (1 << i)) !== 0),
+    saidMono: s.saidMono,
+    timeouts: s.timeouts,
+    abandoned: s.abandoned,
+    score: s.score,
+  }));
+  return {
+    config: {
+      seats: table.joined,
+      mode: table.config.singleRound ? "single" : "match",
+      targetScore: table.config.targetScore,
+      stackDrawTwo: table.config.stackDrawTwo,
+    },
+    stage,
+    round: table.round,
+    turn: table.turn,
+    dir: table.dir < 0 ? -1 : 1,
+    topCard: table.topCard,
+    color: table.color as Color,
+    deckCount: 108 - table.deckPtr,
+    discard,
+    seats: publicSeats,
+    drawnSlot: orNull(table.drawnSlot),
+    drawFour: table.drawFourBy === NO_SEAT ? null : { by: table.drawFourBy, prevColor: table.prevColor as Color },
+    pendingDraw: table.pendingDraw,
+    monoWindow: orNull(table.monoWindow),
+    candidate: orNull(table.candidate),
+    lastResult: null,
+  };
+}
