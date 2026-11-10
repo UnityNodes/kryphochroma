@@ -44,6 +44,9 @@ interface IKryphoTable {
     error CannotCatch();
     error TurnNotExpired();
     error ShuffleNotDone();
+    error BadSession();
+    error TransferFailed();
+    error NotDealt();
 
     event TableCreated(uint256 indexed id, address indexed creator, Config config);
     event Joined(uint256 indexed id, uint8 seat, address indexed player, address session);

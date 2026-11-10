@@ -44,17 +44,19 @@ describe("setup", () => {
     const { state, events } = initialState(config(seats), 42);
     expect(state.pub.seats.every((s) => s.handSize === 7)).toBe(true);
     expect(isNumber(state.pub.topCard)).toBe(true);
-    expect(state.pub.deckCount).toBe(DECK_SIZE - 7 * seats - 1);
+    expect(state.pub.deckCount + state.pub.discard.length).toBe(DECK_SIZE - 7 * seats);
     expect(state.pub.turn).toBe(0);
     expect(totalCards(state)).toBe(DECK_SIZE);
     expect(types({ state, events })).toEqual(["Dealt"]);
   });
 
-  it("puts non-number opening cards under the deck", () => {
+  it("moves non-number opening cards into the discard pile", () => {
     const state = game([filler(R), filler(Y)], [WILD4, B(10), G(5)]);
     expect(state.pub.topCard).toBe(G(5));
     expect(state.pub.color).toBe(2);
-    expect(state.deck.slice(-2)).toEqual([WILD4, B(10)]);
+    expect(state.pub.discard).toEqual([WILD4, B(10), G(5)]);
+    expect(state.pub.deckCount).toBe(108 - 14 - 3);
+    expect(totalCards(state)).toBe(DECK_SIZE);
   });
 
   it("is deterministic for a seed", () => {

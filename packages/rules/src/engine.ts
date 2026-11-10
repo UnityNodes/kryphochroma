@@ -113,10 +113,9 @@ function deal(base: GameState, deck: readonly Card[]): Transition {
     skipped.push(top);
     top = d.deck.shift() as Card;
   }
-  d.deck = [...d.deck, ...skipped];
   d.pub.topCard = top;
   d.pub.color = colorOf(top) as Color;
-  d.pub.discard = [top];
+  d.pub.discard = [...skipped, top];
   d.pub.turn = d.pub.round % seats;
   d.events.push({ type: "Dealt", round: d.pub.round, firstSeat: d.pub.turn, topCard: top });
   return finish(d);
