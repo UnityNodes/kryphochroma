@@ -4,14 +4,18 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "typecheck": "tsc -p tsconfig.json --noEmit"
+    "typecheck": "tsc -p tsconfig.json --noEmit",
+    "test": "pnpm --filter @kryphochroma/rules --filter @kryphochroma/abi build && vitest run"
   },
   "dependencies": {
     "@kryphochroma/rules": "workspace:*",
     "@zama-fhe/sdk": "3.7.2",
-    "viem": "^2.57.17"
+    "viem": "^2.57.17",
+    "@kryphochroma/abi": "workspace:*"
   },
   "devDependencies": {
-    "tsx": "^4.20.0"
+    "tsx": "^4.20.0",
+    "vitest": "^4.0.0",
+    "@vitest/coverage-v8": "^4.0.0"
   }
 }
