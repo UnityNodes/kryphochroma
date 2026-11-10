@@ -17,6 +17,7 @@ export default defineConfig({
       chainType: "l1",
       url: configVariable("SEPOLIA_RPC_URL"),
       accounts: [configVariable("DEPLOYER_PRIVATE_KEY")],
+      gasPrice: 5_000_000n,
     },
   },
   test: {
