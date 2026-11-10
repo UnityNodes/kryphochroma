@@ -88,7 +88,7 @@ describe("simulation", () => {
     let finished = 0;
     for (let seed = 1; seed <= 1000; seed++) {
       const seats = 2 + (seed % 3);
-      const { state } = playRound(initialState(config(seats), seed).state, botPick);
+      const { state } = playRound(initialState(config(seats, "single", seed % 2 === 0), seed).state, botPick);
       expect(state.pub.stage).toBe("MatchOver");
       expect(state.pub.lastResult?.winner).not.toBeNull();
       expect(state.pub.lastResult?.cheaters).toEqual([]);
@@ -107,7 +107,7 @@ describe("simulation", () => {
           rng = step.next;
           return moves[step.value] ?? null;
         };
-        const { state } = playRound(initialState(config(seats), seed).state, randomPick);
+        const { state } = playRound(initialState(config(seats, "single", seed % 2 === 0), seed).state, randomPick);
         expect(["MatchOver", "Playing"]).toContain(state.pub.stage);
       }),
       { numRuns: 100 },
@@ -129,7 +129,7 @@ describe("simulation", () => {
   });
 
   it("a full match reaches the target score", () => {
-    let state = initialState({ seats: 3, mode: "match", targetScore: 500 }, 5).state;
+    let state = initialState({ seats: 3, mode: "match", targetScore: 500, stackDrawTwo: false }, 5).state;
     let rounds = 0;
     while (state.pub.stage !== "MatchOver" && rounds < 100) {
       state = playRound(state, botPick).state;

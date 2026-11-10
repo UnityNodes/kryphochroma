@@ -15,8 +15,8 @@ export const B = (rank: number): Card => cardOf(3, rank);
 export const WILD = cardOf(4, 13);
 export const WILD4 = cardOf(4, 14);
 
-export function config(seats: number, mode: TableConfig["mode"] = "single"): TableConfig {
-  return { seats, mode, targetScore: 500 };
+export function config(seats: number, mode: TableConfig["mode"] = "single", stackDrawTwo = false): TableConfig {
+  return { seats, mode, targetScore: 500, stackDrawTwo };
 }
 
 export function deckWith(prefix: readonly Card[]): Card[] {
@@ -46,9 +46,10 @@ export function game(
   top: Card | readonly Card[],
   mode: TableConfig["mode"] = "single",
   after: readonly Card[] = [],
+  stackDrawTwo = false,
 ): GameState {
   const tops = Array.isArray(top) ? top : [top as Card];
-  return initialState(config(hands.length, mode), 7, deckWith([...dealPrefix(hands, tops), ...after])).state;
+  return initialState(config(hands.length, mode, stackDrawTwo), 7, deckWith([...dealPrefix(hands, tops), ...after])).state;
 }
 
 export function totalCards(state: GameState): number {

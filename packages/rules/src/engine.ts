@@ -43,6 +43,7 @@ export function validateConfig(config: TableConfig): void {
   if (!Number.isInteger(config.targetScore) || config.targetScore < 1) {
     throw new RuleError("BadConfig", "targetScore must be a positive integer");
   }
+  if (typeof config.stackDrawTwo !== "boolean") throw new RuleError("BadConfig", "stackDrawTwo must be a boolean");
 }
 
 export function validateDeck(deck: readonly Card[]): void {
@@ -78,6 +79,7 @@ function blankState(config: TableConfig, round: number, scores: readonly number[
       seats: Array.from({ length: config.seats }, (_, i) => emptySeat(scores[i] ?? 0)),
       drawnSlot: null,
       drawFour: null,
+      pendingDraw: 0,
       monoWindow: null,
       candidate: null,
       lastResult: null,
@@ -156,6 +158,7 @@ export function applyPlay(state: GameState, seat: number, slot: number, card: Ca
   requireStage(d, "Playing");
   if (d.pub.drawFour) throw new RuleError("DrawFourPending");
   requireTurn(d, seat);
+  if (d.pub.pendingDraw > 0 && (isWild(card) || rankOf(card) !== RANK.drawTwo)) throw new RuleError("MustStackOrTake");
   const s = seatOf(d, seat);
   if (!Number.isInteger(slot) || slot < 0 || slot >= HAND_SLOTS || !s.slots[slot]) throw new RuleError("BadSlot");
   if (d.pub.drawnSlot !== null && slot !== d.pub.drawnSlot) throw new RuleError("MustPlayDrawnCard");
@@ -179,7 +182,8 @@ export function applyPlay(state: GameState, seat: number, slot: number, card: Ca
   d.events.push({ type: "Played", seat, slot, card, color });
 
   if (s.handSize === 0) {
-    if (rankOf(card) === RANK.drawTwo && !isWild(card)) drawInto(d, seatAt(d, 1), 2);
+    if (rankOf(card) === RANK.drawTwo && !isWild(card)) drawInto(d, seatAt(d, 1), d.pub.pendingDraw + 2);
+    d.pub.pendingDraw = 0;
     if (isDrawFour(card)) drawInto(d, seatAt(d, 1), 4);
     beginReveal(d, seat);
     return finish(d);
@@ -205,6 +209,10 @@ function applyEffect(d: Draft, card: Card, seat: number, prevColor: Color, hadCo
       d.pub.dir = d.pub.dir === 1 ? -1 : 1;
       return advance(d, d.pub.config.seats === 2 ? 2 : 1);
     case RANK.drawTwo:
+      if (d.pub.config.stackDrawTwo) {
+        d.pub.pendingDraw += 2;
+        return advance(d, 1);
+      }
       drawInto(d, seatAt(d, 1), 2);
       return advance(d, 2);
     default:
@@ -216,6 +224,7 @@ export function applyDraw(state: GameState, seat: number): Transition {
   const d = toDraft(state);
   requireStage(d, "Playing");
   if (d.pub.drawFour) throw new RuleError("DrawFourPending");
+  if (d.pub.pendingDraw > 0) throw new RuleError("DrawPending");
   requireTurn(d, seat);
   if (d.pub.drawnSlot !== null) throw new RuleError("AlreadyDrew");
   if (!canDraw(state.pub, seat)) throw new RuleError("CannotDraw");
@@ -230,6 +239,7 @@ export function applyPass(state: GameState, seat: number): Transition {
   const d = toDraft(state);
   requireStage(d, "Playing");
   if (d.pub.drawFour) throw new RuleError("DrawFourPending");
+  if (d.pub.pendingDraw > 0) throw new RuleError("DrawPending");
   requireTurn(d, seat);
   if (d.pub.drawnSlot === null && canDraw(state.pub, seat)) throw new RuleError("CannotPass");
   d.pub.drawnSlot = null;
@@ -290,6 +300,21 @@ export function applyAcceptDrawFour(state: GameState, seat: number): Transition 
   return finish(d);
 }
 
+export function applyTakeDraws(state: GameState, seat: number): Transition {
+  const d = toDraft(state);
+  requireStage(d, "Playing");
+  if (d.pub.pendingDraw === 0) throw new RuleError("NoPendingDraw");
+  requireTurn(d, seat);
+  const count = d.pub.pendingDraw;
+  d.pub.monoWindow = null;
+  seatOf(d, seat).timeouts = 0;
+  d.events.push({ type: "DrawsTaken", seat, count });
+  drawInto(d, seat, count);
+  d.pub.pendingDraw = 0;
+  advance(d, 1);
+  return finish(d);
+}
+
 export function applyChallengeDrawFour(state: GameState, seat: number): Transition {
   const d = toDraft(state);
   requireStage(d, "Playing");
@@ -331,6 +356,9 @@ export function applyTimeout(state: GameState): Transition {
     drawInto(d, seat, 4);
     d.pub.drawFour = null;
     d.hadColor = null;
+  } else if (d.pub.pendingDraw > 0) {
+    drawInto(d, seat, d.pub.pendingDraw);
+    d.pub.pendingDraw = 0;
   } else if (d.pub.drawnSlot === null && canDraw(state.pub, seat)) {
     drawInto(d, seat, 1);
   }

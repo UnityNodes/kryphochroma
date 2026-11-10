@@ -8,6 +8,7 @@ export interface TableConfig {
   readonly seats: number;
   readonly mode: MatchMode;
   readonly targetScore: number;
+  readonly stackDrawTwo: boolean;
 }
 
 export interface PublicSeat {
@@ -43,6 +44,7 @@ export interface PublicState {
   readonly seats: readonly PublicSeat[];
   readonly drawnSlot: number | null;
   readonly drawFour: PendingDrawFour | null;
+  readonly pendingDraw: number;
   readonly monoWindow: number | null;
   readonly candidate: number | null;
   readonly lastResult: RoundResult | null;
@@ -65,7 +67,8 @@ export type Move =
   | { readonly type: "pass" }
   | { readonly type: "mono" }
   | { readonly type: "accept" }
-  | { readonly type: "challenge" };
+  | { readonly type: "challenge" }
+  | { readonly type: "take" };
 
 export type GameEvent =
   | { readonly type: "Dealt"; readonly round: number; readonly firstSeat: number; readonly topCard: Card }
@@ -75,6 +78,7 @@ export type GameEvent =
   | { readonly type: "MonoSaid"; readonly seat: number }
   | { readonly type: "MonoCaught"; readonly seat: number }
   | { readonly type: "DrawFourAccepted"; readonly seat: number }
+  | { readonly type: "DrawsTaken"; readonly seat: number; readonly count: number }
   | { readonly type: "DrawFourChallenged"; readonly seat: number }
   | { readonly type: "ChallengeResolved"; readonly bit: boolean }
   | { readonly type: "TimedOut"; readonly seat: number }
@@ -102,6 +106,9 @@ export type RuleErrorCode =
   | "CannotDraw"
   | "CannotPass"
   | "DrawFourPending"
+  | "DrawPending"
+  | "NoPendingDraw"
+  | "MustStackOrTake"
   | "NoDrawFour"
   | "CannotSayMono"
   | "CannotCatch"

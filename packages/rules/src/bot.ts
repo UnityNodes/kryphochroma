@@ -78,11 +78,11 @@ export function chooseMove(pub: PublicState, seat: number, hand: Hand, options: 
   const plays = moves.filter((m): m is PlayMove => m.type === "play");
   const play = pickPlay(pub, seat, hand, plays);
   if (play) return play;
-  if (options.cheat) {
+  if (options.cheat && pub.pendingDraw === 0) {
     const lie = cheatMove(pub, hand);
     if (lie) return lie;
   }
-  return moves.find((m) => m.type === "draw") ?? moves.find((m) => m.type === "pass") ?? null;
+  return moves.find((m) => m.type === "take") ?? moves.find((m) => m.type === "draw") ?? moves.find((m) => m.type === "pass") ?? null;
 }
 
 export function botCatchTarget(pub: PublicState, seat: number): number | null {

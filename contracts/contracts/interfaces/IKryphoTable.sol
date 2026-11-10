@@ -18,6 +18,7 @@ interface IKryphoTable {
         uint32 turnTimeout;
         uint16 targetScore;
         bool singleRound;
+        bool stackDrawTwo;
     }
 
     error BadConfig();
@@ -35,6 +36,9 @@ interface IKryphoTable {
     error CannotDraw();
     error CannotPass();
     error DrawFourPending();
+    error DrawPending();
+    error NoPendingDraw();
+    error MustStackOrTake();
     error NoDrawFour();
     error CannotSayMono();
     error CannotCatch();
@@ -51,6 +55,7 @@ interface IKryphoTable {
     event MonoSaid(uint256 indexed id, uint8 seat);
     event MonoCaught(uint256 indexed id, uint8 seat);
     event DrawFourAccepted(uint256 indexed id, uint8 seat);
+    event DrawsTaken(uint256 indexed id, uint8 seat, uint8 count);
     event DrawFourChallenged(uint256 indexed id, uint8 seat);
     event ChallengeResolved(uint256 indexed id, bool hadColor);
     event TimedOut(uint256 indexed id, uint8 seat);

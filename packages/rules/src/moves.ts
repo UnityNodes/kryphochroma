@@ -1,4 +1,4 @@
-import { type Card, PLAYABLE_COLORS, isWild, matches } from "./cards.js";
+import { type Card, PLAYABLE_COLORS, RANK, isWild, matches, rankOf } from "./cards.js";
 import { canDraw } from "./draft.js";
 import {
   applyAcceptDrawFour,
@@ -7,6 +7,7 @@ import {
   applyMono,
   applyPass,
   applyPlay,
+  applyTakeDraws,
   canSayMono,
 } from "./engine.js";
 import type { GameState, Hand, Move, PublicState, Transition } from "./types.js";
@@ -17,6 +18,12 @@ export function legalMoves(pub: PublicState, seat: number, hand: Hand): Move[] {
   if (canSayMono(pub, seat)) moves.push({ type: "mono" });
   if (pub.turn !== seat) return moves;
   if (pub.drawFour) return [...moves, { type: "accept" }, { type: "challenge" }];
+  if (pub.pendingDraw > 0) {
+    hand.forEach((card, slot) => {
+      if (card !== null && !isWild(card) && rankOf(card) === RANK.drawTwo) moves.push({ type: "play", slot, card });
+    });
+    return [...moves, { type: "take" }];
+  }
   hand.forEach((card, slot) => {
     if (card === null) return;
     if (pub.drawnSlot !== null && slot !== pub.drawnSlot) return;
@@ -51,5 +58,7 @@ export function applyMove(state: GameState, seat: number, move: Move): Transitio
       return applyAcceptDrawFour(state, seat);
     case "challenge":
       return applyChallengeDrawFour(state, seat);
+    case "take":
+      return applyTakeDraws(state, seat);
   }
 }
