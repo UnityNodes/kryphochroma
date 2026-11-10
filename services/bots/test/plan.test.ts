@@ -9,7 +9,7 @@ describe("keeper plan", () => {
   });
 
   it("deals missing seats, then reveals the starter", () => {
-    expect(nextKeeperAction({ ...base, stage: 2, dealtMask: 0b001 }, 0n)).toEqual({ kind: "dealSeat", seat: 1 });
+    expect(nextKeeperAction({ ...base, stage: 2, dealtMask: 0b001 }, 0n)).toEqual({ kind: "dealSeat", seat: 1, seats: [1, 2] });
     expect(nextKeeperAction({ ...base, stage: 2, dealtMask: 0b111 }, 0n)).toEqual({ kind: "revealStarter" });
   });
 
@@ -29,5 +29,12 @@ describe("keeper plan", () => {
     expect(nextKeeperAction({ ...base, stage: 0 }, 999n)).toEqual({ kind: "idle" });
     expect(nextKeeperAction({ ...base, stage: 7 }, 999n)).toEqual({ kind: "idle" });
     expect(nextKeeperAction({ ...base, stage: 42 }, 999n)).toEqual({ kind: "idle" });
+  });
+
+  it("pre-shuffles only pool tables in the lobby", () => {
+    const pool = "0xAbc";
+    expect(nextKeeperAction({ ...base, stage: 0, setupStep: 10, creator: "0xabc" }, 0n, pool)).toEqual({ kind: "setupStep", remaining: 50 });
+    expect(nextKeeperAction({ ...base, stage: 0, setupStep: 60, creator: "0xabc" }, 0n, pool)).toEqual({ kind: "idle" });
+    expect(nextKeeperAction({ ...base, stage: 0, setupStep: 10, creator: "0xdef" }, 0n, pool)).toEqual({ kind: "idle" });
   });
 });

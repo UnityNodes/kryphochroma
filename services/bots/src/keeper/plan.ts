@@ -8,11 +8,12 @@ export interface TableView {
   readonly turnDeadline: bigint;
   readonly candidate: number;
   readonly revealPrepared: number;
+  readonly creator?: string;
 }
 
 export type KeeperAction =
   | { readonly kind: "setupStep"; readonly remaining: number }
-  | { readonly kind: "dealSeat"; readonly seat: number }
+  | { readonly kind: "dealSeat"; readonly seat: number; readonly seats: readonly number[] }
   | { readonly kind: "revealStarter" }
   | { readonly kind: "resolveChallenge" }
   | { readonly kind: "prepareReveal" }
@@ -22,14 +23,18 @@ export type KeeperAction =
 
 const stageName = (stage: number): string => STAGE[stage] ?? "Unknown";
 
-export function nextKeeperAction(table: TableView, nowSeconds: bigint): KeeperAction {
+export function nextKeeperAction(table: TableView, nowSeconds: bigint, poolOwner?: string): KeeperAction {
   switch (stageName(table.stage)) {
+    case "Lobby":
+      if (poolOwner && table.creator?.toLowerCase() === poolOwner.toLowerCase() && table.setupStep < SETUP_STEPS) {
+        return { kind: "setupStep", remaining: SETUP_STEPS - table.setupStep };
+      }
+      return { kind: "idle" };
     case "Shuffling":
       return { kind: "setupStep", remaining: SETUP_STEPS - table.setupStep };
     case "Dealing": {
-      for (let seat = 0; seat < table.joined; seat++) {
-        if ((table.dealtMask & (1 << seat)) === 0) return { kind: "dealSeat", seat };
-      }
+      const undealt = Array.from({ length: table.joined }, (_, seat) => seat).filter((seat) => (table.dealtMask & (1 << seat)) === 0);
+      if (undealt.length > 0) return { kind: "dealSeat", seat: undealt[0] ?? 0, seats: undealt };
       return { kind: "revealStarter" };
     }
     case "AwaitChallenge":

@@ -18,7 +18,7 @@ export function clientIp(request: Request): string {
 
 export const botsUrl = BOTS_URL;
 
-export async function forward(request: Request, path: "/drip" | "/fill" | "/act", body: Record<string, unknown>): Promise<Response> {
+export async function forward(request: Request, path: "/drip" | "/fill" | "/act" | "/quick", body: Record<string, unknown>): Promise<Response> {
   const ip = clientIp(request);
   const limit = path === "/act" ? ACT_LIMIT_PER_WINDOW : LIMIT_PER_WINDOW;
   if (!allowed(`${path}:${ip}`, limit, Date.now())) return Response.json({ error: "slow down" }, { status: 429 });

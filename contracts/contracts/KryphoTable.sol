@@ -180,12 +180,20 @@ contract KryphoTable is IKryphoTable, ZamaEthereumConfig {
         Table storage t = _requireStage(id, Stage.Lobby);
         if (msg.sender != t.creator) revert NotCreator();
         if (t.joined < 2) revert BadConfig();
+        bool shuffled = t.setupStep == SETUP_STEPS;
         _resetRound(id, t);
+        if (shuffled) {
+            t.setupStep = SETUP_STEPS;
+            t.stage = Stage.Dealing;
+        }
     }
 
     function setupStep(uint256 id) external {
-        Table storage t = _requireStage(id, Stage.Shuffling);
+        Table storage t = _tables[id];
+        bool early = t.stage == Stage.Lobby && t.creator != address(0);
+        if (!early && t.stage != Stage.Shuffling) revert WrongStage(Stage.Shuffling, t.stage);
         uint16 step = t.setupStep;
+        if (step >= SETUP_STEPS) revert ShuffleNotDone();
         if (step < KryphoDeck.FILL_STEPS) {
             KryphoDeck.fillStep(_deck[id], uint8(step));
         } else {
@@ -193,7 +201,7 @@ contract KryphoTable is IKryphoTable, ZamaEthereumConfig {
         }
         t.setupStep = step + 1;
         emit ShuffleProgress(id, step + 1, SETUP_STEPS);
-        if (step + 1 == SETUP_STEPS) t.stage = Stage.Dealing;
+        if (step + 1 == SETUP_STEPS && !early) t.stage = Stage.Dealing;
     }
 
     function dealSeat(uint256 id, uint8 seat) external {
@@ -453,10 +461,6 @@ contract KryphoTable is IKryphoTable, ZamaEthereumConfig {
 
     function handOf(uint256 id, uint8 seat) external view returns (euint8[24] memory) {
         return _hands[id][seat];
-    }
-
-    function honestOf(uint256 id, uint8 seat) external view returns (ebool) {
-        return _honest[id][seat];
     }
 
     function hadColorOf(uint256 id) external view returns (ebool) {

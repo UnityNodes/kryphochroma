@@ -10,6 +10,7 @@ import { type KeeperAction, type TableView, nextKeeperAction } from "./plan.js";
 import { type GasBudget, belowAlert, canSpend, rollBudget, spend, stopRequested } from "./safety.js";
 
 const SETUP_GAS = 16_000_000n;
+const DEAL_GAS = 8_000_000n;
 const PIPELINE = 8;
 const WATCH_WINDOW = 20n;
 
@@ -87,6 +88,20 @@ export async function runKeeper(config: KeeperConfig, env: NodeJS.ProcessEnv, un
     log({ event: "setup", id, sent: count, remaining: remaining - count });
   }
 
+  async function pipelineDeals(id: bigint, seats: readonly number[]): Promise<void> {
+    const hashes: Hex[] = [];
+    for (const seat of seats) {
+      const request = { address, abi: kryphoTableAbi, functionName: "dealSeat", args: [id, seat], account, chain: sepolia, gas: DEAL_GAS } as never;
+      hashes.push(await walletClient.writeContract(request));
+    }
+    for (const hash of hashes) {
+      const receipt = await publicClient.waitForTransactionReceipt({ hash });
+      minBlock = receipt.blockNumber > minBlock ? receipt.blockNumber : minBlock;
+      budget = spend(budget, receipt.gasUsed);
+    }
+    log({ event: "deal", id, seats });
+  }
+
   async function revealAndSend(functionName: string, id: bigint, handles: readonly Hex[]): Promise<void> {
     const result = await sdk.decryption.decryptPublicValues([...handles]);
     await send(functionName, [id, result.abiEncodedClearValues, result.decryptionProof]);
@@ -97,7 +112,7 @@ export async function runKeeper(config: KeeperConfig, env: NodeJS.ProcessEnv, un
       case "setupStep":
         return pipelineSetup(id, action.remaining);
       case "dealSeat":
-        return send("dealSeat", [id, action.seat]);
+        return pipelineDeals(id, action.seats);
       case "revealStarter": {
         const table = (await read("getTable", [id])) as { deckPtr: number };
         return revealAndSend("setStarter", id, [(await read("deckCardAt", [id, table.deckPtr])) as Hex]);
@@ -132,7 +147,7 @@ export async function runKeeper(config: KeeperConfig, env: NodeJS.ProcessEnv, un
       const now = latest.timestamp;
       for (let id = count > WATCH_WINDOW ? count - WATCH_WINDOW + 1n : 1n; id <= count; id++) {
         const view = (await read("getTable", [id])) as TableView;
-        const action = nextKeeperAction(view, now);
+        const action = nextKeeperAction(view, now, account.address);
         if (action.kind === "idle") continue;
         try {
           await act(id, action);

@@ -1224,30 +1224,6 @@ export const kryphoTableAbi = [
         "type": "uint256"
       },
       {
-        "internalType": "uint8",
-        "name": "seat",
-        "type": "uint8"
-      }
-    ],
-    "name": "honestOf",
-    "outputs": [
-      {
-        "internalType": "ebool",
-        "name": "",
-        "type": "bytes32"
-      }
-    ],
-    "stateMutability": "view",
-    "type": "function"
-  },
-  {
-    "inputs": [
-      {
-        "internalType": "uint256",
-        "name": "id",
-        "type": "uint256"
-      },
-      {
         "internalType": "address",
         "name": "session",
         "type": "address"

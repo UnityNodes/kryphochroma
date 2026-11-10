@@ -191,4 +191,24 @@ describe("KryphoTable guards", function () {
     await expect(table.relay(id, [draw])).to.be.revertedWithCustomError(table, "BadAction");
     await expect(table.relayOne(id, draw)).to.be.revertedWithCustomError(table, "NotYourTurn");
   });
+
+  it("pre-shuffles in the lobby and deals right after start", async function () {
+    const table = await ethers.deployContract("KryphoTable");
+    await (await table.createTable(config)).wait();
+    const id = await table.tableCount();
+    for (let step = 0; step < 60; step++) await (await table.setupStep(id, { gasLimit: 16_700_000 })).wait();
+    await expect(table.setupStep(id)).to.be.revertedWithCustomError(table, "ShuffleNotDone");
+    expect(Number((await table.getTable(id)).stage)).to.equal(0);
+    await (await table.join(id, s[0]!.address)).wait();
+    await (await table.connect(s[1]!).join(id, s[1]!.address)).wait();
+    await (await table.start(id)).wait();
+    const t = await table.getTable(id);
+    expect(Number(t.stage)).to.equal(2);
+    expect(Number(t.setupStep)).to.equal(60);
+    await (await table.dealSeat(id, 0)).wait();
+    await (await table.dealSeat(id, 1)).wait();
+    const { checkSignaturesArgs } = await starter(table, id);
+    await (await table.setStarter(id, checkSignaturesArgs.abiEncodedCleartexts, checkSignaturesArgs.decryptionProof)).wait();
+    expect(Number((await table.getTable(id)).stage)).to.be.oneOf([2, 3]);
+  });
 });

@@ -24,6 +24,47 @@ export function NewTable() {
   const [error, setError] = useState<string | null>(null);
   const running = done >= 0 && done < STEPS.length - 1 && !error;
 
+  const [warming, setWarming] = useState<number | null>(null);
+
+  async function prepare() {
+    const account = loadBurner(window.sessionStorage);
+    const transport = http(SEPOLIA_RPC_URL);
+    const publicClient = createPublicClient({ chain: sepolia, transport });
+    const wallet = createWalletClient({ account, chain: sepolia, transport });
+    setDone(0);
+    if ((await publicClient.getBalance({ address: account.address })) < MIN_BALANCE) {
+      const res = await fetch("/api/drip", { method: "POST", body: JSON.stringify({ address: account.address }) });
+      if (!res.ok) throw new Error("The faucet is busy, try again in a minute");
+      for (let i = 0; i < BALANCE_TRIES && (await publicClient.getBalance({ address: account.address })) < MIN_BALANCE; i++) {
+        await new Promise((r) => setTimeout(r, BALANCE_WAIT_MS));
+      }
+    }
+    setDone(1);
+    return { account, publicClient, wallet };
+  }
+
+  async function quick() {
+    setError(null);
+    try {
+      const pool = (await (await fetch("/api/quick", { method: "POST" })).json()) as { id?: string; warming?: number };
+      if (!pool.id) {
+        setWarming(pool.warming ?? 0);
+        return;
+      }
+      const { account, publicClient, wallet } = await prepare();
+      setDone(2);
+      const joinHash = await wallet.writeContract({ address: TABLE_ADDRESS, abi: kryphoTableAbi, functionName: "join", args: [BigInt(pool.id), account.address], gasPrice: BURNER_GAS_PRICE, gas: BURNER_GAS_LIMIT });
+      await publicClient.waitForTransactionReceipt({ hash: joinHash });
+      setDone(3);
+      const fill = await fetch("/api/fill", { method: "POST", body: JSON.stringify({ id: pool.id }) });
+      if (!fill.ok) throw new Error("Could not seat the bots");
+      setDone(5);
+      router.push(`/t/${pool.id}`);
+    } catch (e) {
+      setError((e as Error).message.slice(0, 160));
+    }
+  }
+
   async function go() {
     setError(null);
     try {
@@ -100,9 +141,17 @@ export function NewTable() {
               {error}
             </p>
           )}
-          <button type="button" className="kc-btn justify-self-center" onClick={go} disabled={running}>
-            {error ? "Try again" : "Create table"}
-          </button>
+          {warming !== null && (
+            <p className="text-center text-sm">A shuffled table is warming up on chain: step {warming} of 60. Try again in a minute, or open your own table below (its shuffle takes about ten minutes).</p>
+          )}
+          <div className="flex flex-wrap justify-center gap-3">
+            <button type="button" className="kc-btn kc-mono" onClick={quick} disabled={running}>
+              Quick game
+            </button>
+            <button type="button" className="kc-btn" onClick={go} disabled={running}>
+              {error ? "Try again" : "Own table"}
+            </button>
+          </div>
         </div>
       </main>
     </div>

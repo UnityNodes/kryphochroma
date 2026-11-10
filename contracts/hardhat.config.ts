@@ -9,6 +9,7 @@ export default defineConfig({
     settings: {
       evmVersion: "cancun",
       optimizer: { enabled: true, runs: 1 },
+      viaIR: true,
     },
   },
   networks: {
