@@ -52,17 +52,20 @@ export async function runKeeper(config: KeeperConfig, env: NodeJS.ProcessEnv, un
   const sdk = new ZamaSDK(createConfig({ chains: [zamaSepolia], publicClient, walletClient, relayers: { [zamaSepolia.id]: node() } }));
   const address = config.table;
   let budget: GasBudget = { dayStart: Date.now(), spent: 0n, limit: config.dailyGasLimit };
+  let minBlock = 0n;
+  let snapshot = 0n;
 
   const read = async (functionName: string, args: readonly unknown[]) =>
-    publicClient.readContract({ address, abi: kryphoTableAbi, functionName, args } as never) as Promise<unknown>;
+    publicClient.readContract({ address, abi: kryphoTableAbi, functionName, args, blockNumber: snapshot } as never) as Promise<unknown>;
 
   async function send(functionName: string, args: readonly unknown[], gas?: bigint): Promise<void> {
     const request = { address, abi: kryphoTableAbi, functionName, args, account, chain: sepolia } as never;
     const estimate = gas ?? (await publicClient.estimateContractGas(request));
     if (!canSpend(budget, estimate)) throw new Error("daily gas budget exhausted");
-    await publicClient.simulateContract(request);
+    await publicClient.simulateContract({ ...(request as object), blockNumber: snapshot } as never);
     const hash = await walletClient.writeContract({ ...(request as object), gas: estimate } as never);
     const receipt = await publicClient.waitForTransactionReceipt({ hash });
+    minBlock = receipt.blockNumber;
     budget = spend(budget, receipt.gasUsed);
     log({ event: "tx", functionName, args, hash, gas: receipt.gasUsed, status: receipt.status });
   }
@@ -71,7 +74,7 @@ export async function runKeeper(config: KeeperConfig, env: NodeJS.ProcessEnv, un
     const count = Math.min(remaining, PIPELINE);
     if (!canSpend(budget, SETUP_GAS * BigInt(count))) throw new Error("daily gas budget exhausted");
     const request = { address, abi: kryphoTableAbi, functionName: "setupStep", args: [id], account, chain: sepolia } as never;
-    await publicClient.simulateContract(request);
+    await publicClient.simulateContract({ ...(request as object), blockNumber: snapshot } as never);
     let nonce = await publicClient.getTransactionCount({ address: account.address, blockTag: "pending" });
     const hashes: Hex[] = [];
     for (let i = 0; i < count; i++) {
@@ -79,6 +82,7 @@ export async function runKeeper(config: KeeperConfig, env: NodeJS.ProcessEnv, un
     }
     for (const hash of hashes) {
       const receipt = await publicClient.waitForTransactionReceipt({ hash });
+      minBlock = receipt.blockNumber > minBlock ? receipt.blockNumber : minBlock;
       budget = spend(budget, receipt.gasUsed);
     }
     log({ event: "setup", id, sent: count, remaining: remaining - count });
@@ -121,8 +125,14 @@ export async function runKeeper(config: KeeperConfig, env: NodeJS.ProcessEnv, un
     budget = rollBudget(budget, Date.now());
     const balance = await publicClient.getBalance({ address: account.address });
     if (belowAlert(balance, config.alertBalance)) log({ event: "low-balance", balance });
+    const latest = await publicClient.getBlock({ blockTag: "latest" });
+    if (latest.number < minBlock) {
+      await new Promise((resolve) => setTimeout(resolve, config.pollMs));
+      continue;
+    }
+    snapshot = latest.number;
     const count = (await read("tableCount", [])) as bigint;
-    const now = (await publicClient.getBlock()).timestamp;
+    const now = latest.timestamp;
     for (let id = count > WATCH_WINDOW ? count - WATCH_WINDOW + 1n : 1n; id <= count; id++) {
       const view = (await read("getTable", [id])) as TableView;
       const action = nextKeeperAction(view, now);
