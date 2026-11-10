@@ -8,7 +8,7 @@ export default defineConfig({
     version: "0.8.27",
     settings: {
       evmVersion: "cancun",
-      optimizer: { enabled: true, runs: 200 },
+      optimizer: { enabled: true, runs: 1 },
     },
   },
   networks: {

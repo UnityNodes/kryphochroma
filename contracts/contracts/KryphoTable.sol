@@ -19,6 +19,33 @@ contract KryphoTable is IKryphoTable, ZamaEthereumConfig {
     uint16 internal constant CHEAT_PENALTY = 100;
     uint64 internal constant CATCH_DELAY_BLOCKS = 2;
     uint16 internal constant SETUP_STEPS = uint16(KryphoDeck.FILL_STEPS) + KryphoDeck.SHUFFLE_STEPS;
+    bytes32 internal constant ACTION_TYPEHASH =
+        keccak256("Action(uint256 table,uint8 seat,uint8 kind,uint8 slot,uint8 card,uint8 color,bytes32 seenHandle,uint32 nonce)");
+    bytes32 internal constant RELAY_SEAT_SLOT = keccak256("kryphochroma.relay.seat");
+    uint256 internal constant HALF_ORDER = 0x7fffffffffffffffffffffffffffffff5d576e7357a4501ddfe92f46681b20a0;
+    uint8 internal constant KIND_PLAY = 0;
+    uint8 internal constant KIND_DRAW = 1;
+    uint8 internal constant KIND_PASS = 2;
+    uint8 internal constant KIND_TAKE = 3;
+    uint8 internal constant KIND_MONO = 4;
+    uint8 internal constant KIND_ACCEPT = 5;
+    uint8 internal constant KIND_CHALLENGE = 6;
+    uint8 internal constant KIND_CATCH = 7;
+
+    bytes32 public immutable DOMAIN_SEPARATOR;
+
+    struct Action {
+        uint8 seat;
+        uint8 kind;
+        uint8 slot;
+        uint8 card;
+        uint8 color;
+        bytes32 seenHandle;
+        uint32 nonce;
+        uint8 v;
+        bytes32 r;
+        bytes32 s;
+    }
 
     struct Seat {
         address player;
@@ -65,6 +92,53 @@ contract KryphoTable is IKryphoTable, ZamaEthereumConfig {
     mapping(uint256 => ebool) internal _hadColor;
     mapping(uint256 => uint8[]) internal _discard;
     mapping(uint256 => bytes32[]) internal _revealHandles;
+    mapping(uint256 => uint32[4]) internal _nonces;
+
+    constructor() {
+        DOMAIN_SEPARATOR = keccak256(
+            abi.encode(
+                keccak256("EIP712Domain(string name,string version,uint256 chainId,address verifyingContract)"),
+                keccak256("Kryphochroma"),
+                keccak256("1"),
+                block.chainid,
+                address(this)
+            )
+        );
+    }
+
+    function relay(uint256 id, Action[] calldata actions) external {
+        Table storage t = _tables[id];
+        for (uint256 i = 0; i < actions.length; i++) {
+            Action calldata a = actions[i];
+            if (a.seat >= t.joined || a.nonce != _nonces[id][a.seat]) revert BadAction();
+            if (_signer(id, a) != _seats[id][a.seat].session) revert BadSignature();
+            _nonces[id][a.seat] = a.nonce + 1;
+            try this.relayOne(id, a) {
+                emit ActionRelayed(id, a.seat, a.nonce);
+            } catch (bytes memory reason) {
+                emit ActionRejected(id, a.seat, a.nonce, bytes4(reason));
+            }
+        }
+    }
+
+    function relayOne(uint256 id, Action calldata a) external {
+        if (msg.sender != address(this)) revert NotYourTurn();
+        _setRelaySeat(a.seat);
+        if (a.kind == KIND_PLAY) play(id, a.slot, a.card, a.color, a.seenHandle);
+        else if (a.kind == KIND_DRAW) draw(id);
+        else if (a.kind == KIND_PASS) pass(id);
+        else if (a.kind == KIND_TAKE) takeDraws(id);
+        else if (a.kind == KIND_MONO) sayMono(id, a.seat);
+        else if (a.kind == KIND_ACCEPT) acceptDrawFour(id);
+        else if (a.kind == KIND_CHALLENGE) challengeDrawFour(id);
+        else if (a.kind == KIND_CATCH) catchMono(id, a.slot);
+        else revert BadAction();
+        _setRelaySeat(NONE);
+    }
+
+    function noncesOf(uint256 id) external view returns (uint32[4] memory) {
+        return _nonces[id];
+    }
 
     function createTable(Config calldata config) external returns (uint256 id) {
         if (config.seats < 2 || config.seats > 4 || config.turnTimeout < MIN_TURN_TIMEOUT || config.targetScore == 0 || config.targetScore > MAX_TARGET_SCORE) {
@@ -161,7 +235,7 @@ contract KryphoTable is IKryphoTable, ZamaEthereumConfig {
         emit Dealt(id, t.round, t.turn, card);
     }
 
-    function play(uint256 id, uint8 slot, uint8 card, uint8 chosenColor, bytes32 seenHandle) external {
+    function play(uint256 id, uint8 slot, uint8 card, uint8 chosenColor, bytes32 seenHandle) public {
         Table storage t = _requireStage(id, Stage.Playing);
         if (t.drawFourBy != NONE) revert DrawFourPending();
         uint8 seat = _requireTurn(id, t);
@@ -203,7 +277,7 @@ contract KryphoTable is IKryphoTable, ZamaEthereumConfig {
         _applyEffect(id, t, card, seat, prevColor);
     }
 
-    function draw(uint256 id) external {
+    function draw(uint256 id) public {
         Table storage t = _requireStage(id, Stage.Playing);
         if (t.drawFourBy != NONE) revert DrawFourPending();
         if (t.pendingDraw > 0) revert DrawPending();
@@ -215,7 +289,7 @@ contract KryphoTable is IKryphoTable, ZamaEthereumConfig {
         _seats[id][seat].timeouts = 0;
     }
 
-    function pass(uint256 id) external {
+    function pass(uint256 id) public {
         Table storage t = _requireStage(id, Stage.Playing);
         if (t.drawFourBy != NONE) revert DrawFourPending();
         if (t.pendingDraw > 0) revert DrawPending();
@@ -228,7 +302,7 @@ contract KryphoTable is IKryphoTable, ZamaEthereumConfig {
         _advance(t, 1);
     }
 
-    function takeDraws(uint256 id) external {
+    function takeDraws(uint256 id) public {
         Table storage t = _requireStage(id, Stage.Playing);
         if (t.pendingDraw == 0) revert NoPendingDraw();
         uint8 seat = _requireTurn(id, t);
@@ -241,9 +315,9 @@ contract KryphoTable is IKryphoTable, ZamaEthereumConfig {
         _advance(t, 1);
     }
 
-    function sayMono(uint256 id, uint8 seat) external {
+    function sayMono(uint256 id, uint8 seat) public {
         Table storage t = _requireStage(id, Stage.Playing);
-        if (seat >= t.joined || !_isActor(_seats[id][seat])) revert NotYourTurn();
+        if (seat >= t.joined || !_isActor(id, seat)) revert NotYourTurn();
         Seat storage s = _seats[id][seat];
         bool window = t.monoWindow == seat && s.handSize == 1;
         bool early = t.turn == seat && s.handSize == 2 && t.drawFourBy == NONE;
@@ -253,7 +327,7 @@ contract KryphoTable is IKryphoTable, ZamaEthereumConfig {
         emit MonoSaid(id, seat);
     }
 
-    function catchMono(uint256 id, uint8 target) external {
+    function catchMono(uint256 id, uint8 target) public {
         Table storage t = _requireStage(id, Stage.Playing);
         if (target >= t.joined || t.monoWindow != target) revert CannotCatch();
         Seat storage s = _seats[id][target];
@@ -264,7 +338,7 @@ contract KryphoTable is IKryphoTable, ZamaEthereumConfig {
         _drawInto(id, t, target, 2);
     }
 
-    function acceptDrawFour(uint256 id) external {
+    function acceptDrawFour(uint256 id) public {
         Table storage t = _requireStage(id, Stage.Playing);
         if (t.drawFourBy == NONE) revert NoDrawFour();
         uint8 seat = _requireTurn(id, t);
@@ -276,7 +350,7 @@ contract KryphoTable is IKryphoTable, ZamaEthereumConfig {
         _advance(t, 1);
     }
 
-    function challengeDrawFour(uint256 id) external {
+    function challengeDrawFour(uint256 id) public {
         Table storage t = _requireStage(id, Stage.Playing);
         if (t.drawFourBy == NONE) revert NoDrawFour();
         uint8 seat = _requireTurn(id, t);
@@ -406,19 +480,47 @@ contract KryphoTable is IKryphoTable, ZamaEthereumConfig {
         if (t.creator == address(0) || t.stage != stage) revert WrongStage(stage, t.stage);
     }
 
-    function _isActor(Seat storage s) internal view returns (bool) {
+    function _isActor(uint256 id, uint8 seat) internal view returns (bool) {
+        uint8 relayed = _relaySeat();
+        if (relayed != NONE) return relayed == seat;
+        Seat storage s = _seats[id][seat];
         return msg.sender == s.session || msg.sender == s.player;
+    }
+
+    function _relaySeat() internal view returns (uint8 seat) {
+        bytes32 slot = RELAY_SEAT_SLOT;
+        uint256 raw;
+        assembly {
+            raw := tload(slot)
+        }
+        return raw == 0 ? NONE : uint8(raw - 1);
+    }
+
+    function _setRelaySeat(uint8 seat) internal {
+        bytes32 slot = RELAY_SEAT_SLOT;
+        uint256 raw = seat == NONE ? 0 : uint256(seat) + 1;
+        assembly {
+            tstore(slot, raw)
+        }
+    }
+
+    function _signer(uint256 id, Action calldata a) internal view returns (address) {
+        if (uint256(a.s) > HALF_ORDER) revert BadSignature();
+        bytes32 structHash = keccak256(abi.encode(ACTION_TYPEHASH, id, a.seat, a.kind, a.slot, a.card, a.color, a.seenHandle, a.nonce));
+        address signer = ecrecover(keccak256(abi.encodePacked("\x19\x01", DOMAIN_SEPARATOR, structHash)), a.v, a.r, a.s);
+        if (signer == address(0)) revert BadSignature();
+        return signer;
     }
 
     function _isOtherSeat(uint256 id, Table storage t, uint8 target) internal view returns (bool) {
         for (uint8 seat = 0; seat < t.joined; seat++) {
-            if (seat != target && _isActor(_seats[id][seat])) return true;
+            if (seat != target && _isActor(id, seat)) return true;
         }
         return false;
     }
 
     function _requireTurn(uint256 id, Table storage t) internal view returns (uint8) {
-        if (!_isActor(_seats[id][t.turn])) revert NotYourTurn();
+        if (!_isActor(id, t.turn)) revert NotYourTurn();
         return t.turn;
     }
 

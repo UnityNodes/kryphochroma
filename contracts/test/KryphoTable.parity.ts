@@ -31,6 +31,36 @@ interface GameSetup {
   readonly stack: boolean;
   readonly cheaters: readonly number[];
   readonly timeoutEvery: number;
+  readonly relayBatch?: number;
+}
+
+const KIND: Record<Move["type"], number> = { play: 0, draw: 1, pass: 2, take: 3, mono: 4, accept: 5, challenge: 6 };
+const ACTION_TYPES = {
+  Action: [
+    { name: "table", type: "uint256" },
+    { name: "seat", type: "uint8" },
+    { name: "kind", type: "uint8" },
+    { name: "slot", type: "uint8" },
+    { name: "card", type: "uint8" },
+    { name: "color", type: "uint8" },
+    { name: "seenHandle", type: "bytes32" },
+    { name: "nonce", type: "uint32" },
+  ],
+};
+
+export async function signAction(
+  table: Awaited<ReturnType<typeof deployTable>>,
+  signer: Signer,
+  id: bigint,
+  seat: number,
+  kind: number,
+  fields: { slot?: number; card?: number; color?: number; seenHandle?: string },
+  nonce: number,
+) {
+  const domain = { name: "Kryphochroma", version: "1", chainId: (await ethers.provider.getNetwork()).chainId, verifyingContract: await table.getAddress() };
+  const value = { table: id, seat, kind, slot: fields.slot ?? 0, card: fields.card ?? 0, color: fields.color ?? 0, seenHandle: fields.seenHandle ?? ethers.ZeroHash, nonce };
+  const sig = ethers.Signature.from(await signer.signTypedData(domain, ACTION_TYPES, value));
+  return { seat, kind, slot: value.slot, card: value.card, color: value.color, seenHandle: value.seenHandle, nonce, v: sig.v, r: sig.r, s: sig.s };
 }
 
 async function deployTable() {
@@ -125,6 +155,17 @@ async function playGame(setup: GameSetup, players: Signer[]): Promise<{ steps: n
   let state = initialState({ seats: setup.seats, mode: "single", targetScore: 500, stackDrawTwo: setup.stack }, 1, deck).state;
   await compare(table, id, state, "after deal");
   let steps = 0;
+  const nonces = Array.from({ length: setup.seats }, () => 0);
+  let pending: Awaited<ReturnType<typeof signAction>>[] = [];
+  let shadow = state;
+  const flush = async () => {
+    if (pending.length === 0) return;
+    const receipt = await (await table.relay(id, pending, { gasLimit: 16_000_000 })).wait();
+    const rejected = receipt?.logs.filter((l) => l.topics[0] === table.interface.getEvent("ActionRejected").topicHash) ?? [];
+    expect(rejected.length, "relayed actions rejected").to.equal(0);
+    pending = [];
+    await compare(table, id, shadow, `after relay batch at step ${steps}`);
+  };
   while (steps < 400) {
     steps++;
     const stage = state.pub.stage;
@@ -147,6 +188,7 @@ async function playGame(setup: GameSetup, players: Signer[]): Promise<{ steps: n
       const actor = players[turn];
       if (!actor) throw new Error("no actor");
       if (catcher !== null && steps % 2 === 0) {
+        await flush();
         const next = applyCatch(state, catcher);
         if (next.events.some((e) => e.type === "Reshuffled")) return { steps, finished: false, state };
         const catcherSigner = players[(catcher + 1) % setup.seats];
@@ -155,6 +197,7 @@ async function playGame(setup: GameSetup, players: Signer[]): Promise<{ steps: n
         await (await table.connect(catcherSigner).catchMono(id, catcher)).wait();
         state = next.state;
       } else if (setup.timeoutEvery > 0 && steps % setup.timeoutEvery === 0) {
+        await flush();
         const next = applyTimeout(state);
         if (next.events.some((e) => e.type === "Reshuffled")) return { steps, finished: false, state };
         await networkHelpers.time.increase(91);
@@ -165,6 +208,15 @@ async function playGame(setup: GameSetup, players: Signer[]): Promise<{ steps: n
         if (!move) throw new Error("no move");
         const next = applyMove(state, turn, move);
         if (next.events.some((e) => e.type === "Reshuffled")) return { steps, finished: false, state };
+        if (setup.relayBatch) {
+          const seenHandle = move.type === "play" ? (await table.handOf(id, turn))[move.slot]! : undefined;
+          pending.push(await signAction(table, actor, id, turn, KIND[move.type], { ...("slot" in move ? { slot: move.slot, card: move.card, color: move.color ?? 0 } : {}), ...(seenHandle ? { seenHandle } : {}) }, nonces[turn]!++));
+          state = next.state;
+          shadow = state;
+          const boundary = move.type === "draw" || state.pub.stage !== "Playing" || state.pub.monoWindow !== null || pending.length >= setup.relayBatch;
+          if (boundary) await flush();
+          continue;
+        }
         await send(table, id, actor, turn, move);
         state = next.state;
       }
@@ -217,5 +269,10 @@ describe("KryphoTable parity with the rules engine", function () {
       if (result.finished) finished++;
     }
     expect(finished).to.be.greaterThanOrEqual(5);
+  });
+
+  it("relayed signed moves in batches stay in sync", async function () {
+    const result = await playGame({ seats: 4, stack: true, cheaters: [], timeoutEvery: 0, relayBatch: 6 }, signers.slice(0, 4));
+    expect(result.steps).to.be.greaterThan(10);
   });
 });

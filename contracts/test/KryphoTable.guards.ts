@@ -1,5 +1,6 @@
 import { expect } from "chai";
 import { network } from "hardhat";
+import { signAction } from "./KryphoTable.parity.js";
 
 type Connection = Awaited<ReturnType<typeof network.connect>>;
 type Signer = Awaited<ReturnType<Connection["ethers"]["getSigners"]>>[number];
@@ -164,5 +165,30 @@ describe("KryphoTable guards", function () {
     await (await table.createTable(config)).wait();
     const id = await table.tableCount();
     await expect(table.prepareReveal(id)).to.be.revertedWithCustomError(table, "WrongStage");
+  });
+
+  it("relays only correctly signed, in-order actions and survives a bad one", async function () {
+    const { table, id } = await ready([s[0]!, s[1]!]);
+    while (Number((await table.getTable(id)).stage) === 2) {
+      const { checkSignaturesArgs } = await starter(table, id);
+      await (await table.setStarter(id, checkSignaturesArgs.abiEncodedCleartexts, checkSignaturesArgs.decryptionProof)).wait();
+    }
+    const turn = Number((await table.getTable(id)).turn);
+    const actor = s[turn]!;
+    const other = s[1 - turn]!;
+    const forged = await signAction(table, other, id, turn, 1, {}, 0);
+    await expect(table.relay(id, [forged])).to.be.revertedWithCustomError(table, "BadSignature");
+    const wrongNonce = await signAction(table, actor, id, turn, 1, {}, 5);
+    await expect(table.relay(id, [wrongNonce])).to.be.revertedWithCustomError(table, "BadAction");
+    const badPass = await signAction(table, actor, id, turn, 2, {}, 0);
+    const draw = await signAction(table, actor, id, turn, 1, {}, 1);
+    const receipt = await (await table.relay(id, [badPass, draw])).wait();
+    const names = receipt!.logs.map((l) => { try { return table.interface.parseLog(l)?.name; } catch { return null; } });
+    expect(names).to.include("ActionRejected");
+    expect(names).to.include("ActionRelayed");
+    expect(names).to.include("Drew");
+    expect((await table.noncesOf(id))[turn]).to.equal(2n);
+    await expect(table.relay(id, [draw])).to.be.revertedWithCustomError(table, "BadAction");
+    await expect(table.relayOne(id, draw)).to.be.revertedWithCustomError(table, "NotYourTurn");
   });
 });

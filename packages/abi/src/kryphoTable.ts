@@ -1,12 +1,22 @@
 export const kryphoTableAbi = [
   {
     "inputs": [],
+    "stateMutability": "nonpayable",
+    "type": "constructor"
+  },
+  {
+    "inputs": [],
     "name": "AlreadyDrew",
     "type": "error"
   },
   {
     "inputs": [],
     "name": "AlreadySeated",
+    "type": "error"
+  },
+  {
+    "inputs": [],
+    "name": "BadAction",
     "type": "error"
   },
   {
@@ -27,6 +37,11 @@ export const kryphoTableAbi = [
   {
     "inputs": [],
     "name": "BadSession",
+    "type": "error"
+  },
+  {
+    "inputs": [],
+    "name": "BadSignature",
     "type": "error"
   },
   {
@@ -164,6 +179,62 @@ export const kryphoTableAbi = [
     "inputs": [],
     "name": "ZamaProtocolUnsupported",
     "type": "error"
+  },
+  {
+    "anonymous": false,
+    "inputs": [
+      {
+        "indexed": true,
+        "internalType": "uint256",
+        "name": "id",
+        "type": "uint256"
+      },
+      {
+        "indexed": false,
+        "internalType": "uint8",
+        "name": "seat",
+        "type": "uint8"
+      },
+      {
+        "indexed": false,
+        "internalType": "uint32",
+        "name": "nonce",
+        "type": "uint32"
+      },
+      {
+        "indexed": false,
+        "internalType": "bytes4",
+        "name": "reason",
+        "type": "bytes4"
+      }
+    ],
+    "name": "ActionRejected",
+    "type": "event"
+  },
+  {
+    "anonymous": false,
+    "inputs": [
+      {
+        "indexed": true,
+        "internalType": "uint256",
+        "name": "id",
+        "type": "uint256"
+      },
+      {
+        "indexed": false,
+        "internalType": "uint8",
+        "name": "seat",
+        "type": "uint8"
+      },
+      {
+        "indexed": false,
+        "internalType": "uint32",
+        "name": "nonce",
+        "type": "uint32"
+      }
+    ],
+    "name": "ActionRelayed",
+    "type": "event"
   },
   {
     "anonymous": false,
@@ -643,6 +714,19 @@ export const kryphoTableAbi = [
     ],
     "name": "TimedOut",
     "type": "event"
+  },
+  {
+    "inputs": [],
+    "name": "DOMAIN_SEPARATOR",
+    "outputs": [
+      {
+        "internalType": "bytes32",
+        "name": "",
+        "type": "bytes32"
+      }
+    ],
+    "stateMutability": "view",
+    "type": "function"
   },
   {
     "inputs": [
@@ -1195,6 +1279,25 @@ export const kryphoTableAbi = [
         "type": "uint256"
       }
     ],
+    "name": "noncesOf",
+    "outputs": [
+      {
+        "internalType": "uint32[4]",
+        "name": "",
+        "type": "uint32[4]"
+      }
+    ],
+    "stateMutability": "view",
+    "type": "function"
+  },
+  {
+    "inputs": [
+      {
+        "internalType": "uint256",
+        "name": "id",
+        "type": "uint256"
+      }
+    ],
     "name": "pass",
     "outputs": [],
     "stateMutability": "nonpayable",
@@ -1242,6 +1345,146 @@ export const kryphoTableAbi = [
       }
     ],
     "name": "prepareReveal",
+    "outputs": [],
+    "stateMutability": "nonpayable",
+    "type": "function"
+  },
+  {
+    "inputs": [
+      {
+        "internalType": "uint256",
+        "name": "id",
+        "type": "uint256"
+      },
+      {
+        "components": [
+          {
+            "internalType": "uint8",
+            "name": "seat",
+            "type": "uint8"
+          },
+          {
+            "internalType": "uint8",
+            "name": "kind",
+            "type": "uint8"
+          },
+          {
+            "internalType": "uint8",
+            "name": "slot",
+            "type": "uint8"
+          },
+          {
+            "internalType": "uint8",
+            "name": "card",
+            "type": "uint8"
+          },
+          {
+            "internalType": "uint8",
+            "name": "color",
+            "type": "uint8"
+          },
+          {
+            "internalType": "bytes32",
+            "name": "seenHandle",
+            "type": "bytes32"
+          },
+          {
+            "internalType": "uint32",
+            "name": "nonce",
+            "type": "uint32"
+          },
+          {
+            "internalType": "uint8",
+            "name": "v",
+            "type": "uint8"
+          },
+          {
+            "internalType": "bytes32",
+            "name": "r",
+            "type": "bytes32"
+          },
+          {
+            "internalType": "bytes32",
+            "name": "s",
+            "type": "bytes32"
+          }
+        ],
+        "internalType": "struct KryphoTable.Action[]",
+        "name": "actions",
+        "type": "tuple[]"
+      }
+    ],
+    "name": "relay",
+    "outputs": [],
+    "stateMutability": "nonpayable",
+    "type": "function"
+  },
+  {
+    "inputs": [
+      {
+        "internalType": "uint256",
+        "name": "id",
+        "type": "uint256"
+      },
+      {
+        "components": [
+          {
+            "internalType": "uint8",
+            "name": "seat",
+            "type": "uint8"
+          },
+          {
+            "internalType": "uint8",
+            "name": "kind",
+            "type": "uint8"
+          },
+          {
+            "internalType": "uint8",
+            "name": "slot",
+            "type": "uint8"
+          },
+          {
+            "internalType": "uint8",
+            "name": "card",
+            "type": "uint8"
+          },
+          {
+            "internalType": "uint8",
+            "name": "color",
+            "type": "uint8"
+          },
+          {
+            "internalType": "bytes32",
+            "name": "seenHandle",
+            "type": "bytes32"
+          },
+          {
+            "internalType": "uint32",
+            "name": "nonce",
+            "type": "uint32"
+          },
+          {
+            "internalType": "uint8",
+            "name": "v",
+            "type": "uint8"
+          },
+          {
+            "internalType": "bytes32",
+            "name": "r",
+            "type": "bytes32"
+          },
+          {
+            "internalType": "bytes32",
+            "name": "s",
+            "type": "bytes32"
+          }
+        ],
+        "internalType": "struct KryphoTable.Action",
+        "name": "a",
+        "type": "tuple"
+      }
+    ],
+    "name": "relayOne",
     "outputs": [],
     "stateMutability": "nonpayable",
     "type": "function"
