@@ -1,0 +1,42 @@
+{
+  "name": "@kryphochroma/web",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "predev": "pnpm --filter @kryphochroma/rules --filter @kryphochroma/cards --filter @kryphochroma/abi build",
+    "dev": "next dev -p 3310",
+    "prebuild": "pnpm --filter @kryphochroma/rules --filter @kryphochroma/cards --filter @kryphochroma/abi build",
+    "build": "next build",
+    "start": "next start -p 3310",
+    "typecheck": "pnpm --filter @kryphochroma/rules --filter @kryphochroma/cards --filter @kryphochroma/abi build && tsc --noEmit",
+    "test": "pnpm --filter @kryphochroma/rules --filter @kryphochroma/cards build && vitest run"
+  },
+  "dependencies": {
+    "@kryphochroma/abi": "workspace:*",
+    "@kryphochroma/cards": "workspace:*",
+    "@kryphochroma/rules": "workspace:*",
+    "class-variance-authority": "^0.7.1",
+    "clsx": "^2.1.1",
+    "cn": "^0.5.2",
+    "lucide-react": "^1.71.0",
+    "motion": "^14.12.0",
+    "next": "16.4.6",
+    "next-themes": "^0.4.6",
+    "radix-ui": "^1.8.1",
+    "react": "19.3.1",
+    "react-dom": "19.3.1",
+    "sonner": "^2.0.8",
+    "tailwind-merge": "^3.7.0"
+  },
+  "devDependencies": {
+    "@tailwindcss/postcss": "^4.3.5",
+    "@testing-library/react": "^16.3.3",
+    "@types/react": "^19.2.0",
+    "@types/react-dom": "^19.2.0",
+    "@vitejs/plugin-react": "^6.3.0",
+    "jsdom": "^31.0.0",
+    "tailwindcss": "^4.3.5",
+    "vitest": "^4.0.0"
+  }
+}
