@@ -126,6 +126,11 @@ export const kryphoTableAbi = [
   },
   {
     "inputs": [],
+    "name": "StaleHand",
+    "type": "error"
+  },
+  {
+    "inputs": [],
     "name": "TableFull",
     "type": "error"
   },
@@ -1216,6 +1221,11 @@ export const kryphoTableAbi = [
         "internalType": "uint8",
         "name": "chosenColor",
         "type": "uint8"
+      },
+      {
+        "internalType": "bytes32",
+        "name": "seenHandle",
+        "type": "bytes32"
       }
     ],
     "name": "play",

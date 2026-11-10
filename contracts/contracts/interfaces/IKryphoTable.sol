@@ -49,6 +49,7 @@ interface IKryphoTable {
     error NotDealt();
     error CatchTooEarly();
     error RevealNotReady();
+    error StaleHand();
 
     event TableCreated(uint256 indexed id, address indexed creator, Config config);
     event Joined(uint256 indexed id, uint8 seat, address indexed player, address session);

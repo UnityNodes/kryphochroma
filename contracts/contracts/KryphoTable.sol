@@ -161,13 +161,14 @@ contract KryphoTable is IKryphoTable, ZamaEthereumConfig {
         emit Dealt(id, t.round, t.turn, card);
     }
 
-    function play(uint256 id, uint8 slot, uint8 card, uint8 chosenColor) external {
+    function play(uint256 id, uint8 slot, uint8 card, uint8 chosenColor, bytes32 seenHandle) external {
         Table storage t = _requireStage(id, Stage.Playing);
         if (t.drawFourBy != NONE) revert DrawFourPending();
         uint8 seat = _requireTurn(id, t);
         if (t.pendingDraw > 0 && !card.isDrawTwo()) revert MustStackOrTake();
         Seat storage s = _seats[id][seat];
         if (slot >= HAND_SLOTS || s.slots & (uint32(1) << slot) == 0) revert BadSlot();
+        if (FHE.toBytes32(_hands[id][seat][slot]) != seenHandle) revert StaleHand();
         if (t.drawnSlot != NONE && slot != t.drawnSlot) revert MustPlayDrawnCard();
         if (!card.isValid()) revert BadCard();
         if (!card.matches(t.topCard, t.color)) revert IllegalCard();

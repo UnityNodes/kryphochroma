@@ -108,7 +108,7 @@ describe("simulation", () => {
           return moves[step.value] ?? null;
         };
         const { state } = playRound(initialState(config(seats, "single", seed % 2 === 0), seed).state, randomPick);
-        expect(["MatchOver", "Playing"]).toContain(state.pub.stage);
+        expect(["MatchOver", "Playing", "AwaitChallenge", "Revealing"]).toContain(state.pub.stage);
       }),
       { numRuns: 100 },
     );

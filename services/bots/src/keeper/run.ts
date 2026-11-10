@@ -1,0 +1,138 @@
+import { kryphoTableAbi } from "@kryphochroma/abi";
+import { ZamaSDK } from "@zama-fhe/sdk";
+import { sepolia as zamaSepolia } from "@zama-fhe/sdk/chains";
+import { node } from "@zama-fhe/sdk/node";
+import { createConfig } from "@zama-fhe/sdk/viem";
+import { type Hex, createPublicClient, createWalletClient, http } from "viem";
+import { privateKeyToAccount } from "viem/accounts";
+import { sepolia } from "viem/chains";
+import { type KeeperAction, type TableView, nextKeeperAction } from "./plan.js";
+import { type GasBudget, belowAlert, canSpend, rollBudget, spend, stopRequested } from "./safety.js";
+
+const SETUP_GAS = 16_000_000n;
+const PIPELINE = 8;
+const WATCH_WINDOW = 20n;
+
+export interface KeeperConfig {
+  readonly rpcUrl: string;
+  readonly privateKey: Hex;
+  readonly table: Hex;
+  readonly dailyGasLimit: bigint;
+  readonly alertBalance: bigint;
+  readonly stopFile: string;
+  readonly pollMs: number;
+}
+
+function required(env: NodeJS.ProcessEnv, name: string): string {
+  const value = env[name];
+  if (!value) throw new Error(`${name} is not set`);
+  return value;
+}
+
+export function loadKeeperConfig(env: NodeJS.ProcessEnv): KeeperConfig {
+  return {
+    rpcUrl: required(env, "SEPOLIA_RPC_URL"),
+    privateKey: required(env, "KEEPER_PRIVATE_KEY") as Hex,
+    table: required(env, "TABLE_ADDRESS") as Hex,
+    dailyGasLimit: BigInt(env.KEEPER_DAILY_GAS ?? "3000000000"),
+    alertBalance: BigInt(env.KEEPER_ALERT_WEI ?? "10000000000000000"),
+    stopFile: env.KEEPER_STOP_FILE ?? "/run/kryphochroma/keeper.stop",
+    pollMs: Number(env.KEEPER_POLL_MS ?? "4000"),
+  };
+}
+
+const log = (entry: Record<string, unknown>) =>
+  process.stdout.write(`${JSON.stringify({ at: new Date().toISOString(), ...entry }, (_, v) => (typeof v === "bigint" ? v.toString() : v))}\n`);
+
+export async function runKeeper(config: KeeperConfig, env: NodeJS.ProcessEnv, until: () => Promise<boolean> = async () => false): Promise<void> {
+  const transport = http(config.rpcUrl);
+  const account = privateKeyToAccount(config.privateKey);
+  const publicClient = createPublicClient({ chain: sepolia, transport });
+  const walletClient = createWalletClient({ account, chain: sepolia, transport });
+  const sdk = new ZamaSDK(createConfig({ chains: [zamaSepolia], publicClient, walletClient, relayers: { [zamaSepolia.id]: node() } }));
+  const address = config.table;
+  let budget: GasBudget = { dayStart: Date.now(), spent: 0n, limit: config.dailyGasLimit };
+
+  const read = async (functionName: string, args: readonly unknown[]) =>
+    publicClient.readContract({ address, abi: kryphoTableAbi, functionName, args } as never) as Promise<unknown>;
+
+  async function send(functionName: string, args: readonly unknown[], gas?: bigint): Promise<void> {
+    const request = { address, abi: kryphoTableAbi, functionName, args, account, chain: sepolia } as never;
+    const estimate = gas ?? (await publicClient.estimateContractGas(request));
+    if (!canSpend(budget, estimate)) throw new Error("daily gas budget exhausted");
+    await publicClient.simulateContract(request);
+    const hash = await walletClient.writeContract({ ...(request as object), gas: estimate } as never);
+    const receipt = await publicClient.waitForTransactionReceipt({ hash });
+    budget = spend(budget, receipt.gasUsed);
+    log({ event: "tx", functionName, args, hash, gas: receipt.gasUsed, status: receipt.status });
+  }
+
+  async function pipelineSetup(id: bigint, remaining: number): Promise<void> {
+    const count = Math.min(remaining, PIPELINE);
+    if (!canSpend(budget, SETUP_GAS * BigInt(count))) throw new Error("daily gas budget exhausted");
+    const request = { address, abi: kryphoTableAbi, functionName: "setupStep", args: [id], account, chain: sepolia } as never;
+    await publicClient.simulateContract(request);
+    let nonce = await publicClient.getTransactionCount({ address: account.address, blockTag: "pending" });
+    const hashes: Hex[] = [];
+    for (let i = 0; i < count; i++) {
+      hashes.push(await walletClient.writeContract({ ...(request as object), gas: SETUP_GAS, nonce: nonce++ } as never));
+    }
+    for (const hash of hashes) {
+      const receipt = await publicClient.waitForTransactionReceipt({ hash });
+      budget = spend(budget, receipt.gasUsed);
+    }
+    log({ event: "setup", id, sent: count, remaining: remaining - count });
+  }
+
+  async function revealAndSend(functionName: string, id: bigint, handles: readonly Hex[]): Promise<void> {
+    const result = await sdk.decryption.decryptPublicValues([...handles]);
+    await send(functionName, [id, result.abiEncodedClearValues, result.decryptionProof]);
+  }
+
+  async function act(id: bigint, action: KeeperAction): Promise<void> {
+    switch (action.kind) {
+      case "setupStep":
+        return pipelineSetup(id, action.remaining);
+      case "dealSeat":
+        return send("dealSeat", [id, action.seat]);
+      case "revealStarter": {
+        const table = (await read("getTable", [id])) as { deckPtr: number };
+        return revealAndSend("setStarter", id, [(await read("deckCardAt", [id, table.deckPtr])) as Hex]);
+      }
+      case "resolveChallenge":
+        return revealAndSend("resolveChallenge", id, [(await read("hadColorOf", [id])) as Hex]);
+      case "prepareReveal":
+        return send("prepareReveal", [id]);
+      case "finishReveal":
+        return revealAndSend("finishReveal", id, (await read("revealHandles", [id])) as Hex[]);
+      case "forceTimeout":
+        return send("forceTimeout", [id]);
+      case "idle":
+        return;
+    }
+  }
+
+  log({ event: "start", keeper: account.address, table: address });
+  for (;;) {
+    if (stopRequested(env, config.stopFile) || (await until())) {
+      log({ event: "stopped" });
+      return;
+    }
+    budget = rollBudget(budget, Date.now());
+    const balance = await publicClient.getBalance({ address: account.address });
+    if (belowAlert(balance, config.alertBalance)) log({ event: "low-balance", balance });
+    const count = (await read("tableCount", [])) as bigint;
+    const now = (await publicClient.getBlock()).timestamp;
+    for (let id = count > WATCH_WINDOW ? count - WATCH_WINDOW + 1n : 1n; id <= count; id++) {
+      const view = (await read("getTable", [id])) as TableView;
+      const action = nextKeeperAction(view, now);
+      if (action.kind === "idle") continue;
+      try {
+        await act(id, action);
+      } catch (error) {
+        log({ event: "error", id, action: action.kind, message: (error as Error).message.slice(0, 300) });
+      }
+    }
+    await new Promise((resolve) => setTimeout(resolve, config.pollMs));
+  }
+}

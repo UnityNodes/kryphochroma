@@ -103,7 +103,7 @@ async function send(table: Awaited<ReturnType<typeof deployTable>>, id: bigint, 
   const c = table.connect(signer);
   switch (move.type) {
     case "play":
-      return (await c.play(id, move.slot, move.card, move.color ?? 0)).wait();
+      return (await c.play(id, move.slot, move.card, move.color ?? 0, (await table.handOf(id, seat))[move.slot]!)).wait();
     case "draw":
       return (await c.draw(id)).wait();
     case "pass":
