@@ -49,8 +49,27 @@ function wallet() {
   return { w, calls };
 }
 
+function slowClient(seatedSession: Hex | null): PublicClient {
+  return {
+    getBalance: async () => MIN_BURNER_BALANCE,
+    waitForTransactionReceipt: async () => {
+      throw new Error("Timed out while waiting for transaction");
+    },
+    readContract: async ({ functionName }: { functionName: string }) =>
+      functionName === "getTable" ? { joined: seatedSession ? 2 : 1 } : { player, session: functionName === "getSeat" && seatedSession ? seatedSession : player },
+  } as unknown as PublicClient;
+}
+
 describe("taking a seat", () => {
   beforeEach(() => burnerWrites.splice(0));
+
+  it("trusts the chain when the receipt is slow but the session already sits at the table", async () => {
+    await expect(takeSeat({ publicClient: slowClient(burner.address), burner, funder: { kind: "guest" }, drip: async () => true }, 7n)).resolves.toBeUndefined();
+  });
+
+  it("still fails when the receipt is slow and the session is not seated", async () => {
+    await expect(takeSeat({ publicClient: slowClient(null), burner, funder: { kind: "guest" }, drip: async () => true }, 7n)).rejects.toThrow(/Timed out/);
+  });
 
   it("joins as a guest with the session key itself", async () => {
     await takeSeat({ publicClient: client(MIN_BURNER_BALANCE), burner, funder: { kind: "guest" }, drip: async () => true }, 7n);

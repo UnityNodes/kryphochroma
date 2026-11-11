@@ -2,10 +2,10 @@
 
 import { useState } from "react";
 import { toast } from "sonner";
-import { createPublicClient, http } from "viem";
+import { createPublicClient } from "viem";
 import { sepolia } from "viem/chains";
 import { loadBurner } from "@/chain/burner";
-import { SEPOLIA_RPC_URL } from "@/chain/config";
+import { sepoliaTransport } from "@/chain/rpc";
 import { type Funder, type SeatDeps, fundBurner, requestBots, serviceDrip as drip, startTable, takeSeat } from "@/chain/seat";
 import { useChainGame } from "@/chain/useChainGame";
 import { useFunder } from "@/components/wallet/useFunder";
@@ -13,7 +13,7 @@ import { TableView, useColorBlind } from "@/components/table/Table";
 import { PreGame } from "./PreGame";
 
 function seatDeps(funder: Funder): SeatDeps {
-  return { publicClient: createPublicClient({ chain: sepolia, transport: http(SEPOLIA_RPC_URL) }), burner: loadBurner(window.sessionStorage), funder, drip };
+  return { publicClient: createPublicClient({ chain: sepolia, transport: sepoliaTransport() }), burner: loadBurner(window.sessionStorage), funder, drip };
 }
 
 export function ChainTable({ id, watch }: { readonly id: string; readonly watch?: boolean }) {

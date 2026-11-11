@@ -334,10 +334,10 @@ export function TableView({ controller: game, colorBlind, onToggleShapes }: Tabl
       <Dialog open={pub.stage === "MatchOver" && !busy}>
         <DialogContent className="kc-box border-2 border-cream bg-ink sm:max-w-[360px]" showCloseButton={false}>
           <DialogTitle className="font-display text-[30px] font-normal text-sun">
-            {result?.winner === HUMAN ? "You win!" : result?.winner === null ? "No winner" : `${names[result?.winner ?? 0] ?? "Seat"} wins`}
+            {result?.winner === HUMAN && !game.watching ? "You win!" : result?.winner === null ? "No winner" : `${names[result?.winner ?? 0] ?? "Seat"} wins`}
           </DialogTitle>
           <DialogDescription className="text-muted">
-            {result ? `${result.points} points${result.bonus ? " · doubled by the secret colour" : ""} · every honesty bit checked${result.cheaters.length > 0 ? ` · liars: ${result.cheaters.map((s) => (s === HUMAN ? "you" : names[s])).join(", ")}` : ""}` : ""}
+            {result ? `${result.points} points${result.bonus ? " · doubled by the secret colour" : ""} · every honesty bit checked${result.cheaters.length > 0 ? ` · liars: ${result.cheaters.map((s) => (s === HUMAN && !game.watching ? "you" : names[s])).join(", ")}` : ""}` : ""}
           </DialogDescription>
           {result?.secrets && result.secrets.some((c) => c >= 0) && (
             <ul className="grid gap-1 text-sm text-cream">

@@ -1,7 +1,8 @@
 import { fillMessage, kryphoTableAbi } from "@kryphochroma/abi";
-import { type Hex, type PrivateKeyAccount, type PublicClient, type WalletClient, createWalletClient, http, parseEventLogs } from "viem";
+import { type Hex, type PrivateKeyAccount, type PublicClient, type WalletClient, createWalletClient, parseEventLogs } from "viem";
 import { sepolia } from "viem/chains";
-import { BURNER_GAS_LIMIT, BURNER_GAS_PRICE, SEPOLIA_RPC_URL, TABLE_ADDRESS } from "./config";
+import { BURNER_GAS_LIMIT, BURNER_GAS_PRICE, TABLE_ADDRESS } from "./config";
+import { sepoliaTransport } from "./rpc";
 import { confirm } from "./confirm";
 
 export const MIN_BURNER_BALANCE = 500_000_000_000_000n;
@@ -30,7 +31,7 @@ export async function requestBots(burner: PrivateKeyAccount, id: bigint): Promis
   if (!res.ok) throw new Error("Could not seat the bots");
 }
 
-const burnerWallet = (burner: PrivateKeyAccount) => createWalletClient({ account: burner, chain: sepolia, transport: http(SEPOLIA_RPC_URL) });
+const burnerWallet = (burner: PrivateKeyAccount) => createWalletClient({ account: burner, chain: sepolia, transport: sepoliaTransport() });
 
 async function waitForBalance(publicClient: PublicClient, address: Hex): Promise<boolean> {
   for (let i = 0; i < BALANCE_TRIES; i++) {
@@ -62,9 +63,23 @@ export async function takeSeat(deps: SeatDeps, id: bigint): Promise<void> {
     funder.kind === "wallet"
       ? await funder.wallet.writeContract({ address: TABLE_ADDRESS, abi: kryphoTableAbi, functionName: "join", args, account: funder.wallet.account ?? funder.address, chain: sepolia, value: (await needsGas(deps)) ? WALLET_CRUMB : 0n })
       : await burnerWallet(burner).writeContract({ address: TABLE_ADDRESS, abi: kryphoTableAbi, functionName: "join", args, gasPrice: BURNER_GAS_PRICE, gas: BURNER_GAS_LIMIT });
-  const receipt = await confirm(publicClient, hash, "Taking a seat");
+  const receipt = await confirm(publicClient, hash, "Taking a seat").catch(async (error: Error) => {
+    if (await sitsAt(publicClient, id, burner.address)) return null;
+    throw error;
+  });
+  if (!receipt) return;
   const seated = parseEventLogs({ abi: kryphoTableAbi, logs: receipt.logs, eventName: "Joined" }).some((l) => l.args.session.toLowerCase() === burner.address.toLowerCase());
   if (!seated) throw new Error("Could not take a seat, please try again");
+}
+
+/** A slow RPC can miss the receipt of a join that did land, so the seat list on chain decides. */
+async function sitsAt(publicClient: PublicClient, id: bigint, session: Hex): Promise<boolean> {
+  const view = (await publicClient.readContract({ address: TABLE_ADDRESS, abi: kryphoTableAbi, functionName: "getTable", args: [id] })) as { joined: number };
+  for (let seat = 0; seat < Number(view.joined); seat++) {
+    const s = (await publicClient.readContract({ address: TABLE_ADDRESS, abi: kryphoTableAbi, functionName: "getSeat", args: [id, seat] })) as { session: string };
+    if (s.session.toLowerCase() === session.toLowerCase()) return true;
+  }
+  return false;
 }
 
 export async function openTable(deps: SeatDeps, config: { readonly seats: number; readonly turnTimeout: number; readonly stackDrawTwo: boolean }): Promise<bigint> {

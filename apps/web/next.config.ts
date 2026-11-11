@@ -1,6 +1,6 @@
+import { rpcUrls } from "@kryphochroma/abi";
 import type { NextConfig } from "next";
 
-const DEFAULT_RPC = "https://ethereum-sepolia-rpc.publicnode.com";
 const ZAMA_ORIGINS = ["https://relayer.testnet.zama.org", "https://*.s3.eu-west-1.amazonaws.com", "https://*.s3.amazonaws.com"];
 
 function originOf(url: string): string {
@@ -13,7 +13,7 @@ const contentSecurityPolicy = [
   "style-src 'self' 'unsafe-inline'",
   "img-src 'self' data: blob:",
   "font-src 'self'",
-  `connect-src 'self' data: blob: ${originOf(process.env.NEXT_PUBLIC_SEPOLIA_RPC_URL ?? DEFAULT_RPC)} ${ZAMA_ORIGINS.join(" ")}`,
+  `connect-src 'self' data: blob: ${rpcUrls(process.env.NEXT_PUBLIC_SEPOLIA_RPC_URL).map(originOf).join(" ")} ${ZAMA_ORIGINS.join(" ")}`,
   "worker-src 'self' blob:",
   "object-src 'none'",
   "base-uri 'none'",

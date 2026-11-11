@@ -5,10 +5,10 @@ import { Bot, Check, Loader2, Users, Zap } from "lucide-react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
-import { createPublicClient, http } from "viem";
+import { createPublicClient } from "viem";
 import { sepolia } from "viem/chains";
 import { loadBurner } from "@/chain/burner";
-import { SEPOLIA_RPC_URL } from "@/chain/config";
+import { sepoliaTransport } from "@/chain/rpc";
 import { type SeatDeps, fundBurner, openTable, requestBots, serviceDrip as drip, startTable, takeSeat } from "@/chain/seat";
 import { WalletBar } from "@/components/wallet/WalletBar";
 import { useFunder } from "@/components/wallet/useFunder";
@@ -70,7 +70,7 @@ export function NewTable() {
 
   function deps(): SeatDeps {
     if (!funderState.ready) throw new Error(funderState.reason === "wrong-chain" ? "Switch your wallet to Sepolia first" : "Wallet is still connecting");
-    const publicClient = createPublicClient({ chain: sepolia, transport: http(SEPOLIA_RPC_URL) });
+    const publicClient = createPublicClient({ chain: sepolia, transport: sepoliaTransport() });
     return { publicClient, burner: loadBurner(window.sessionStorage), funder: funderState.funder, drip };
   }
 
@@ -99,7 +99,7 @@ export function NewTable() {
       setDone(1);
       await takeSeat(d, id);
       setDone(2);
-      await requestBots(d.burner, id);
+      await requestBots(d.burner, id).catch(() => undefined);
       setDone(3);
       router.push(`/t/${pool.id}`);
     });

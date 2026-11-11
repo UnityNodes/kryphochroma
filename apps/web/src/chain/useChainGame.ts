@@ -19,12 +19,13 @@ import { sepolia as zamaSepolia } from "@zama-fhe/sdk/chains";
 import { createConfig } from "@zama-fhe/sdk/viem";
 import { web } from "@zama-fhe/sdk/web";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { type Hex, type Log, createPublicClient, createWalletClient, http, toEventSelector } from "viem";
+import { type Hex, type Log, createPublicClient, createWalletClient, toEventSelector } from "viem";
 import { sepolia } from "viem/chains";
 import type { TableController } from "@/game/controller";
 import { useTransitionQueue } from "@/game/useTransitionQueue";
 import { loadBurner } from "./burner";
-import { SEPOLIA_RPC_URL, TABLE_ADDRESS } from "./config";
+import { TABLE_ADDRESS } from "./config";
+import { sepoliaTransport } from "./rpc";
 import { toGameEvents } from "./events";
 
 const POLL_MS = 2000;
@@ -58,7 +59,7 @@ export interface ChainGame extends TableController {
 export function useChainGame(id: bigint, colorBlind: boolean, watchOnly = false): ChainGame {
   const burner = useMemo(() => loadBurner(window.sessionStorage), []);
   const clients = useMemo(() => {
-    const transport = http(SEPOLIA_RPC_URL);
+    const transport = sepoliaTransport();
     const publicClient = createPublicClient({ chain: sepolia, transport });
     const walletClient = createWalletClient({ account: burner, chain: sepolia, transport });
     const sdk = new ZamaSDK(createConfig({ chains: [zamaSepolia], publicClient, walletClient, relayers: { [zamaSepolia.id]: web() } }));
@@ -112,6 +113,7 @@ export function useChainGame(id: bigint, colorBlind: boolean, watchOnly = false)
   const poll = useCallback(async () => {
     const { publicClient, sdk } = clients;
     const block = await publicClient.getBlockNumber({ cacheTime: 0 });
+    if (lastBlock.current !== null && block < lastBlock.current) return;
     const read = (functionName: string, args: readonly unknown[]) =>
       publicClient.readContract({ address: TABLE_ADDRESS, abi: kryphoTableAbi, functionName, args, blockNumber: block } as never) as Promise<unknown>;
     const table = (await read("getTable", [id])) as ChainSnapshot["table"];
