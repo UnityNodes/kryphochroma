@@ -56,7 +56,7 @@ describe("setup", () => {
     expect(state.pub.topCard).toBe(G(5));
     expect(state.pub.color).toBe(2);
     expect(state.pub.discard).toEqual([WILD4, B(10), G(5)]);
-    expect(state.pub.deckCount).toBe(108 - 14 - 3);
+    expect(state.pub.deckCount).toBe(DECK_SIZE - 14 - 3);
     expect(totalCards(state)).toBe(DECK_SIZE);
   });
 
@@ -86,9 +86,9 @@ describe("play", () => {
     expectRule(() => applyPlay(s, 0, 7, R(1)), "BadSlot");
     expectRule(() => applyPlay(s, 0, 30, R(1)), "BadSlot");
     expectRule(() => applyPlay(s, 0, 6, B(9)), "IllegalCard");
-    expectRule(() => applyPlay(s, 0, 0, 76), "BadCard");
+    expectRule(() => applyPlay(s, 0, 0, 0x5f), "BadCard");
     expectRule(() => applyPlay(s, 0, 4, WILD), "BadColor");
-    expectRule(() => applyPlay(s, 0, 4, WILD, 4), "BadColor");
+    expectRule(() => applyPlay(s, 0, 4, WILD, 5), "BadColor");
   });
 
   it("skip jumps over the next seat", () => {

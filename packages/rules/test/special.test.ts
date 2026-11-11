@@ -33,7 +33,7 @@ function withHandSize(state: GameState, seat: number, keep: number): GameState {
     i === seat ? { ...s, handSize: keep, slots: s.slots.map((_, j) => j < keep) } : s,
   );
   const hands = state.hands.map((h, i) => (i === seat ? hand : h));
-  return { ...state, hands, pub: { ...state.pub, seats } };
+  return { ...state, hands, secrets: state.secrets.map(() => -1), pub: { ...state.pub, seats } };
 }
 
 describe("mono", () => {
@@ -179,13 +179,23 @@ describe("reveal and scoring", () => {
   const lastCard = (mode: "single" | "match" = "single") =>
     withHandSize(game([[R(1), WILD, B(3), B(4), B(5), B(6), B(7)], [Y(1), Y(2), Y(3), Y(10), WILD, Y(6), Y(7)]], R(5), mode), 0, 1);
 
+  it("doubles the round when the last card matches the winner's secret colour", () => {
+    const base = lastCard();
+    const hit = applyReveal(applyPlay({ ...base, secrets: [0, 3] }, 0, 0, R(1)).state).state;
+    expect(hit.pub.lastResult).toMatchObject({ winner: 0, points: 2 * 89, bonus: true, secrets: [0, 3] });
+    const miss = applyReveal(applyPlay({ ...base, secrets: [2, 0] }, 0, 0, R(1)).state).state;
+    expect(miss.pub.lastResult).toMatchObject({ winner: 0, points: 89, bonus: false });
+    const external = applyReveal(applyPlay(base, 0, 0, R(1)).state, { honest: [true, true], hands: [[], base.hands[1] ?? []], secrets: [0, 1] }).state;
+    expect(external.pub.lastResult?.bonus).toBe(true);
+  });
+
   it("ends the round when a hand is empty and pays the winner", () => {
     const played = applyPlay(lastCard(), 0, 0, R(1));
     expect(played.state.pub.stage).toBe("Revealing");
     expect(types(played)).toEqual(["Played", "RevealStarted"]);
     expectRule(() => applyPlay(played.state, 1, 0, Y(1)), "WrongStage");
     const { state, events } = applyReveal(played.state);
-    expect(state.pub.lastResult).toEqual({ winner: 0, points: 1 + 2 + 3 + 20 + 50 + 6 + 7, cheaters: [] });
+    expect(state.pub.lastResult).toEqual({ winner: 0, points: 1 + 2 + 3 + 20 + 50 + 6 + 7, cheaters: [], bonus: false, secrets: [-1, -1] });
     expect(state.pub.seats[0]?.score).toBe(89);
     expect(state.pub.stage).toBe("MatchOver");
     expect(types({ state, events })).toEqual(["RoundSettled", "MatchOver"]);
@@ -201,7 +211,7 @@ describe("reveal and scoring", () => {
     const played = applyPlay(s, 0, 0, R(9)).state;
     expect(played.honest[0]).toBe(false);
     const { state } = applyReveal(played);
-    expect(state.pub.lastResult).toEqual({ winner: 2, points: 1 + 2 + 3 + 20 + 50 + 6 + 7, cheaters: [0] });
+    expect(state.pub.lastResult).toEqual({ winner: 2, points: 1 + 2 + 3 + 20 + 50 + 6 + 7, cheaters: [0], bonus: false, secrets: [-1, -1, -1] });
     expect(state.pub.seats[2]?.score).toBe(89);
     expect(state.pub.seats[0]?.score).toBe(0);
   });
@@ -231,7 +241,7 @@ describe("reveal and scoring", () => {
     const played = applyPlay(lastCard(), 0, 0, R(1)).state;
     expectRule(() => applyReveal(played, { honest: [true], hands: [[]] }), "BadReveal");
     const { state } = applyReveal(played, { honest: [false, false], hands: [[], [Y(1)]] });
-    expect(state.pub.lastResult).toEqual({ winner: null, points: 0, cheaters: [0, 1] });
+    expect(state.pub.lastResult).toMatchObject({ winner: null, points: 0, cheaters: [0, 1], bonus: false });
     expect(state.pub.stage).toBe("MatchOver");
   });
 });

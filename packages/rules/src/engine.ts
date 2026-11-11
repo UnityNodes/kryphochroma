@@ -8,6 +8,7 @@ import {
   isColor,
   isDrawFour,
   isNumber,
+  isSpyglass,
   isValidCard,
   isWild,
   matches,
@@ -32,11 +33,15 @@ import {
   seatAt,
   toDraft,
 } from "./draft.js";
-import { shuffle } from "./rng.js";
+import { randomInt, shuffle } from "./rng.js";
 import { CHEAT_PENALTY, type RevealedHand, scoreRound } from "./score.js";
 
 export const MAX_TARGET_SCORE = 10_000;
-import { type GameState, type PublicSeat, RuleError, type TableConfig, type Transition } from "./types.js";
+import { type GameState, type Peek, type PublicSeat, RuleError, type TableConfig, type Transition } from "./types.js";
+
+export const SECRET_COLORS = 5;
+export const VEIL_TRUE_DRAW = 2;
+export const VEIL_LIE_DRAW = 4;
 
 export function validateConfig(config: TableConfig): void {
   if (!Number.isInteger(config.seats) || config.seats < MIN_SEATS || config.seats > MAX_SEATS) {
@@ -49,7 +54,7 @@ export function validateConfig(config: TableConfig): void {
 }
 
 export function validateDeck(deck: readonly Card[]): void {
-  if (deck.length !== DECK_SIZE) throw new RuleError("BadCard", "deck must have 108 cards");
+  if (deck.length !== DECK_SIZE) throw new RuleError("BadCard", `deck must have ${DECK_SIZE} cards`);
   const expected = [...fullDeck()].sort((a, b) => a - b);
   const actual = [...deck].sort((a, b) => a - b);
   if (expected.some((card, i) => card !== actual[i])) throw new RuleError("BadCard", "deck composition mismatch");
@@ -63,6 +68,7 @@ function emptySeat(score: number): PublicSeat {
     timeouts: 0,
     abandoned: false,
     score,
+    veilUsed: false,
   };
 }
 
@@ -81,6 +87,7 @@ function blankState(config: TableConfig, round: number, scores: readonly number[
       seats: Array.from({ length: config.seats }, (_, i) => emptySeat(scores[i] ?? 0)),
       drawnSlot: null,
       drawFour: null,
+      veil: null,
       pendingDraw: 0,
       monoWindow: null,
       candidate: null,
@@ -90,6 +97,8 @@ function blankState(config: TableConfig, round: number, scores: readonly number[
     hands: Array.from({ length: config.seats }, () => Array.from({ length: HAND_SLOTS }, () => null)),
     honest: Array.from({ length: config.seats }, () => true),
     hadColor: null,
+    veilTrue: null,
+    secrets: Array.from({ length: config.seats }, () => -1),
     rng,
   };
 }
@@ -119,6 +128,13 @@ function deal(base: GameState, deck: readonly Card[]): Transition {
   d.pub.color = colorOf(top) as Color;
   d.pub.discard = [...skipped, top];
   d.pub.turn = d.pub.round % seats;
+  let rng = d.rng;
+  d.secrets = d.secrets.map(() => {
+    const step = randomInt(rng, SECRET_COLORS);
+    rng = step.next;
+    return step.value;
+  });
+  d.rng = rng;
   d.events.push({ type: "Dealt", round: d.pub.round, firstSeat: d.pub.turn, topCard: top });
   return finish(d);
 }
@@ -148,17 +164,33 @@ function beginReveal(d: Draft, candidate: number): void {
   d.pub.stage = "Revealing";
   d.pub.candidate = candidate;
   d.pub.drawFour = null;
+  d.pub.veil = null;
   d.pub.drawnSlot = null;
   d.pub.monoWindow = null;
   d.hadColor = null;
+  d.veilTrue = null;
   d.events.push({ type: "RevealStarted", candidate });
 }
 
-export function applyPlay(state: GameState, seat: number, slot: number, card: Card, chosenColor?: number): Transition {
+function closeVeil(d: Draft, seat: number): void {
+  if (d.pub.veil && d.pub.veil.judge === seat) {
+    d.pub.veil = null;
+    d.veilTrue = null;
+  }
+}
+
+function requirePeek(d: Draft, seat: number, peek: Peek | undefined): Peek {
+  const target = peek ? d.pub.seats[peek.seat] : undefined;
+  if (!peek || !target || peek.seat === seat || !Number.isInteger(peek.slot) || !target.slots[peek.slot]) throw new RuleError("BadPeek");
+  return peek;
+}
+
+export function applyPlay(state: GameState, seat: number, slot: number, card: Card, chosenColor?: number, peek?: Peek): Transition {
   const d = toDraft(state);
   requireStage(d, "Playing");
   if (d.pub.drawFour) throw new RuleError("DrawFourPending");
   requireTurn(d, seat);
+  closeVeil(d, seat);
   if (d.pub.pendingDraw > 0 && (isWild(card) || rankOf(card) !== RANK.drawTwo)) throw new RuleError("MustStackOrTake");
   const s = seatOf(d, seat);
   if (!Number.isInteger(slot) || slot < 0 || slot >= HAND_SLOTS || !s.slots[slot]) throw new RuleError("BadSlot");
@@ -166,6 +198,7 @@ export function applyPlay(state: GameState, seat: number, slot: number, card: Ca
   if (!isValidCard(card)) throw new RuleError("BadCard");
   if (!matches(card, d.pub.topCard, d.pub.color)) throw new RuleError("IllegalCard");
   if (isWild(card) && (chosenColor === undefined || !isColor(chosenColor))) throw new RuleError("BadColor");
+  const target = isSpyglass(card) ? requirePeek(d, seat, peek) : null;
 
   const hand = d.hands[seat] as (Card | null)[];
   const prevColor = d.pub.color;
@@ -181,6 +214,7 @@ export function applyPlay(state: GameState, seat: number, slot: number, card: Ca
   d.pub.drawnSlot = null;
   s.timeouts = 0;
   d.events.push({ type: "Played", seat, slot, card, color });
+  if (target) d.events.push({ type: "Peeked", seat, target: target.seat, slot: target.slot });
 
   if (s.handSize === 0) {
     if (rankOf(card) === RANK.drawTwo && !isWild(card)) drawInto(d, seatAt(d, 1), d.pub.pendingDraw + 2);
@@ -221,12 +255,54 @@ function applyEffect(d: Draft, card: Card, seat: number, prevColor: Color, hadCo
   }
 }
 
+export function applyVeil(state: GameState, seat: number, slot: number, claim: Card): Transition {
+  const d = toDraft(state);
+  requireStage(d, "Playing");
+  if (d.pub.drawFour) throw new RuleError("DrawFourPending");
+  if (d.pub.pendingDraw > 0) throw new RuleError("MustStackOrTake");
+  requireTurn(d, seat);
+  closeVeil(d, seat);
+  const s = seatOf(d, seat);
+  if (s.veilUsed || s.handSize < 2) throw new RuleError("VeilUsed");
+  if (!Number.isInteger(slot) || slot < 0 || slot >= HAND_SLOTS || !s.slots[slot]) throw new RuleError("BadSlot");
+  if (d.pub.drawnSlot !== null && slot !== d.pub.drawnSlot) throw new RuleError("MustPlayDrawnCard");
+  if (!isValidCard(claim) || !isNumber(claim)) throw new RuleError("BadCard");
+  if (!matches(claim, d.pub.topCard, d.pub.color)) throw new RuleError("IllegalCard");
+  const actual = removeFromHand(d, seat, slot);
+  s.veilUsed = true;
+  d.pub.discard.push(claim);
+  d.pub.topCard = claim;
+  d.pub.color = colorOf(claim) as Color;
+  d.pub.monoWindow = s.handSize === 1 && !s.saidMono ? seat : null;
+  d.pub.drawnSlot = null;
+  s.timeouts = 0;
+  d.events.push({ type: "Veiled", seat, slot, claim });
+  advance(d, 1);
+  d.pub.veil = { by: seat, judge: d.pub.turn, claim };
+  d.veilTrue = actual === claim;
+  return finish(d);
+}
+
+export function applyDoubt(state: GameState, seat: number): Transition {
+  const d = toDraft(state);
+  requireStage(d, "Playing");
+  if (!d.pub.veil || d.pub.veil.judge !== seat) throw new RuleError("NoVeil");
+  requireTurn(d, seat);
+  if (d.pub.drawnSlot !== null) throw new RuleError("NoVeil");
+  d.pub.monoWindow = null;
+  seatOf(d, seat).timeouts = 0;
+  d.pub.stage = "AwaitChallenge";
+  d.events.push({ type: "VeilDoubted", seat });
+  return finish(d);
+}
+
 export function applyDraw(state: GameState, seat: number): Transition {
   const d = toDraft(state);
   requireStage(d, "Playing");
   if (d.pub.drawFour) throw new RuleError("DrawFourPending");
   if (d.pub.pendingDraw > 0) throw new RuleError("DrawPending");
   requireTurn(d, seat);
+  closeVeil(d, seat);
   if (d.pub.drawnSlot !== null) throw new RuleError("AlreadyDrew");
   if (!canDraw(state.pub, seat)) throw new RuleError("CannotDraw");
   const [slot] = drawInto(d, seat, 1);
@@ -242,6 +318,7 @@ export function applyPass(state: GameState, seat: number): Transition {
   if (d.pub.drawFour) throw new RuleError("DrawFourPending");
   if (d.pub.pendingDraw > 0) throw new RuleError("DrawPending");
   requireTurn(d, seat);
+  closeVeil(d, seat);
   if (d.pub.drawnSlot === null && canDraw(state.pub, seat)) throw new RuleError("CannotPass");
   d.pub.drawnSlot = null;
   d.pub.monoWindow = null;
@@ -291,6 +368,7 @@ export function applyAcceptDrawFour(state: GameState, seat: number): Transition 
   requireStage(d, "Playing");
   if (!d.pub.drawFour) throw new RuleError("NoDrawFour");
   requireTurn(d, seat);
+  closeVeil(d, seat);
   d.pub.monoWindow = null;
   seatOf(d, seat).timeouts = 0;
   d.events.push({ type: "DrawFourAccepted", seat });
@@ -306,6 +384,7 @@ export function applyTakeDraws(state: GameState, seat: number): Transition {
   requireStage(d, "Playing");
   if (d.pub.pendingDraw === 0) throw new RuleError("NoPendingDraw");
   requireTurn(d, seat);
+  closeVeil(d, seat);
   const count = d.pub.pendingDraw;
   d.pub.monoWindow = null;
   seatOf(d, seat).timeouts = 0;
@@ -331,6 +410,17 @@ export function applyChallengeDrawFour(state: GameState, seat: number): Transiti
 export function applyChallenge(state: GameState, bit?: boolean): Transition {
   const d = toDraft(state);
   requireStage(d, "AwaitChallenge");
+  const veil = d.pub.veil;
+  if (veil && !d.pub.drawFour) {
+    const truth = bit ?? d.veilTrue;
+    if (truth === null) throw new RuleError("BadReveal");
+    d.events.push({ type: "VeilResolved", truth });
+    drawInto(d, truth ? veil.judge : veil.by, truth ? VEIL_TRUE_DRAW : VEIL_LIE_DRAW);
+    d.pub.veil = null;
+    d.veilTrue = null;
+    d.pub.stage = "Playing";
+    return finish(d);
+  }
   const pending = d.pub.drawFour;
   const value = bit ?? d.hadColor;
   if (!pending || value === null) throw new RuleError("BadReveal");
@@ -352,6 +442,7 @@ export function applyTimeout(state: GameState): Transition {
   requireStage(d, "Playing");
   const seat = d.pub.turn;
   const s = seatOf(d, seat);
+  closeVeil(d, seat);
   d.events.push({ type: "TimedOut", seat });
   if (d.pub.drawFour) {
     drawInto(d, seat, 4);
@@ -377,6 +468,7 @@ export function applyTimeout(state: GameState): Transition {
 export interface Reveal {
   readonly honest: readonly boolean[];
   readonly hands: readonly RevealedHand[];
+  readonly secrets?: readonly number[];
 }
 
 export function applyReveal(state: GameState, reveal?: Reveal): Transition {
@@ -384,7 +476,8 @@ export function applyReveal(state: GameState, reveal?: Reveal): Transition {
   requireStage(d, "Revealing");
   const candidate = d.pub.candidate;
   const seats = d.pub.config.seats;
-  const data = reveal ?? { honest: state.honest, hands: state.hands };
+  const data = reveal ?? { honest: state.honest, hands: state.hands, secrets: state.secrets };
+  const secrets = data.secrets ?? state.secrets;
   if (candidate === null || data.honest.length !== seats || data.hands.length !== seats) {
     throw new RuleError("BadReveal");
   }
@@ -396,9 +489,11 @@ export function applyReveal(state: GameState, reveal?: Reveal): Transition {
     s.score -= taken;
     forfeited += taken;
   }
-  const result = scored.winner === null ? scored : { ...scored, points: scored.points + forfeited };
+  const bonus = scored.winner !== null && scored.winner === candidate && secrets[candidate] === colorOf(d.pub.topCard);
+  const points = scored.winner === null ? 0 : scored.points * (bonus ? 2 : 1) + forfeited;
+  const result = { winner: scored.winner, points, cheaters: [...scored.cheaters], bonus };
   if (result.winner !== null) seatOf(d, result.winner).score += result.points;
-  d.pub.lastResult = { ...result, cheaters: [...result.cheaters] };
+  d.pub.lastResult = { ...result, secrets: [...secrets] };
   d.pub.candidate = null;
   d.events.push({ type: "RoundSettled", ...result });
   const over =

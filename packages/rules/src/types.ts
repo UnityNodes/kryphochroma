@@ -18,6 +18,18 @@ export interface PublicSeat {
   readonly timeouts: number;
   readonly abandoned: boolean;
   readonly score: number;
+  readonly veilUsed: boolean;
+}
+
+export interface PendingVeil {
+  readonly by: number;
+  readonly judge: number;
+  readonly claim: Card;
+}
+
+export interface Peek {
+  readonly seat: number;
+  readonly slot: number;
 }
 
 export interface PendingDrawFour {
@@ -29,6 +41,8 @@ export interface RoundResult {
   readonly winner: number | null;
   readonly points: number;
   readonly cheaters: readonly number[];
+  readonly bonus?: boolean;
+  readonly secrets?: readonly number[];
 }
 
 export interface PublicState {
@@ -44,6 +58,7 @@ export interface PublicState {
   readonly seats: readonly PublicSeat[];
   readonly drawnSlot: number | null;
   readonly drawFour: PendingDrawFour | null;
+  readonly veil: PendingVeil | null;
   readonly pendingDraw: number;
   readonly monoWindow: number | null;
   readonly candidate: number | null;
@@ -59,11 +74,15 @@ export interface GameState {
   readonly hands: readonly Hand[];
   readonly honest: readonly boolean[];
   readonly hadColor: boolean | null;
+  readonly veilTrue: boolean | null;
+  readonly secrets: readonly number[];
   readonly rng: number;
 }
 
 export type Move =
-  | { readonly type: "play"; readonly slot: number; readonly card: Card; readonly color?: Color }
+  | { readonly type: "play"; readonly slot: number; readonly card: Card; readonly color?: Color; readonly peek?: Peek }
+  | { readonly type: "veil"; readonly slot: number; readonly claim: Card }
+  | { readonly type: "doubt" }
   | { readonly type: "draw" }
   | { readonly type: "pass" }
   | { readonly type: "mono" }
@@ -82,11 +101,15 @@ export type GameEvent =
   | { readonly type: "DrawsTaken"; readonly seat: number; readonly count: number }
   | { readonly type: "DrawFourChallenged"; readonly seat: number }
   | { readonly type: "ChallengeResolved"; readonly bit: boolean }
+  | { readonly type: "Veiled"; readonly seat: number; readonly slot: number; readonly claim: Card }
+  | { readonly type: "VeilDoubted"; readonly seat: number }
+  | { readonly type: "VeilResolved"; readonly truth: boolean }
+  | { readonly type: "Peeked"; readonly seat: number; readonly target: number; readonly slot: number }
   | { readonly type: "TimedOut"; readonly seat: number }
   | { readonly type: "SeatAbandoned"; readonly seat: number }
   | { readonly type: "Reshuffled"; readonly count: number }
   | { readonly type: "RevealStarted"; readonly candidate: number }
-  | { readonly type: "RoundSettled"; readonly winner: number | null; readonly points: number; readonly cheaters: readonly number[] }
+  | { readonly type: "RoundSettled"; readonly winner: number | null; readonly points: number; readonly cheaters: readonly number[]; readonly bonus?: boolean }
   | { readonly type: "MatchOver"; readonly winner: number | null };
 
 export interface Transition {
@@ -113,7 +136,10 @@ export type RuleErrorCode =
   | "NoDrawFour"
   | "CannotSayMono"
   | "CannotCatch"
-  | "BadReveal";
+  | "BadReveal"
+  | "VeilUsed"
+  | "NoVeil"
+  | "BadPeek";
 
 export class RuleError extends Error {
   readonly code: RuleErrorCode;

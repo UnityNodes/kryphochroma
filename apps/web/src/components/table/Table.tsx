@@ -2,7 +2,8 @@
 
 import { CARD_COLORS, sharedDefs } from "@kryphochroma/cards";
 import { type Color, canDraw, canSayMono, botCatchTarget, isPlayable, isWild, legalMoves } from "@kryphochroma/rules";
-import { Eye, Layers, Shapes, Shuffle, Swords, Trophy, Volume2, VolumeX, WifiOff } from "lucide-react";
+import { Eye, House, Layers, Shapes, Shuffle, Swords, Trophy, Volume2, VolumeX, WifiOff } from "lucide-react";
+import Link from "next/link";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { toast } from "sonner";
 import { Dialog, DialogContent, DialogDescription, DialogTitle } from "@/components/ui/dialog";
@@ -136,13 +137,13 @@ export function TableView({ controller: game, colorBlind, onToggleShapes }: Tabl
     <div className="kc-app">
       <div aria-hidden dangerouslySetInnerHTML={{ __html: sharedDefs() }} />
       <header className="kc-top">
-        <div className="kc-brand">
+        <Link href="/" className="kc-brand" aria-label="Kryphochroma, back to the menu">
           <Logo />
           <div>
             <b>Kryphochroma</b>
             <small>FHE card game · nobody can peek</small>
           </div>
-        </div>
+        </Link>
         <div className="kc-chips">
           {game.mode === "practice" ? (
             <span className="kc-chip kc-hide-s">
@@ -294,12 +295,18 @@ export function TableView({ controller: game, colorBlind, onToggleShapes }: Tabl
           <DialogDescription className="text-muted">
             {result ? `${result.points} points · every honesty bit checked${result.cheaters.length > 0 ? ` · liars: ${result.cheaters.map((s) => (s === HUMAN ? "you" : names[s])).join(", ")}` : ""}` : ""}
           </DialogDescription>
-          {game.restart && (
-            <button type="button" className="kc-btn justify-self-center" onClick={game.restart}>
-              <Shuffle aria-hidden />
-              Deal again
-            </button>
-          )}
+          <div className="flex flex-wrap justify-center gap-3">
+            {game.restart && (
+              <button type="button" className="kc-btn" onClick={game.restart}>
+                <Shuffle aria-hidden />
+                Deal again
+              </button>
+            )}
+            <Link href={game.mode === "chain" ? "/new" : "/"} className="kc-btn">
+              <House aria-hidden />
+              Menu
+            </Link>
+          </div>
         </DialogContent>
       </Dialog>
     </div>

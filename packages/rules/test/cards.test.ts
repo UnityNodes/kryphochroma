@@ -9,13 +9,14 @@ import {
   isColor,
   isDrawFour,
   isNumber,
+  isSpyglass,
   isValidCard,
   isWild,
   matches,
   points,
   rankOf,
 } from "../src/index.js";
-import { B, G, R, WILD, WILD4, Y } from "./helpers.js";
+import { B, G, R, V, WILD, WILD4, Y } from "./helpers.js";
 
 describe("cards", () => {
   it("encodes color and rank into one byte", () => {
@@ -24,22 +25,26 @@ describe("cards", () => {
     expect(rankOf(39)).toBe(7);
   });
 
-  it("builds a 108 card deck with the classic composition", () => {
+  it("builds a 138 card deck with five colours, spyglasses and wilds", () => {
     const deck = fullDeck();
     expect(deck).toHaveLength(DECK_SIZE);
+    expect(DECK_SIZE).toBe(138);
     expect(deck.filter((c) => c === R(0))).toHaveLength(1);
     expect(deck.filter((c) => c === Y(9))).toHaveLength(2);
     expect(deck.filter((c) => c === B(12))).toHaveLength(2);
+    expect(deck.filter((c) => c === V(7))).toHaveLength(2);
+    expect(deck.filter((c) => c === V(13))).toHaveLength(1);
+    expect(deck.filter((c) => isSpyglass(c))).toHaveLength(5);
     expect(deck.filter((c) => c === WILD)).toHaveLength(4);
     expect(deck.filter((c) => c === WILD4)).toHaveLength(4);
-    expect(new Set(deck).size).toBe(54);
+    expect(new Set(deck).size).toBe(72);
     expect(deck.every(isValidCard)).toBe(true);
   });
 
-  it("rejects ids outside the 54 types", () => {
-    expect(isValidCard(cardOf(0, 13))).toBe(false);
-    expect(isValidCard(cardOf(4, 0))).toBe(false);
-    expect(isValidCard(cardOf(5, 1))).toBe(false);
+  it("rejects ids outside the 72 types", () => {
+    expect(isValidCard(cardOf(0, 14))).toBe(false);
+    expect(isValidCard(cardOf(5, 0))).toBe(false);
+    expect(isValidCard(cardOf(6, 1))).toBe(false);
     expect(isValidCard(-1)).toBe(false);
     expect(isValidCard(1.5)).toBe(false);
     expect(isValidCard(256)).toBe(false);
@@ -54,8 +59,11 @@ describe("cards", () => {
     expect(isNumber(WILD)).toBe(false);
     expect(isAction(R(12))).toBe(true);
     expect(isAction(WILD4)).toBe(false);
-    expect(isColor(3)).toBe(true);
-    expect(isColor(4)).toBe(false);
+    expect(isColor(4)).toBe(true);
+    expect(isColor(5)).toBe(false);
+    expect(isSpyglass(V(13))).toBe(true);
+    expect(isSpyglass(WILD)).toBe(false);
+    expect(isAction(V(13))).toBe(true);
     expect(isColor(0.5)).toBe(false);
   });
 

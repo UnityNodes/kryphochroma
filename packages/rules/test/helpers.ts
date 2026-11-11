@@ -12,8 +12,9 @@ export const R = (rank: number): Card => cardOf(0, rank);
 export const Y = (rank: number): Card => cardOf(1, rank);
 export const G = (rank: number): Card => cardOf(2, rank);
 export const B = (rank: number): Card => cardOf(3, rank);
-export const WILD = cardOf(4, 13);
-export const WILD4 = cardOf(4, 14);
+export const V = (rank: number): Card => cardOf(4, rank);
+export const WILD = cardOf(5, 13);
+export const WILD4 = cardOf(5, 14);
 
 export function config(seats: number, mode: TableConfig["mode"] = "single", stackDrawTwo = false): TableConfig {
   return { seats, mode, targetScore: 500, stackDrawTwo };

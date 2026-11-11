@@ -5,4 +5,4 @@ export * from "./score.js";
 export { HAND_SLOTS, HAND_START, MAX_SEATS, MAX_TIMEOUTS, MIN_SEATS, canDraw } from "./draft.js";
 export * from "./engine.js";
 export * from "./moves.js";
-export { botCatchTarget, chooseMove, favouriteColor, type BotOptions } from "./bot.js";
+export { botCatchTarget, chooseMove, favouriteColor, veilIsImpossible, type BotOptions } from "./bot.js";

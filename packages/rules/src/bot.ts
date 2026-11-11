@@ -7,10 +7,11 @@ import {
   isAction,
   isDrawFour,
   isWild,
+  points,
   rankOf,
 } from "./cards.js";
 import { catchableSeat } from "./engine.js";
-import { legalMoves } from "./moves.js";
+import { legalMoves, veilClaims } from "./moves.js";
 import type { Hand, Move, PublicState } from "./types.js";
 
 export interface BotOptions {
@@ -67,10 +68,41 @@ function cheatMove(pub: PublicState, hand: Hand): PlayMove | null {
   return { type: "play", slot, card: cardOf(pub.color, rankOf(pub.topCard) <= 9 ? rankOf(pub.topCard) : 0) };
 }
 
+function copiesOf(card: Card): number {
+  return rankOf(card) === 0 ? 1 : 2;
+}
+
+export function veilIsImpossible(pub: PublicState, hand: Hand): boolean {
+  const claim = pub.veil?.claim;
+  if (claim === undefined) return false;
+  const seen = pub.discard.slice(0, -1).filter((c) => c === claim).length + hand.filter((c) => c === claim).length;
+  return seen >= copiesOf(claim);
+}
+
+function veilMove(pub: PublicState, seat: number, hand: Hand): Move | null {
+  const me = pub.seats[seat];
+  if (!me || me.veilUsed || me.handSize < 2 || pub.pendingDraw > 0 || pub.drawnSlot !== null) return null;
+  const claims = veilClaims(pub);
+  if (claims.length === 0) return null;
+  let slot = -1;
+  let worst = -1;
+  hand.forEach((card, i) => {
+    if (card !== null && points(card) > worst) {
+      worst = points(card);
+      slot = i;
+    }
+  });
+  if (slot < 0 || worst < 20) return null;
+  const favourite = favouriteColor(hand, slot);
+  const claim = claims.find((c) => colorOf(c) === favourite) ?? claims[0];
+  return claim === undefined ? null : { type: "veil", slot, claim };
+}
+
 export function chooseMove(pub: PublicState, seat: number, hand: Hand, options: BotOptions = {}): Move | null {
   const moves = legalMoves(pub, seat, hand);
   if (moves.some((m) => m.type === "mono")) return { type: "mono" };
   if (pub.turn !== seat || pub.stage !== "Playing") return null;
+  if (moves.some((m) => m.type === "doubt") && veilIsImpossible(pub, hand)) return { type: "doubt" };
   if (pub.drawFour) {
     const held = hand.filter((card) => card !== null && !isWild(card) && colorOf(card) === pub.drawFour?.prevColor);
     return held.length >= CHALLENGE_THRESHOLD ? { type: "challenge" } : { type: "accept" };
@@ -78,6 +110,8 @@ export function chooseMove(pub: PublicState, seat: number, hand: Hand, options: 
   const plays = moves.filter((m): m is PlayMove => m.type === "play");
   const play = pickPlay(pub, seat, hand, plays);
   if (play) return play;
+  const veil = veilMove(pub, seat, hand);
+  if (veil) return veil;
   if (options.cheat && pub.pendingDraw === 0) {
     const lie = cheatMove(pub, hand);
     if (lie) return lie;
