@@ -88,7 +88,9 @@ interface LobbyView {
 
 const POOL_SEATS = 4;
 const POOL_TURN_TIMEOUT = 120;
-const reserved = new Set<string>();
+const RESERVE_MS = 120_000;
+const reserved = new Map<string, number>();
+const isReserved = (id: bigint): boolean => (reserved.get(id.toString()) ?? 0) > Date.now();
 let poolCreating = false;
 
 async function seatsTakenByBots(id: bigint, joined: number): Promise<number> {
@@ -118,7 +120,7 @@ async function poolTables(): Promise<{ id: bigint; view: LobbyView }[]> {
 
 async function ensurePool(): Promise<void> {
   if (poolCreating) return;
-  const free = (await poolTables()).filter((p) => !reserved.has(p.id.toString()));
+  const free = (await poolTables()).filter((p) => !isReserved(p.id));
   for (const p of free) {
     if (Number(p.view.joined) === 0) log({ event: "pool-seated", id: p.id, bots: await seatBots(p.id, Number(p.view.config.seats) - 1) });
   }
@@ -146,10 +148,10 @@ async function ensurePool(): Promise<void> {
 }
 
 async function quick(): Promise<{ id?: string; warming?: number }> {
-  const ready = (await poolTables()).filter((p) => !reserved.has(p.id.toString()));
+  const ready = (await poolTables()).filter((p) => !isReserved(p.id));
   const shuffled = ready.find((p) => Number(p.view.setupStep) >= 60 && Number(p.view.config.seats) - Number(p.view.joined) === 1);
   if (!shuffled) return { warming: Math.max(0, ...ready.map((p) => Number(p.view.setupStep))) };
-  reserved.add(shuffled.id.toString());
+  reserved.set(shuffled.id.toString(), Date.now() + RESERVE_MS);
   void ensurePool().catch(() => undefined);
   return { id: shuffled.id.toString() };
 }
