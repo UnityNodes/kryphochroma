@@ -19,6 +19,7 @@ export interface PublicSeat {
   readonly abandoned: boolean;
   readonly score: number;
   readonly veilUsed: boolean;
+  readonly sonarUsed: boolean;
 }
 
 export interface PendingVeil {
@@ -83,6 +84,7 @@ export type Move =
   | { readonly type: "play"; readonly slot: number; readonly card: Card; readonly color?: Color; readonly peek?: Peek }
   | { readonly type: "veil"; readonly slot: number; readonly claim: Card }
   | { readonly type: "doubt" }
+  | { readonly type: "sonar"; readonly target: number; readonly color: Color }
   | { readonly type: "draw" }
   | { readonly type: "pass" }
   | { readonly type: "mono" }
@@ -105,6 +107,7 @@ export type GameEvent =
   | { readonly type: "VeilDoubted"; readonly seat: number }
   | { readonly type: "VeilResolved"; readonly truth: boolean }
   | { readonly type: "Peeked"; readonly seat: number; readonly target: number; readonly slot: number }
+  | { readonly type: "Sonared"; readonly seat: number; readonly target: number; readonly color: Color; readonly count: number | null }
   | { readonly type: "TimedOut"; readonly seat: number }
   | { readonly type: "SeatAbandoned"; readonly seat: number }
   | { readonly type: "Reshuffled"; readonly count: number }
@@ -138,6 +141,7 @@ export type RuleErrorCode =
   | "CannotCatch"
   | "BadReveal"
   | "VeilUsed"
+  | "BadSonar"
   | "NoVeil"
   | "BadPeek";
 

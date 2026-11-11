@@ -36,7 +36,7 @@ interface GameSetup {
   readonly relayBatch?: number;
 }
 
-const KIND: Record<Move["type"], number> = { play: 0, draw: 1, pass: 2, take: 3, mono: 4, accept: 5, challenge: 6, veil: 8, doubt: 9 };
+const KIND: Record<Move["type"], number> = { play: 0, draw: 1, pass: 2, take: 3, mono: 4, accept: 5, challenge: 6, veil: 8, doubt: 9, sonar: 10 };
 const SETUP_STEPS = 70;
 const ACTION_TYPES = {
   Action: [
@@ -132,9 +132,9 @@ async function compare(table: Awaited<ReturnType<typeof deployTable>>, id: bigin
     const s = await table.getSeat(id, seat);
     const e = pub.seats[seat];
     if (!e) throw new Error("seat missing");
-    onChain.seats.push({ handSize: Number(s.handSize), slots: Number(s.slots), saidMono: s.saidMono, timeouts: Number(s.timeouts), abandoned: s.abandoned, score: Number(s.score), veilUsed: s.veilUsed });
+    onChain.seats.push({ handSize: Number(s.handSize), slots: Number(s.slots), saidMono: s.saidMono, timeouts: Number(s.timeouts), abandoned: s.abandoned, score: Number(s.score), veilUsed: s.veilUsed, sonarUsed: s.sonarUsed });
     const mask = e.slots.reduce((m, used, i) => (used ? m | (1 << i) : m), 0);
-    expected.seats.push({ handSize: e.handSize, slots: mask, saidMono: e.saidMono, timeouts: e.timeouts, abandoned: e.abandoned, score: e.score, veilUsed: e.veilUsed });
+    expected.seats.push({ handSize: e.handSize, slots: mask, saidMono: e.saidMono, timeouts: e.timeouts, abandoned: e.abandoned, score: e.score, veilUsed: e.veilUsed, sonarUsed: e.sonarUsed });
   }
   expect(onChain, label).to.deep.equal(expected);
 }
@@ -148,6 +148,8 @@ async function send(table: Awaited<ReturnType<typeof deployTable>>, id: bigint, 
       return (await c.veil(id, move.slot, move.claim, (await table.handOf(id, seat))[move.slot]!)).wait();
     case "doubt":
       return (await c.doubtVeil(id)).wait();
+    case "sonar":
+      return (await c.sonar(id, move.target, move.color)).wait();
     case "draw":
       return (await c.draw(id)).wait();
     case "pass":
@@ -227,7 +229,7 @@ async function playGame(setup: GameSetup, players: Signer[]): Promise<{ steps: n
         if (next.events.some((e) => e.type === "Reshuffled")) return { steps, finished: false, state };
         if (setup.relayBatch) {
           const seenHandle = move.type === "play" || move.type === "veil" ? (await table.handOf(id, turn))[move.slot]! : undefined;
-          const fields = move.type === "play" ? { slot: move.slot, card: move.card, color: colorField(move) } : move.type === "veil" ? { slot: move.slot, card: move.claim } : {};
+          const fields = move.type === "play" ? { slot: move.slot, card: move.card, color: colorField(move) } : move.type === "veil" ? { slot: move.slot, card: move.claim } : move.type === "sonar" ? { slot: move.target, color: move.color } : {};
           pending.push(await signAction(table, actor, id, turn, KIND[move.type], { ...fields, ...(seenHandle ? { seenHandle } : {}) }, nonces[turn]!++));
           state = next.state;
           shadow = state;

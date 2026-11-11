@@ -18,4 +18,12 @@ export interface TableController {
   readonly secretColor?: number | null;
   readonly peek?: { readonly seat: number; readonly slot: number; readonly card: number | null } | null;
   readonly clearPeek?: () => void;
+  readonly sonar?: SonarReading | null;
+  readonly clearSonar?: () => void;
+}
+
+export interface SonarReading {
+  readonly target: number;
+  readonly color: number;
+  readonly count: number | null;
 }

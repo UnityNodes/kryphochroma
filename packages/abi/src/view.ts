@@ -32,6 +32,7 @@ export interface ChainSeat {
   readonly abandoned: boolean;
   readonly score: number;
   readonly veilUsed?: boolean;
+  readonly sonarUsed?: boolean;
 }
 
 const STAGES: Record<number, Stage> = { 3: "Playing", 4: "AwaitChallenge", 5: "Revealing", 6: "RoundOver", 7: "MatchOver" };
@@ -55,6 +56,7 @@ export function toPublicState(table: ChainTable, seats: readonly ChainSeat[], di
     abandoned: s.abandoned,
     score: s.score,
     veilUsed: Boolean(s.veilUsed),
+    sonarUsed: Boolean(s.sonarUsed),
   }));
   const veilBy = table.veilBy ?? NO_SEAT;
   const veilJudge = table.veilJudge ?? NO_SEAT;

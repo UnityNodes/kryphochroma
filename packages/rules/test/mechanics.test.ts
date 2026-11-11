@@ -6,7 +6,9 @@ import {
   applyDoubt,
   applyDraw,
   applyPlay,
+  applySonar,
   applyTimeout,
+  sonarCount,
   applyVeil,
   chooseMove,
   legalMoves,
@@ -48,6 +50,48 @@ describe("spyglass", () => {
   it("offers every opponent slot as a legal target", () => {
     const peeks = legalMoves(twoSeats().pub, 0, twoSeats().hands[0] ?? []).filter((m) => m.type === "play" && m.card === V(13));
     expect(peeks).toHaveLength(7);
+  });
+});
+
+describe("sonar", () => {
+  it("counts the target's cards of one colour, ignores wilds and passes the turn", () => {
+    const t = applySonar(twoSeats(), 0, 1, 1);
+    expect(t.events).toEqual([{ type: "Sonared", seat: 0, target: 1, color: 1, count: 6 }]);
+    expect(t.state.pub.turn).toBe(1);
+    expect(t.state.pub.seats[0]?.sonarUsed).toBe(true);
+    expect(t.state.pub.topCard).toBe(V(5));
+  });
+
+  it("works once per round, never on yourself, never on a wild colour and not after a draw", () => {
+    const s = twoSeats();
+    expectRule(() => applySonar(s, 0, 0, 1), "BadSonar");
+    expectRule(() => applySonar(s, 0, 1, 5), "BadSonar");
+    expectRule(() => applySonar(s, 0, 3, 1), "BadSonar");
+    expectRule(() => applySonar(s, 1, 0, 1), "NotYourTurn");
+    const back = applySonar(applySonar(s, 0, 1, 1).state, 1, 0, 3).state;
+    expectRule(() => applySonar(back, 0, 1, 2), "BadSonar");
+    expectRule(() => applySonar(applyDraw(s, 0).state, 0, 1, 1), "DrawPending");
+  });
+
+  it("is offered as a legal move for every rival and colour until used", () => {
+    const sonars = legalMoves(twoSeats().pub, 0, twoSeats().hands[0] ?? []).filter((m) => m.type === "sonar");
+    expect(sonars).toHaveLength(5);
+    const used = applySonar(applySonar(twoSeats(), 0, 1, 1).state, 1, 0, 2).state;
+    expect(legalMoves(used.pub, 0, used.hands[0] ?? []).some((m) => m.type === "sonar")).toBe(false);
+  });
+
+  it("lets a stuck bot ping the rival closest to going out instead of drawing", () => {
+    const dealt = game([[R(1), R(2), R(3), R(4), R(6), R(7), R(8)], [Y(1), Y(2), Y(3), Y(4), Y(6), Y(7), Y(8)]], B(5));
+    const close = (st: GameState): GameState => ({ ...st, pub: { ...st.pub, seats: st.pub.seats.map((x, i) => (i === 1 ? { ...x, handSize: 2 } : x)) } });
+    expect(chooseMove(close(dealt).pub, 0, dealt.hands[0] ?? [])).toEqual({ type: "sonar", target: 1, color: 3 });
+    expect(chooseMove(dealt.pub, 0, dealt.hands[0] ?? [])).toEqual({ type: "draw" });
+    const used = applySonar(applySonar(dealt, 0, 1, 3).state, 1, 0, 0).state;
+    expect(chooseMove(close(used).pub, 0, used.hands[0] ?? [])).toEqual({ type: "draw" });
+  });
+
+  it("cannot count a hand it cannot see", () => {
+    expect(sonarCount([Y(1), null, -1], 1)).toBeNull();
+    expect(sonarCount([Y(1), null, Y(2), B(3)], 1)).toBe(2);
   });
 });
 

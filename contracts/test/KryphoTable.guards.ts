@@ -331,6 +331,42 @@ describe("KryphoTable guards", function () {
     expect(await canRead(target[4]!, s[turn]!.address)).to.equal(false);
   });
 
+  it("answers a sonar ping with an encrypted count only the asker can read, once per round", async function () {
+    const { table, id } = await ready([s[0]!, s[1]!]);
+    while (Number((await table.getTable(id)).stage) === 2) {
+      const { checkSignaturesArgs } = await starter(table, id);
+      await (await table.setStarter(id, checkSignaturesArgs.abiEncodedCleartexts, checkSignaturesArgs.decryptionProof)).wait();
+    }
+    const address = await table.getAddress();
+    const t = await table.getTable(id);
+    const turn = Number(t.turn);
+    const other = 1 - turn;
+    const seat = await table.getSeat(id, other);
+    const hand = await table.handOf(id, other);
+    const cards: number[] = [];
+    for (let i = 0; i < 24; i++) if ((Number(seat.slots) >> i) & 1) cards.push(await fhevm.cleartextDb.readUint8({ euint8: hex(hand[i]!) }));
+    const color = cards[0]! >> 4 < 5 ? cards[0]! >> 4 : 2;
+    const expected = cards.filter((c) => c >> 4 === color).length;
+
+    await expect(table.connect(s[turn]!).sonar(id, turn, color)).to.be.revertedWithCustomError(table, "BadSonar");
+    await expect(table.connect(s[turn]!).sonar(id, other, 5)).to.be.revertedWithCustomError(table, "BadSonar");
+    await expect(table.connect(s[other]!).sonar(id, turn, color)).to.be.revertedWithCustomError(table, "NotYourTurn");
+    await expect(table.connect(s[turn]!).sonar(id, other, color)).to.emit(table, "Sonared").withArgs(id, turn, other, color);
+    expect(Number((await table.getTable(id)).turn)).to.equal(other);
+
+    const ping = hex(await table.sonarOf(id, turn));
+    expect(await fhevm.helpers.decryptUint8({ euint8: ping, contractAddress: address, userAddress: s[turn]!.address })).to.equal(expected);
+    const leaked = await fhevm.helpers.decryptUint8({ euint8: ping, contractAddress: address, userAddress: s[other]!.address }).then(
+      () => true,
+      () => false,
+    );
+    expect(leaked).to.equal(false);
+
+    const back = await signAction(table, s[other]!, id, other, 10, { slot: turn, color: (color + 1) % 5 }, 0);
+    await expect(table.relay(id, [back])).to.emit(table, "Sonared").withArgs(id, other, turn, (color + 1) % 5);
+    await expect(table.connect(s[turn]!).sonar(id, other, color)).to.be.revertedWithCustomError(table, "BadSonar");
+  });
+
   it("settles a doubted veil with one revealed bit and refuses a forged proof", async function () {
     const { table, id } = await ready([s[0]!, s[1]!]);
     while (Number((await table.getTable(id)).stage) === 2) {

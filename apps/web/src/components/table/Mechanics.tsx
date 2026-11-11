@@ -1,7 +1,7 @@
 "use client";
 
 import { CARD_COLORS } from "@kryphochroma/cards";
-import { type Card, type Peek, type PublicState, cardLabel, colorOf, peekTargets, rankOf, veilClaims } from "@kryphochroma/rules";
+import { type Card, type Color, type Peek, type PublicState, cardLabel, colorOf, peekTargets, rankOf, veilClaims } from "@kryphochroma/rules";
 import { EyeOff, Lock } from "lucide-react";
 import { useState } from "react";
 import { Dialog, DialogContent, DialogDescription, DialogTitle } from "@/components/ui/dialog";
@@ -174,3 +174,85 @@ export function SecretBadge({ color }: { readonly color: number | null }) {
   );
 }
 
+
+export interface SonarDialogProps {
+  readonly open: boolean;
+  readonly pub: PublicState;
+  readonly me: number;
+  readonly names: readonly string[];
+  readonly onClose: () => void;
+  readonly onSonar: (target: number, color: Color) => void;
+}
+
+export function SonarDialog({ open, pub, me, names, onClose, onSonar }: SonarDialogProps) {
+  const rivals = pub.seats.map((s, seat) => ({ seat, size: s.handSize })).filter((r) => r.seat !== me);
+  const [target, setTarget] = useState<number | null>(null);
+  const chosen = target ?? (rivals.length === 1 ? (rivals[0]?.seat ?? null) : null);
+  const close = () => {
+    setTarget(null);
+    onClose();
+  };
+  return (
+    <Dialog open={open} onOpenChange={(next) => !next && close()}>
+      <DialogContent className={DIALOG}>
+        <DialogTitle className={TITLE}>Sonar</DialogTitle>
+        <DialogDescription className="text-muted">
+          Ask how many cards of one colour a rival holds. The contract counts it inside their encrypted hand and only your key can read the answer. Everyone sees that you pinged, nobody sees the number. Once per round, uses your turn.
+        </DialogDescription>
+        <h3 className="text-xs font-semibold tracking-[.12em] text-muted uppercase">1. Who</h3>
+        <div className="flex flex-wrap gap-2" role="radiogroup" aria-label="Rival to ping">
+          {rivals.map((r) => (
+            <button key={r.seat} type="button" role="radio" aria-checked={chosen === r.seat} className={cn("kc-chip min-h-11", chosen === r.seat && "kc-chip-on")} onClick={() => setTarget(r.seat)}>
+              {names[r.seat] ?? `Seat ${r.seat + 1}`} · {r.size} cards
+            </button>
+          ))}
+        </div>
+        <h3 className="text-xs font-semibold tracking-[.12em] text-muted uppercase">2. Which colour</h3>
+        <div className="flex flex-wrap gap-2">
+          {CARD_COLORS.map((color, c) => (
+            <button
+              key={color.name}
+              type="button"
+              disabled={chosen === null}
+              onClick={() => chosen !== null && (onSonar(chosen, c as Color), setTarget(null))}
+              aria-label={`Ping for ${color.name} cards`}
+              className="grid size-11 place-items-center rounded-full border-2 border-cream text-xs font-semibold text-ink disabled:opacity-40"
+              style={{ background: color.base }}
+            >
+              {color.name.slice(0, 1)}
+            </button>
+          ))}
+        </div>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
+export interface SonarResultProps {
+  readonly sonar: { readonly target: number; readonly color: number; readonly count: number | null } | null;
+  readonly names: readonly string[];
+  readonly onClose: () => void;
+}
+
+export function SonarResult({ sonar, names, onClose }: SonarResultProps) {
+  const swatch = sonar ? CARD_COLORS[sonar.color] : undefined;
+  const who = sonar ? (names[sonar.target] ?? "Seat") : "";
+  return (
+    <Dialog open={sonar !== null} onOpenChange={(next) => !next && onClose()}>
+      <DialogContent className="kc-box border-2 border-cream bg-ink sm:max-w-[360px]">
+        <DialogTitle className={TITLE}>Sonar answer</DialogTitle>
+        <DialogDescription className="text-muted">{sonar ? `${who} · ${swatch?.name ?? ""} cards. Only your key can decrypt this number.` : ""}</DialogDescription>
+        {sonar && sonar.count !== null ? (
+          <p className="text-center font-display text-7xl" style={{ color: swatch?.base }} role="status">
+            {sonar.count}
+          </p>
+        ) : (
+          <p className="flex items-center justify-center gap-1 text-sm text-muted" role="status">
+            <Lock className="size-4" aria-hidden />
+            Counting inside the encrypted hand…
+          </p>
+        )}
+      </DialogContent>
+    </Dialog>
+  );
+}

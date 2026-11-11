@@ -43,6 +43,8 @@ function functionFor(move: Move, seat: number, handles: readonly Hex[]): { funct
       return { functionName: "acceptDrawFour", args: (id) => [id] };
     case "challenge":
       return { functionName: "challengeDrawFour", args: (id) => [id] };
+    case "sonar":
+      return { functionName: "sonar", args: (id) => [id, move.target, move.color] };
   }
 }
 

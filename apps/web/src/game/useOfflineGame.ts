@@ -1,6 +1,6 @@
 "use client";
 
-import { type Move, RuleError, applyCatch } from "@kryphochroma/rules";
+import { type Move, RuleError, applyCatch, sonarCount } from "@kryphochroma/rules";
 import { useCallback, useEffect, useRef, useState } from "react";
 import type { TableController } from "./controller";
 import { HUMAN, SEAT_NAMES, humanMove, newOfflineGame, nextAutoStep } from "./offline";
@@ -15,6 +15,7 @@ export function useOfflineGame(seats: number, stackDrawTwo: boolean, colorBlind:
   const queue = useTransitionQueue(initial.current, HUMAN, SEAT_NAMES, colorBlind);
   const { shown: state, busy, enqueue, reset } = queue;
   const [peek, setPeek] = useState<TableController["peek"]>(null);
+  const [sonar, setSonar] = useState<TableController["sonar"]>(null);
 
   useEffect(() => {
     if (busy) return;
@@ -30,6 +31,7 @@ export function useOfflineGame(seats: number, stackDrawTwo: boolean, colorBlind:
       try {
         enqueue(humanMove(state, move));
         if (move.type === "play" && move.peek) setPeek({ ...move.peek, card: state.hands[move.peek.seat]?.[move.peek.slot] ?? null });
+        if (move.type === "sonar") setSonar({ target: move.target, color: move.color, count: sonarCount(state.hands[move.target] ?? [], move.color) });
         return null;
       } catch (error) {
         return error instanceof RuleError ? error.code : "Move failed";
@@ -51,6 +53,7 @@ export function useOfflineGame(seats: number, stackDrawTwo: boolean, colorBlind:
   }, [seats, stackDrawTwo, reset]);
 
   const clearPeek = useCallback(() => setPeek(null), []);
+  const clearSonar = useCallback(() => setSonar(null), []);
 
   return {
     mode: "practice",
@@ -66,5 +69,7 @@ export function useOfflineGame(seats: number, stackDrawTwo: boolean, colorBlind:
     secretColor: state.secrets[HUMAN] ?? null,
     peek,
     clearPeek,
+    sonar,
+    clearSonar,
   };
 }

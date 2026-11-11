@@ -69,6 +69,7 @@ function emptySeat(score: number): PublicSeat {
     abandoned: false,
     score,
     veilUsed: false,
+    sonarUsed: false,
   };
 }
 
@@ -280,6 +281,28 @@ export function applyVeil(state: GameState, seat: number, slot: number, claim: C
   advance(d, 1);
   d.pub.veil = { by: seat, judge: d.pub.turn, claim };
   d.veilTrue = actual === claim;
+  return finish(d);
+}
+
+export function sonarCount(hand: readonly (Card | null)[], color: number): number | null {
+  const cards = hand.filter((card): card is Card => card !== null);
+  if (cards.some((card) => card < 0)) return null;
+  return cards.filter((card) => colorOf(card) === color).length;
+}
+
+export function applySonar(state: GameState, seat: number, target: number, color: number): Transition {
+  const d = toDraft(state);
+  requireStage(d, "Playing");
+  if (d.pub.drawFour || d.pub.pendingDraw > 0 || d.pub.drawnSlot !== null) throw new RuleError("DrawPending");
+  requireTurn(d, seat);
+  closeVeil(d, seat);
+  const s = seatOf(d, seat);
+  if (s.sonarUsed || target === seat || !Number.isInteger(target) || !d.pub.seats[target] || !isColor(color)) throw new RuleError("BadSonar");
+  s.sonarUsed = true;
+  s.timeouts = 0;
+  d.pub.monoWindow = null;
+  d.events.push({ type: "Sonared", seat, target, color: color as Color, count: sonarCount(d.hands[target] ?? [], color) });
+  advance(d, 1);
   return finish(d);
 }
 

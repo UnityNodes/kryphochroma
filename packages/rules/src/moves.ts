@@ -8,6 +8,7 @@ import {
   applyMono,
   applyPass,
   applyPlay,
+  applySonar,
   applyTakeDraws,
   applyVeil,
   canSayMono,
@@ -45,6 +46,11 @@ export function legalMoves(pub: PublicState, seat: number, hand: Hand): Move[] {
     hand.forEach((card, slot) => {
       if (card === null || (pub.drawnSlot !== null && slot !== pub.drawnSlot)) return;
       for (const claim of claims) moves.push({ type: "veil", slot, claim });
+    });
+  }
+  if (me && !me.sonarUsed && pub.drawnSlot === null) {
+    pub.seats.forEach((_, target) => {
+      if (target !== seat) for (const color of PLAYABLE_COLORS) moves.push({ type: "sonar", target, color });
     });
   }
   const drawable = canDraw(pub, seat);
@@ -92,5 +98,7 @@ export function applyMove(state: GameState, seat: number, move: Move): Transitio
       return applyVeil(state, seat, move.slot, move.claim);
     case "doubt":
       return applyDoubt(state, seat);
+    case "sonar":
+      return applySonar(state, seat, move.target, move.color);
   }
 }

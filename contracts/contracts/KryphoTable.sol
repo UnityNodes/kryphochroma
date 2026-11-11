@@ -7,6 +7,7 @@ import {IKryphoTable} from "./interfaces/IKryphoTable.sol";
 import {KryphoDeck} from "./KryphoDeck.sol";
 import {CardLib} from "./CardLib.sol";
 import {KryphoScore} from "./KryphoScore.sol";
+import {KryphoRadio} from "./KryphoRadio.sol";
 
 contract KryphoTable is IKryphoTable, ZamaEthereumConfig {
     using CardLib for uint8;
@@ -22,13 +23,9 @@ contract KryphoTable is IKryphoTable, ZamaEthereumConfig {
     uint8 internal constant MIN_REFILL = 16;
     uint256 internal constant SESSION_STIPEND = 10_000;
     uint16 internal constant MAX_TARGET_SCORE = 10_000;
-    uint16 internal constant CHEAT_PENALTY = 100;
     uint64 internal constant CATCH_DELAY_BLOCKS = 2;
     uint16 internal constant SETUP_STEPS = uint16(KryphoDeck.FILL_STEPS) + KryphoDeck.SHUFFLE_STEPS;
-    bytes32 internal constant ACTION_TYPEHASH =
-        keccak256("Action(uint256 table,uint8 seat,uint8 kind,uint8 slot,uint8 card,uint8 color,bytes32 seenHandle,uint32 nonce)");
     bytes32 internal constant RELAY_SEAT_SLOT = keccak256("kryphochroma.relay.seat");
-    uint256 internal constant HALF_ORDER = 0x7fffffffffffffffffffffffffffffff5d576e7357a4501ddfe92f46681b20a0;
     uint8 internal constant KIND_PLAY = 0;
     uint8 internal constant KIND_DRAW = 1;
     uint8 internal constant KIND_PASS = 2;
@@ -39,37 +36,13 @@ contract KryphoTable is IKryphoTable, ZamaEthereumConfig {
     uint8 internal constant KIND_CATCH = 7;
     uint8 internal constant KIND_VEIL = 8;
     uint8 internal constant KIND_DOUBT = 9;
+    uint8 internal constant KIND_SONAR = 10;
     uint8 internal constant SECRET_COLORS = 5;
     uint8 internal constant VEIL_TRUE_DRAW = 2;
     uint8 internal constant VEIL_LIE_DRAW = 4;
 
     bytes32 public immutable DOMAIN_SEPARATOR;
     address public immutable TAKEOVER;
-
-    struct Action {
-        uint8 seat;
-        uint8 kind;
-        uint8 slot;
-        uint8 card;
-        uint8 color;
-        bytes32 seenHandle;
-        uint32 nonce;
-        uint8 v;
-        bytes32 r;
-        bytes32 s;
-    }
-
-    struct Seat {
-        address player;
-        address session;
-        uint8 handSize;
-        uint32 slots;
-        bool saidMono;
-        uint8 timeouts;
-        bool abandoned;
-        uint16 score;
-        bool veilUsed;
-    }
 
     struct Table {
         address creator;
@@ -115,6 +88,7 @@ contract KryphoTable is IKryphoTable, ZamaEthereumConfig {
     mapping(uint256 => uint8[]) internal _discard;
     mapping(uint256 => bytes32[]) internal _revealHandles;
     mapping(uint256 => uint32[4]) internal _nonces;
+    mapping(uint256 => euint8[4]) internal _sonar;
 
     constructor(address takeover) {
         TAKEOVER = takeover;
@@ -158,6 +132,7 @@ contract KryphoTable is IKryphoTable, ZamaEthereumConfig {
         else if (a.kind == KIND_CATCH) catchMono(id, a.slot);
         else if (a.kind == KIND_VEIL) veil(id, a.slot, a.card, a.seenHandle);
         else if (a.kind == KIND_DOUBT) doubtVeil(id);
+        else if (a.kind == KIND_SONAR) sonar(id, a.slot, a.color);
         else revert BadAction();
         _setRelaySeat(NONE);
     }
@@ -384,6 +359,20 @@ contract KryphoTable is IKryphoTable, ZamaEthereumConfig {
         emit VeilDoubted(id, seat);
     }
 
+    function sonar(uint256 id, uint8 target, uint8 color) public {
+        Table storage t = _requireStage(id, Stage.Playing);
+        if (t.drawFourBy != NONE || t.pendingDraw > 0 || t.drawnSlot != NONE) revert DrawPending();
+        uint8 seat = _requireTurn(id, t);
+        Seat storage s = _seats[id][seat];
+        if (s.sonarUsed || target == seat || target >= t.joined || color >= CardLib.WILD_COLOR) revert BadSonar();
+        s.sonarUsed = true;
+        s.timeouts = 0;
+        t.monoWindow = NONE;
+        _sonar[id][seat] = KryphoRadio.ping(_handColors, id, target, _seats[id][target].slots, color, s.session);
+        emit Sonared(id, seat, target, color);
+        _advance(t, 1);
+    }
+
     function draw(uint256 id) public {
         Table storage t = _requireStage(id, Stage.Playing);
         if (t.drawFourBy != NONE) revert DrawFourPending();
@@ -524,17 +513,7 @@ contract KryphoTable is IKryphoTable, ZamaEthereumConfig {
         Table storage t = _requireStage(id, Stage.Revealing);
         uint8 seat = t.revealPrepared;
         if (seat >= t.joined) revert RevealNotReady();
-        bytes32[] storage handles = _revealHandles[id];
-        FHE.makePubliclyDecryptable(_honest[id][seat]);
-        handles.push(FHE.toBytes32(_honest[id][seat]));
-        FHE.makePubliclyDecryptable(_secret[id][seat]);
-        handles.push(FHE.toBytes32(_secret[id][seat]));
-        uint32 slots = _seats[id][seat].slots;
-        for (uint8 i = 0; i < HAND_SLOTS; i++) {
-            if (slots & (uint32(1) << i) == 0) continue;
-            FHE.makePubliclyDecryptable(_hands[id][seat][i]);
-            handles.push(FHE.toBytes32(_hands[id][seat][i]));
-        }
+        KryphoScore.expose(_revealHandles[id], _honest[id][seat], _secret[id][seat], _hands, id, seat, _seats[id][seat].slots);
         t.revealPrepared = seat + 1;
     }
 
@@ -542,19 +521,7 @@ contract KryphoTable is IKryphoTable, ZamaEthereumConfig {
         Table storage t = _requireStage(id, Stage.Revealing);
         if (t.revealPrepared != t.joined) revert RevealNotReady();
         FHE.checkSignatures(_revealHandles[id], cleartexts, proof);
-        uint32[4] memory slots;
-        for (uint8 seat = 0; seat < t.joined; seat++) slots[seat] = _seats[id][seat].slots;
-        (int8 winner, uint16 points, uint8 cheaters, bool bonus) = KryphoScore.score(cleartexts, slots, t.joined, t.candidate, t.topCard);
-        for (uint8 seat = 0; seat < t.joined; seat++) {
-            if (cheaters & (uint8(1) << seat) == 0) continue;
-            Seat storage c = _seats[id][seat];
-            uint16 taken = c.score < CHEAT_PENALTY ? c.score : CHEAT_PENALTY;
-            c.score -= taken;
-            if (winner >= 0) points += taken;
-        }
-        if (winner >= 0) _seats[id][uint8(winner)].score += points;
-        emit RoundSettled(id, winner, points, cheaters, bonus);
-        bool over = t.config.singleRound || (winner >= 0 && _seats[id][uint8(winner)].score >= t.config.targetScore);
+        (int8 winner, bool over) = KryphoScore.settle(_seats, id, cleartexts, t.joined, t.candidate, t.topCard, t.config.singleRound, t.config.targetScore);
         t.stage = over ? Stage.MatchOver : Stage.RoundOver;
         if (over) emit MatchOver(id, winner);
     }
@@ -579,6 +546,10 @@ contract KryphoTable is IKryphoTable, ZamaEthereumConfig {
 
     function secretOf(uint256 id, uint8 seat) external view returns (euint8) {
         return _secret[id][seat];
+    }
+
+    function sonarOf(uint256 id, uint8 seat) external view returns (euint8) {
+        return _sonar[id][seat];
     }
 
     function hadColorOf(uint256 id) external view returns (ebool) {
@@ -625,9 +596,7 @@ contract KryphoTable is IKryphoTable, ZamaEthereumConfig {
     }
 
     function _signer(uint256 id, Action calldata a) internal view returns (address) {
-        if (uint256(a.s) > HALF_ORDER) revert BadSignature();
-        bytes32 structHash = keccak256(abi.encode(ACTION_TYPEHASH, id, a.seat, a.kind, a.slot, a.card, a.color, a.seenHandle, a.nonce));
-        address signer = ecrecover(keccak256(abi.encodePacked("\x19\x01", DOMAIN_SEPARATOR, structHash)), a.v, a.r, a.s);
+        address signer = KryphoRadio.signer(DOMAIN_SEPARATOR, id, a);
         if (signer == address(0)) revert BadSignature();
         return signer;
     }
@@ -834,6 +803,7 @@ contract KryphoTable is IKryphoTable, ZamaEthereumConfig {
             s.saidMono = false;
             s.timeouts = 0;
             s.veilUsed = false;
+            s.sonarUsed = false;
         }
     }
 }

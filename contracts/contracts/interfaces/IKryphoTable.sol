@@ -21,6 +21,32 @@ interface IKryphoTable {
         bool stackDrawTwo;
     }
 
+    struct Seat {
+        address player;
+        address session;
+        uint8 handSize;
+        uint32 slots;
+        bool saidMono;
+        uint8 timeouts;
+        bool abandoned;
+        uint16 score;
+        bool veilUsed;
+        bool sonarUsed;
+    }
+
+    struct Action {
+        uint8 seat;
+        uint8 kind;
+        uint8 slot;
+        uint8 card;
+        uint8 color;
+        bytes32 seenHandle;
+        uint32 nonce;
+        uint8 v;
+        bytes32 r;
+        bytes32 s;
+    }
+
     error BadConfig();
     error TableFull();
     error AlreadySeated();
@@ -55,6 +81,7 @@ interface IKryphoTable {
     error VeilUsed();
     error NoVeil();
     error BadPeek();
+    error BadSonar();
 
     event TableCreated(uint256 indexed id, address indexed creator, Config config);
     event Joined(uint256 indexed id, uint8 seat, address indexed player, address session);
@@ -73,6 +100,7 @@ interface IKryphoTable {
     event VeilDoubted(uint256 indexed id, uint8 seat);
     event VeilResolved(uint256 indexed id, bool truth);
     event Peeked(uint256 indexed id, uint8 seat, uint8 target, uint8 slot);
+    event Sonared(uint256 indexed id, uint8 seat, uint8 target, uint8 color);
     event TimedOut(uint256 indexed id, uint8 seat);
     event SeatAbandoned(uint256 indexed id, uint8 seat);
     event Reshuffled(uint256 indexed id, uint8 count);

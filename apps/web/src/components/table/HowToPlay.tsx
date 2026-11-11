@@ -11,6 +11,7 @@ const RULES = [
   "Five colours: red, sun, teal, blue and violet. Match the top card by colour or number. Wild cards go on anything and pick the next colour.",
   "Skip, Reverse and Draw Two work as you expect. A Wild +4 makes the next player take 4, unless they challenge it.",
   "Spyglass: play it on its colour and look at one card in an opponent's hand. Only your key can decrypt it.",
+  "Sonar: once per round, instead of your move, ask how many cards of one colour a rival holds. The contract counts it inside their encrypted hand and only your key reads the answer.",
   "Veil, once per round: lay any card face down and name a number card that fits. The next player may doubt it. A lie draws 4, a wrong doubt draws 2.",
   "Secret colour: you get a hidden colour at the deal. Go out on a card of that colour and the round counts double.",
   "No card to play? Draw one. If it fits you may play it, otherwise pass. Down to one card? Press Mono! or get caught for 2.",

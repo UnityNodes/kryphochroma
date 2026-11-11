@@ -98,6 +98,15 @@ function veilMove(pub: PublicState, seat: number, hand: Hand): Move | null {
   return claim === undefined ? null : { type: "veil", slot, claim };
 }
 
+const SONAR_WHEN_RIVAL_HOLDS = 3;
+
+function sonarMove(pub: PublicState, seat: number, moves: readonly Move[]): Move | null {
+  if (!moves.some((m) => m.type === "sonar")) return null;
+  const rivals = pub.seats.map((s, i) => ({ i, size: s.handSize })).filter((r) => r.i !== seat && r.size > 0 && r.size <= SONAR_WHEN_RIVAL_HOLDS);
+  const target = rivals.sort((a, b) => a.size - b.size)[0];
+  return target ? { type: "sonar", target: target.i, color: pub.color } : null;
+}
+
 export function chooseMove(pub: PublicState, seat: number, hand: Hand, options: BotOptions = {}): Move | null {
   const moves = legalMoves(pub, seat, hand);
   if (moves.some((m) => m.type === "mono")) return { type: "mono" };
@@ -112,6 +121,8 @@ export function chooseMove(pub: PublicState, seat: number, hand: Hand, options: 
   if (play) return play;
   const veil = veilMove(pub, seat, hand);
   if (veil) return veil;
+  const sonar = sonarMove(pub, seat, moves);
+  if (sonar) return sonar;
   if (options.cheat && pub.pendingDraw === 0) {
     const lie = cheatMove(pub, hand);
     if (lie) return lie;

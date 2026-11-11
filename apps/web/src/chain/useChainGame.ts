@@ -87,6 +87,14 @@ export function useChainGame(id: bigint, colorBlind: boolean, watchOnly = false)
   const pendingPeek = useRef<{ seat: number; slot: number } | null>(null);
   const [secretColor, setSecretColor] = useState<number | null>(null);
   const [peek, setPeek] = useState<TableController["peek"]>(null);
+  const [sonar, setSonar] = useState<TableController["sonar"]>(null);
+  const sonarHandle = useRef<Hex | null>(null);
+  const pendingSonar = useRef<{ readonly target: number; readonly color: number; readonly stale: Hex | null } | null>(null);
+  const startSonar = useCallback((target: number, color: number) => {
+    if (pendingSonar.current) return;
+    pendingSonar.current = { target, color, stale: sonarHandle.current };
+    setSonar({ target, color, count: null });
+  }, []);
   const [sending, setSending] = useState(false);
 
   const reconcile = useCallback(
@@ -96,6 +104,7 @@ export function useChainGame(id: bigint, colorBlind: boolean, watchOnly = false)
       for (const e of events) {
         if (e.type === "RoundSettled") settled.current = { winner: e.winner, points: e.points, cheaters: e.cheaters, bonus: e.bonus };
         if (e.type === "Peeked" && e.seat === meRef.current) pendingPeek.current = { seat: e.target, slot: e.slot };
+        if (e.type === "Sonared" && e.seat === meRef.current) startSonar(e.target, e.color);
       }
       const projectedState = project(base.state, base.nonces, actions.current).state;
       const over = projectedState.pub.stage === "RoundOver" || projectedState.pub.stage === "MatchOver";
@@ -107,7 +116,7 @@ export function useChainGame(id: bigint, colorBlind: boolean, watchOnly = false)
         enqueue({ state: target, events });
       }
     },
-    [enqueue, reset],
+    [enqueue, reset, startSonar],
   );
 
   const poll = useCallback(async () => {
@@ -136,7 +145,11 @@ export function useChainGame(id: bigint, colorBlind: boolean, watchOnly = false)
       const secret = (await read("secretOf", [id, seat])) as Hex;
       const peekAt = pendingPeek.current;
       const peekHandle = peekAt ? ((await read("handOf", [id, peekAt.seat])) as readonly Hex[])[peekAt.slot] : undefined;
-      const extra = [secret, ...(peekHandle ? [peekHandle] : [])].filter((h) => !/^0x0+$/.test(h) && !plain.current.has(h));
+      const ping = (await read("sonarOf", [id, seat])) as Hex;
+      const sonarAt = pendingSonar.current;
+      const fresh = sonarAt && !/^0x0+$/.test(ping) && ping !== sonarAt.stale ? ping : undefined;
+      if (!sonarAt) sonarHandle.current = ping;
+      const extra = [secret, ...(peekHandle ? [peekHandle] : []), ...(fresh ? [fresh] : [])].filter((h) => !/^0x0+$/.test(h) && !plain.current.has(h));
       const missing = [...own.filter((h, i) => (slots & (1 << i)) !== 0 && !plain.current.has(h)), ...extra];
       if (missing.length > 0) {
         if (!permitted.current) {
@@ -149,6 +162,11 @@ export function useChainGame(id: bigint, colorBlind: boolean, watchOnly = false)
       }
       known.set(seat, own.map((h, i) => ((slots & (1 << i)) !== 0 ? (plain.current.get(h) ?? null) : null)));
       setSecretColor(plain.current.get(secret) ?? null);
+      if (sonarAt && fresh && plain.current.has(fresh)) {
+        setSonar({ target: sonarAt.target, color: sonarAt.color, count: Number(plain.current.get(fresh)) });
+        sonarHandle.current = fresh;
+        pendingSonar.current = null;
+      }
       if (peekAt && peekHandle && plain.current.has(peekHandle)) {
         setPeek({ ...peekAt, card: plain.current.get(peekHandle) ?? null });
         pendingPeek.current = null;
@@ -197,6 +215,7 @@ export function useChainGame(id: bigint, colorBlind: boolean, watchOnly = false)
         const next = current ? stepAction(current, action) : null;
         if (next) {
           projected.current = next.state;
+          for (const e of next.events) if (e.type === "Sonared" && e.seat === meRef.current) startSonar(e.target, e.color);
           for (const e of next.events) if (e.type === "Peeked" && e.seat === meRef.current) {
             pendingPeek.current = { seat: e.target, slot: e.slot };
             setPeek({ seat: e.target, slot: e.slot, card: null });
@@ -208,7 +227,7 @@ export function useChainGame(id: bigint, colorBlind: boolean, watchOnly = false)
       }
     };
     return () => source.close();
-  }, [id, enqueue, reconcile]);
+  }, [id, enqueue, reconcile, startSonar]);
 
   const submit = useCallback(
     async (move: Move | { readonly type: "catch"; readonly target: number }): Promise<string | null> => {
@@ -251,6 +270,8 @@ export function useChainGame(id: bigint, colorBlind: boolean, watchOnly = false)
     secretColor: seated ? secretColor : undefined,
     peek,
     clearPeek: () => setPeek(null),
+    sonar,
+    clearSonar: () => setSonar(null),
     snapshot,
     address: burner.address,
     error,

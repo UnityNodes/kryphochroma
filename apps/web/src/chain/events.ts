@@ -59,6 +59,9 @@ export function toGameEvents(logs: readonly Log[], id: bigint): GameEvent[] {
       case "Peeked":
         events.push({ type: "Peeked", seat: num(args.seat), target: num(args.target), slot: num(args.slot) });
         break;
+      case "Sonared":
+        events.push({ type: "Sonared", seat: num(args.seat), target: num(args.target), color: num(args.color) as Color, count: null });
+        break;
       case "SeatAbandoned":
         events.push({ type: "SeatAbandoned", seat: num(args.seat) });
         break;

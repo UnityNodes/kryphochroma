@@ -62,6 +62,11 @@ export const kryphoTableAbi = [
   },
   {
     "inputs": [],
+    "name": "BadSonar",
+    "type": "error"
+  },
+  {
+    "inputs": [],
     "name": "CannotCatch",
     "type": "error"
   },
@@ -716,6 +721,37 @@ export const kryphoTableAbi = [
         "internalType": "uint256",
         "name": "id",
         "type": "uint256"
+      },
+      {
+        "indexed": false,
+        "internalType": "uint8",
+        "name": "seat",
+        "type": "uint8"
+      },
+      {
+        "indexed": false,
+        "internalType": "uint8",
+        "name": "target",
+        "type": "uint8"
+      },
+      {
+        "indexed": false,
+        "internalType": "uint8",
+        "name": "color",
+        "type": "uint8"
+      }
+    ],
+    "name": "Sonared",
+    "type": "event"
+  },
+  {
+    "anonymous": false,
+    "inputs": [
+      {
+        "indexed": true,
+        "internalType": "uint256",
+        "name": "id",
+        "type": "uint256"
       }
     ],
     "name": "TableCancelled",
@@ -1163,9 +1199,14 @@ export const kryphoTableAbi = [
             "internalType": "bool",
             "name": "veilUsed",
             "type": "bool"
+          },
+          {
+            "internalType": "bool",
+            "name": "sonarUsed",
+            "type": "bool"
           }
         ],
-        "internalType": "struct KryphoTable.Seat",
+        "internalType": "struct IKryphoTable.Seat",
         "name": "",
         "type": "tuple"
       }
@@ -1578,7 +1619,7 @@ export const kryphoTableAbi = [
             "type": "bytes32"
           }
         ],
-        "internalType": "struct KryphoTable.Action[]",
+        "internalType": "struct IKryphoTable.Action[]",
         "name": "actions",
         "type": "tuple[]"
       }
@@ -1648,7 +1689,7 @@ export const kryphoTableAbi = [
             "type": "bytes32"
           }
         ],
-        "internalType": "struct KryphoTable.Action",
+        "internalType": "struct IKryphoTable.Action",
         "name": "a",
         "type": "tuple"
       }
@@ -1789,6 +1830,53 @@ export const kryphoTableAbi = [
     "name": "setupStep",
     "outputs": [],
     "stateMutability": "nonpayable",
+    "type": "function"
+  },
+  {
+    "inputs": [
+      {
+        "internalType": "uint256",
+        "name": "id",
+        "type": "uint256"
+      },
+      {
+        "internalType": "uint8",
+        "name": "target",
+        "type": "uint8"
+      },
+      {
+        "internalType": "uint8",
+        "name": "color",
+        "type": "uint8"
+      }
+    ],
+    "name": "sonar",
+    "outputs": [],
+    "stateMutability": "nonpayable",
+    "type": "function"
+  },
+  {
+    "inputs": [
+      {
+        "internalType": "uint256",
+        "name": "id",
+        "type": "uint256"
+      },
+      {
+        "internalType": "uint8",
+        "name": "seat",
+        "type": "uint8"
+      }
+    ],
+    "name": "sonarOf",
+    "outputs": [
+      {
+        "internalType": "euint8",
+        "name": "",
+        "type": "bytes32"
+      }
+    ],
+    "stateMutability": "view",
     "type": "function"
   },
   {

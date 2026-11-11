@@ -2,10 +2,11 @@ import type { network } from "hardhat";
 
 type Ethers = Awaited<ReturnType<typeof network.connect>>["ethers"];
 
-export async function linkedLibraries(ethers: Ethers): Promise<{ KryphoDeck: string; KryphoScore: string }> {
+export async function linkedLibraries(ethers: Ethers): Promise<{ KryphoDeck: string; KryphoScore: string; KryphoRadio: string }> {
   const deck = await ethers.deployContract("KryphoDeck");
   const score = await ethers.deployContract("KryphoScore");
-  return { KryphoDeck: await deck.getAddress(), KryphoScore: await score.getAddress() };
+  const radio = await ethers.deployContract("KryphoRadio");
+  return { KryphoDeck: await deck.getAddress(), KryphoScore: await score.getAddress(), KryphoRadio: await radio.getAddress() };
 }
 
 export async function deployHarness(ethers: Ethers, takeover: string) {

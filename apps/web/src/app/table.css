@@ -128,4 +128,4 @@
 .kc-eq span:nth-child(3){animation-duration:.95s}
 @keyframes kc-eq{from{transform:scaleY(.25)}to{transform:scaleY(1)}}
 @media (prefers-reduced-motion:reduce){.kc-eq span{animation:none;transform:scaleY(.6)}}
-@media (max-width:440px){.kc-brand b{display:none}}
+@media (max-width:440px){.kc-brand b{display:none}.kc-actions{gap:6px}.kc-actions .kc-btn{padding:0 12px}}

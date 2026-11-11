@@ -2,7 +2,7 @@
 
 import { CARD_COLORS, sharedDefs } from "@kryphochroma/cards";
 import { type Color, type Peek, canDraw, cardLabel, canSayMono, botCatchTarget, isPlayable, isSpyglass, isWild, legalMoves, veilClaims } from "@kryphochroma/rules";
-import { Eye, EyeOff, House, Layers, Shapes, Shuffle, Swords, Trophy, Volume2, VolumeX, WifiOff } from "lucide-react";
+import { Eye, EyeOff, House, Layers, Radar, Shapes, Shuffle, Swords, Trophy, Volume2, VolumeX, WifiOff } from "lucide-react";
 import Link from "next/link";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { toast } from "sonner";
@@ -20,7 +20,7 @@ import { Center } from "./Center";
 import { Feed } from "./Feed";
 import { Hand } from "./Hand";
 import { HowToPlay } from "./HowToPlay";
-import { PeekDialog, PeekResult, SecretBadge, SecretChip, VeilDialog } from "./Mechanics";
+import { PeekDialog, PeekResult, SecretBadge, SecretChip, SonarDialog, SonarResult, VeilDialog } from "./Mechanics";
 import { RadioChip } from "./RadioChip";
 import { Seat } from "./Seat";
 
@@ -34,6 +34,7 @@ const ERROR_TEXT: Record<string, string> = {
   VeilUsed: "You already veiled a card this round",
   NoVeil: "There is no veil to doubt",
   BadPeek: "Pick a card in an opponent's hand",
+  BadSonar: "Sonar works once per round, on a rival, for one of the five colours",
 };
 
 export interface TableProps {
@@ -71,6 +72,7 @@ export function TableView({ controller: game, colorBlind, onToggleShapes }: Tabl
   const [pickingSlot, setPickingSlot] = useState<number | null>(null);
   const [peekSlot, setPeekSlot] = useState<number | null>(null);
   const [veiling, setVeiling] = useState(false);
+  const [pinging, setPinging] = useState(false);
   const sound = useSound();
   const { play: playSound } = sound;
   const lastLine = game.feed[0];
@@ -137,6 +139,7 @@ export function TableView({ controller: game, colorBlind, onToggleShapes }: Tabl
   const catchable = botCatchTarget(pub, HUMAN);
   const meSeat = pub.seats[HUMAN];
   const radio = useRadio(tableTension(pub, HUMAN));
+  const canSonar = mine && !game.watching && !!meSeat && !meSeat.sonarUsed && pub.pendingDraw === 0 && pub.drawFour === null && pub.drawnSlot === null;
   const canVeil = mine && !!meSeat && !meSeat.veilUsed && meSeat.handSize >= 2 && pub.pendingDraw === 0 && pub.drawFour === null && veilClaims(pub).length > 0;
   const canDoubt = mine && pub.veil !== null && pub.veil.judge === HUMAN && pub.drawnSlot === null;
   const status = canDoubt && pub.veil ? `${names[pub.veil.by] ?? "Someone"} veiled a card as ${cardLabel(pub.veil.claim)}: doubt it or play on` : statusText(pub.stage, pub.turn, game.watching ? -1 : HUMAN, names, busy, drawn, pub.drawFour !== null, pub.pendingDraw);
@@ -295,9 +298,15 @@ export function TableView({ controller: game, colorBlind, onToggleShapes }: Tabl
               </button>
             )}
             {canVeil && (
-              <button type="button" className="kc-btn" onClick={() => setVeiling(true)} disabled={busy}>
+              <button type="button" className="kc-btn" onClick={() => setVeiling(true)} disabled={busy} aria-label="Veil">
                 <EyeOff aria-hidden />
-                Veil
+                <span className="kc-hide-s">Veil</span>
+              </button>
+            )}
+            {canSonar && (
+              <button type="button" className="kc-btn" onClick={() => setPinging(true)} disabled={busy} aria-label="Sonar">
+                <Radar aria-hidden />
+                <span className="kc-hide-s">Sonar</span>
               </button>
             )}
             {catchable !== null ? (
@@ -323,6 +332,18 @@ export function TableView({ controller: game, colorBlind, onToggleShapes }: Tabl
           </div>
         </DialogContent>
       </Dialog>
+      <SonarDialog
+        open={pinging}
+        pub={pub}
+        me={HUMAN}
+        names={names}
+        onClose={() => setPinging(false)}
+        onSonar={(target, color) => {
+          setPinging(false);
+          run({ type: "sonar", target, color });
+        }}
+      />
+      <SonarResult sonar={game.sonar ?? null} names={names} onClose={() => game.clearSonar?.()} />
       <VeilDialog
         open={veiling}
         pub={pub}

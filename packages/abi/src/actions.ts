@@ -5,7 +5,7 @@ import { type ChainSeat, type ChainTable, toPublicState } from "./view.js";
 export const UNKNOWN_CARD = -1;
 export const ZERO_HANDLE = `0x${"0".repeat(64)}` as const;
 
-export const ACTION_KIND = { play: 0, draw: 1, pass: 2, take: 3, mono: 4, accept: 5, challenge: 6, catch: 7, veil: 8, doubt: 9 } as const;
+export const ACTION_KIND = { play: 0, draw: 1, pass: 2, take: 3, mono: 4, accept: 5, challenge: 6, catch: 7, veil: 8, doubt: 9, sonar: 10 } as const;
 export const PEEK_SEAT_SHIFT = 5;
 const PEEK_SLOT_MASK = 31;
 
@@ -61,6 +61,8 @@ export function fieldsFor(table: bigint, seat: number, move: Move | { readonly t
       return { ...base, kind: ACTION_KIND.veil, slot: move.slot, card: move.claim, seenHandle: handles[move.slot] ?? ZERO_HANDLE };
     case "catch":
       return { ...base, kind: ACTION_KIND.catch, slot: move.target };
+    case "sonar":
+      return { ...base, kind: ACTION_KIND.sonar, slot: move.target, color: move.color };
     default:
       return { ...base, kind: ACTION_KIND[move.type] };
   }
@@ -89,6 +91,8 @@ export function moveOf(action: ActionFields): Move | { readonly type: "catch"; r
       return { type: "challenge" };
     case ACTION_KIND.catch:
       return { type: "catch", target: action.slot };
+    case ACTION_KIND.sonar:
+      return { type: "sonar", target: action.slot, color: action.color as Color };
     default:
       return null;
   }
