@@ -51,7 +51,7 @@ describe("keeper plan", () => {
     expect(nextKeeperAction({ ...base, stage: 0, setupStep: 10, creator: "0xdef" }, 0n, pool)).toEqual({ kind: "idle" });
   });
 
-  it("runs every urgent step before a single background shuffle batch", () => {
+  it("runs urgent steps first and gives every background shuffle a batch, started tables and the pool before refills", () => {
     const planned: PlannedAction[] = [
       { id: 5n, stage: 0, action: { kind: "setupStep", remaining: 52 } },
       { id: 4n, stage: 2, action: { kind: "revealStarter" } },
@@ -62,9 +62,8 @@ describe("keeper plan", () => {
     ];
     const { urgent, background } = scheduleKeeper(planned);
     expect(urgent.map((p) => p.id)).toEqual([4n, 2n]);
-    expect(background?.id).toBe(7n);
-    expect(scheduleKeeper(planned.filter((p) => p.id !== 7n)).background?.id).toBe(5n);
-    expect(scheduleKeeper([planned[3]!, planned[2]!]).background?.id).toBe(6n);
-    expect(scheduleKeeper([planned[2]!])).toEqual({ urgent: [], background: null });
+    expect(background.map((p) => p.id)).toEqual([6n, 5n, 7n]);
+    expect(scheduleKeeper([planned[5]!, planned[0]!]).background.map((p) => p.id)).toEqual([5n, 7n]);
+    expect(scheduleKeeper([planned[2]!])).toEqual({ urgent: [], background: [] });
   });
 });

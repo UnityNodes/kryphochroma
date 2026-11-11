@@ -80,14 +80,15 @@ export interface PlannedAction {
 const BACKGROUND_KINDS = new Set<KeeperAction["kind"]>(["setupStep", "reshuffleStep"]);
 
 function backgroundRank(entry: PlannedAction): number {
-  if (entry.action.kind === "reshuffleStep") return 0;
-  return stageName(entry.stage) === "Lobby" ? 1 : 2;
+  if (stageName(entry.stage) === "Shuffling") return 0;
+  if (stageName(entry.stage) === "Lobby") return 1;
+  return 2;
 }
 
-export function scheduleKeeper(planned: readonly PlannedAction[]): { readonly urgent: readonly PlannedAction[]; readonly background: PlannedAction | null } {
+export function scheduleKeeper(planned: readonly PlannedAction[]): { readonly urgent: readonly PlannedAction[]; readonly background: readonly PlannedAction[] } {
   const active = planned.filter((p) => p.action.kind !== "idle");
   const urgent = active.filter((p) => !BACKGROUND_KINDS.has(p.action.kind));
   const background = [...active.filter((p) => BACKGROUND_KINDS.has(p.action.kind))].sort((a, b) => backgroundRank(a) - backgroundRank(b) || Number(a.id - b.id));
-  return { urgent, background: background[0] ?? null };
+  return { urgent, background };
 }
 

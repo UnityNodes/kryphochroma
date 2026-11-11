@@ -163,7 +163,7 @@ export async function runKeeper(config: KeeperConfig, env: NodeJS.ProcessEnv, un
         planned.push({ id, stage: Number(table.stage), action: nextKeeperAction(view, now, config.poolOwner ?? account.address) });
       }
       const { urgent, background } = scheduleKeeper(planned);
-      const lanes = { urgent, background: background ? [background] : [], both: background ? [...urgent, background] : urgent };
+      const lanes = { urgent, background, both: [...urgent, ...background.slice(0, 1)] };
       for (const entry of lanes[config.lane]) {
         try {
           await act(entry.id, entry.action);
