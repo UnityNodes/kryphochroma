@@ -113,7 +113,7 @@ export async function takeSeat(deps: SeatDeps, id: bigint): Promise<void> {
   const args = [id, burner.address] as const;
   const hash =
     funder.kind === "wallet"
-      ? await funder.wallet.writeContract({ address: TABLE_ADDRESS, abi: kryphoTableAbi, functionName: "join", args, account: funder.wallet.account ?? funder.address, chain: sepolia, value: (await needsGas(deps)) ? WALLET_CRUMB : 0n })
+      ? await funder.wallet.writeContract({ address: TABLE_ADDRESS, abi: kryphoTableAbi, functionName: "join", args, account: funder.wallet.account ?? funder.address, chain: sepolia, gas: JOIN_GAS_LIMIT, value: (await needsGas(deps)) ? WALLET_CRUMB : 0n })
       : await sendWhenFunded(() => burnerSend(publicClient, burner, encodeFunctionData({ abi: kryphoTableAbi, functionName: "join", args }), JOIN_GAS_LIMIT));
   const receipt = await confirm(publicClient, hash, "Taking a seat").catch(async (error: Error) => {
     if (await sitsAt(publicClient, id, burner.address)) return null;

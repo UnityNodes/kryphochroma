@@ -91,7 +91,7 @@ export function useChainGame(id: bigint, colorBlind: boolean, watchOnly = false)
   const chain = useRef<{ state: GameState; nonces: number[] } | null>(null);
   const actions = useRef<SignedAction[]>([]);
   const projected = useRef<GameState | null>(null);
-  const permitted = useRef(false);
+  const permit = useRef<Promise<void> | null>(null);
   const meRef = useRef(0);
   const settled = useRef<GameState["pub"]["lastResult"]>(null);
   const pendingPeek = useRef<{ seat: number; slot: number } | null>(null);
@@ -141,6 +141,13 @@ export function useChainGame(id: bigint, colorBlind: boolean, watchOnly = false)
     const seat = watchOnly ? -1 : seats.findIndex((s) => s.session.toLowerCase() === mine || (s.player.toLowerCase() === mine && !s.abandoned));
     meRef.current = Math.max(seat, 0);
     setSnapshot({ table, seats, me: seat });
+    if (seat >= 0 && !permit.current) {
+      permit.current = sdk.permits.grantPermit([TABLE_ADDRESS]).catch((e: unknown) => {
+        permit.current = null;
+        throw e;
+      });
+      permit.current.catch(() => undefined);
+    }
     if (Number(table.stage) < 3) {
       lastBlock.current = block;
       return;
@@ -162,10 +169,7 @@ export function useChainGame(id: bigint, colorBlind: boolean, watchOnly = false)
       const extra = [secret, ...(peekHandle ? [peekHandle] : []), ...(fresh ? [fresh] : [])].filter((h) => !/^0x0+$/.test(h) && !plain.current.has(h));
       const missing = [...own.filter((h, i) => (slots & (1 << i)) !== 0 && !plain.current.has(h)), ...extra];
       if (missing.length > 0) {
-        if (!permitted.current) {
-          await sdk.permits.grantPermit([TABLE_ADDRESS]);
-          permitted.current = true;
-        }
+        await (permit.current ?? sdk.permits.grantPermit([TABLE_ADDRESS]));
         const { values, pending } = await decryptEach((batch) => sdk.decryption.decryptValues(batch.map((encryptedValue) => ({ encryptedValue, contractAddress: TABLE_ADDRESS }))), missing);
         for (const [handle, value] of values) plain.current.set(handle, value);
         if (pending.length > 0) setError("Waiting for your new card to be decryptable");
