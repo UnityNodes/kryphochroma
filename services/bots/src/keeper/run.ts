@@ -8,6 +8,7 @@ import { rpcTransport } from "../rpc.js";
 import { privateKeyToAccount } from "viem/accounts";
 import { sepolia } from "viem/chains";
 import { type KeeperAction, type PlannedAction, type TableView, nextKeeperAction, scheduleKeeper } from "./plan.js";
+import { createTableScan } from "./scan.js";
 import { type GasBudget, belowAlert, canSpend, rollBudget, spend, stopRequested } from "./safety.js";
 
 const SETUP_GAS = 16_000_000n;
@@ -15,7 +16,6 @@ const DEAL_GAS = JOIN_GAS_LIMIT;
 const URGENT_PIPELINE = 4;
 const BACKGROUND_PIPELINE = 8;
 const ALERT_EVERY_MS = 600_000;
-const WATCH_WINDOW = 20n;
 
 export interface KeeperConfig {
   readonly rpcUrl: string;
@@ -56,8 +56,9 @@ const log = (entry: Record<string, unknown>) =>
 export async function runKeeper(config: KeeperConfig, env: NodeJS.ProcessEnv, until: () => Promise<boolean> = async () => false): Promise<void> {
   const transport = rpcTransport(config.rpcUrl);
   const account = privateKeyToAccount(config.privateKey, { nonceManager });
-  const publicClient = createPublicClient({ chain: sepolia, transport });
+  const publicClient = createPublicClient({ chain: sepolia, transport, batch: { multicall: true } });
   const walletClient = createWalletClient({ account, chain: sepolia, transport });
+  const scan = createTableScan();
   const sdk = new ZamaSDK(createConfig({ chains: [zamaSepolia], publicClient, walletClient, relayers: { [zamaSepolia.id]: node() } }));
   const address = config.table;
   let budget: GasBudget = { dayStart: Date.now(), spent: 0n, limit: config.dailyGasLimit };
@@ -159,12 +160,14 @@ export async function runKeeper(config: KeeperConfig, env: NodeJS.ProcessEnv, un
       snapshot = latest.number;
       const count = (await read("tableCount", [])) as bigint;
       const now = latest.timestamp;
-      const planned: PlannedAction[] = [];
-      for (let id = count > WATCH_WINDOW ? count - WATCH_WINDOW + 1n : 1n; id <= count; id++) {
-        const table = (await read("getTable", [id])) as TableView;
-        const view = table.stage === 3 ? { ...table, spare: ((await read("discardOf", [id])) as readonly number[]).length - 1 } : table;
-        planned.push({ id, stage: Number(table.stage), action: nextKeeperAction(view, now, config.poolOwner ?? account.address) });
-      }
+      const planned: PlannedAction[] = await Promise.all(
+        scan.ids(count).map(async (id) => {
+          const table = (await read("getTable", [id])) as TableView;
+          scan.settle(id, Number(table.stage));
+          const view = table.stage === 3 ? { ...table, spare: ((await read("discardOf", [id])) as readonly number[]).length - 1 } : table;
+          return { id, stage: Number(table.stage), action: nextKeeperAction(view, now, config.poolOwner ?? account.address) };
+        }),
+      );
       const { urgent, background } = scheduleKeeper(planned);
       const lanes = { urgent, background, both: [...urgent, ...background.slice(0, 1)] };
       for (const entry of lanes[config.lane]) {

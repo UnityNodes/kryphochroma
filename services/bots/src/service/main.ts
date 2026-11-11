@@ -11,11 +11,11 @@ import { createBot } from "../player/run.js";
 import { type SignedAction } from "@kryphochroma/abi";
 import { createRelay, encodeMessage } from "../relay/hub.js";
 import { type DripLedger, decideDrip, releaseDrip } from "./drip.js";
+import { createTableScan } from "../keeper/scan.js";
 import { type PoolTable, SPARE_BY_SEATS, pickBots, pickReady, planPool } from "./pool.js";
 import { type ProfileStore, fromDisk, lookup, parseAddresses, putProfile, toDisk } from "./profiles.js";
 
 const ACTIVE_STAGES = new Set([3, 4]);
-const WATCH_WINDOW = 20n;
 const FLEET_POLL_MS = 1000;
 const BOT_MIN_WEI = parseEther("0.005");
 const BOT_TOPUP_WEI = parseEther("0.02");
@@ -50,7 +50,8 @@ function tableAddress(): Hex {
 
 const rpcUrl = env("SEPOLIA_RPC_URL");
 const table = tableAddress();
-const publicClient = createPublicClient({ chain: sepolia, transport: rpcTransport(rpcUrl) });
+const publicClient = createPublicClient({ chain: sepolia, transport: rpcTransport(rpcUrl), batch: { multicall: true } });
+const scan = createTableScan();
 const keeper = privateKeyToAccount(env("KEEPER_PRIVATE_KEY") as Hex, { nonceManager });
 const keeperWallet = createWalletClient({ account: keeper, chain: sepolia, transport: rpcTransport(rpcUrl) });
 const bots = env("BOT_KEYS").split(",").map((key) => createBot(key as Hex, table, publicClient, rpcUrl));
@@ -109,7 +110,7 @@ interface LobbyView {
 const POOL_SEATS = 4;
 const POOL_TURN_TIMEOUT = 120;
 const RESERVE_MS = 120_000;
-const MAX_POOL_TABLES = 8;
+const MAX_POOL_TABLES = 20;
 const FILL_SEAT_TRIES = 5;
 const FILL_SEAT_WAIT_MS = 3000;
 const STREAM_REFRESH_MS = 2000;
@@ -139,13 +140,9 @@ async function readLobby(id: bigint): Promise<LobbyView> {
 
 async function poolTables(): Promise<{ id: bigint; view: LobbyView }[]> {
   const count = (await publicClient.readContract({ address: table, abi: kryphoTableAbi, functionName: "tableCount" })) as bigint;
-  const found: { id: bigint; view: LobbyView }[] = [];
-  for (let id = count > WATCH_WINDOW ? count - WATCH_WINDOW + 1n : 1n; id <= count; id++) {
-    const view = await readLobby(id);
-    const open = Number(view.config.seats) - Number(view.joined);
-    if (Number(view.stage) === 0 && open >= 0 && view.creator.toLowerCase() === keeper.address.toLowerCase()) found.push({ id, view });
-  }
-  return found;
+  const views = await Promise.all(scan.ids(count).map(async (id) => ({ id, view: await readLobby(id) })));
+  for (const { id, view } of views) scan.settle(id, Number(view.stage));
+  return views.filter(({ view }) => Number(view.stage) === 0 && Number(view.config.seats) >= Number(view.joined) && view.creator.toLowerCase() === keeper.address.toLowerCase());
 }
 
 const botAddresses = new Set(bots.map((b) => b.address.toLowerCase()));
@@ -166,7 +163,7 @@ async function openTables(): Promise<typeof openCache.tables> {
   const count = (await publicClient.readContract({ address: table, abi: kryphoTableAbi, functionName: "tableCount" })) as bigint;
   const fresh = await recentLobbies();
   const tables: typeof openCache.tables = [];
-  for (let id = count > WATCH_WINDOW ? count - WATCH_WINDOW + 1n : 1n; id <= count; id++) {
+  for (const id of scan.ids(count)) {
     if (!fresh.has(id.toString())) continue;
     const view = await readLobby(id);
     const free = Number(view.config.seats) - Number(view.joined);
@@ -413,8 +410,11 @@ async function relayLoop(): Promise<void> {
       const block = await publicClient.getBlockNumber({ cacheTime: 0 });
       const count = (await publicClient.readContract({ address: table, abi: kryphoTableAbi, functionName: "tableCount" })) as bigint;
       knownTables = count;
-      for (let id = count > WATCH_WINDOW ? count - WATCH_WINDOW + 1n : 1n; id <= count; id++) {
-        const view = (await publicClient.readContract({ address: table, abi: kryphoTableAbi, functionName: "getTable", args: [id] })) as { stage: number };
+      const ids = scan.ids(count);
+      const views = await Promise.all(ids.map((id) => publicClient.readContract({ address: table, abi: kryphoTableAbi, functionName: "getTable", args: [id] }) as Promise<{ stage: number }>));
+      for (const [i, id] of ids.entries()) {
+        const view = views[i] as { stage: number };
+        scan.settle(id, Number(view.stage));
         if (!ACTIVE_STAGES.has(Number(view.stage))) {
           relay.forget(id);
           continue;

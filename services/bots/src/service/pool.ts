@@ -11,7 +11,7 @@ export interface PoolPlan {
   readonly create: readonly number[];
 }
 
-export const SPARE_BY_SEATS: Readonly<Record<number, number>> = { 4: 2, 3: 1, 2: 1 };
+export const SPARE_BY_SEATS: Readonly<Record<number, number>> = { 4: 6, 3: 3, 2: 5 };
 
 const isSpare = (p: PoolTable): boolean => p.joined === 0 && !p.reserved;
 
