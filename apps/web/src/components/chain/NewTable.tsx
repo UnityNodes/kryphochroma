@@ -9,7 +9,7 @@ import { createPublicClient } from "viem";
 import { sepolia } from "viem/chains";
 import { loadBurner } from "@/chain/burner";
 import { friendlyError } from "@/chain/errors";
-import { sepoliaTransport } from "@/chain/rpc";
+import { RECEIPT_POLL_MS, sepoliaTransport } from "@/chain/rpc";
 import { type SeatDeps, fundBurner, openTable, requestBots, serviceDrip as drip, startTable, takeSeat } from "@/chain/seat";
 import { ProfileChip } from "@/components/profile/ProfileChip";
 import { useMyProfile } from "@/components/profile/useMyProfile";
@@ -75,7 +75,7 @@ export function NewTable() {
 
   function deps(): SeatDeps {
     if (!funderState.ready) throw new Error(funderState.reason === "wrong-chain" ? "Switch your wallet to Sepolia first" : "Wallet is still connecting");
-    const publicClient = createPublicClient({ chain: sepolia, transport: sepoliaTransport() });
+    const publicClient = createPublicClient({ chain: sepolia, transport: sepoliaTransport(), pollingInterval: RECEIPT_POLL_MS });
     return { publicClient, burner: loadBurner(window.sessionStorage), funder: funderState.funder, drip };
   }
 
@@ -115,9 +115,10 @@ export function NewTable() {
       setDone(0);
       await fundBurner(d);
       setDone(1);
-      const id = await openTable(d, { seats, turnTimeout: TURN_TIMEOUT_S, stackDrawTwo: stack });
+      const guest = d.funder.kind === "guest";
+      const id = await openTable(d, { seats, turnTimeout: TURN_TIMEOUT_S, stackDrawTwo: stack }, guest);
       setDone(2);
-      await takeSeat(d, id);
+      if (!guest) await takeSeat(d, id);
       setDone(4);
       router.push(tablePath(id));
     });
@@ -128,9 +129,10 @@ export function NewTable() {
       setDone(0);
       await fundBurner(d);
       setDone(1);
-      const id = await openTable(d, { seats, turnTimeout: TURN_TIMEOUT_S, stackDrawTwo: stack });
+      const guest = d.funder.kind === "guest";
+      const id = await openTable(d, { seats, turnTimeout: TURN_TIMEOUT_S, stackDrawTwo: stack }, guest);
       setDone(2);
-      await takeSeat(d, id);
+      if (!guest) await takeSeat(d, id);
       setDone(3);
       await requestBots(d.burner, id);
       setDone(4);

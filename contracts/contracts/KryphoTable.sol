@@ -142,7 +142,7 @@ contract KryphoTable is IKryphoTable, ZamaEthereumConfig {
         return _nonces[id];
     }
 
-    function createTable(Config calldata config) external returns (uint256 id) {
+    function createTable(Config calldata config) public returns (uint256 id) {
         if (config.seats < 2 || config.seats > 4 || config.turnTimeout < MIN_TURN_TIMEOUT || config.turnTimeout > MAX_TURN_TIMEOUT || config.targetScore == 0 || config.targetScore > MAX_TARGET_SCORE) {
             revert BadConfig();
         }
@@ -151,6 +151,12 @@ contract KryphoTable is IKryphoTable, ZamaEthereumConfig {
         t.creator = msg.sender;
         t.config = config;
         emit TableCreated(id, msg.sender, config);
+    }
+
+    function openTable(Config calldata config, address session) external returns (uint256 id) {
+        id = createTable(config);
+        if (session == address(0) || session == TAKEOVER) revert BadSession();
+        KryphoLobby.join(_seats, id, _tables[id].joined++, msg.sender, session);
     }
 
     function join(uint256 id, address session) external payable {
@@ -191,12 +197,10 @@ contract KryphoTable is IKryphoTable, ZamaEthereumConfig {
             KryphoLobby.seatOf(_seats, id, t.joined, msg.sender);
         }
         if (t.joined < 2) revert BadConfig();
-        bool shuffled = t.setupStep == SETUP_STEPS;
+        uint16 done = t.setupStep;
         _resetRound(id, t);
-        if (shuffled) {
-            t.setupStep = SETUP_STEPS;
-            t.stage = Stage.Dealing;
-        }
+        t.setupStep = done;
+        if (done == SETUP_STEPS) t.stage = Stage.Dealing;
     }
 
     function setupStep(uint256 id) external {

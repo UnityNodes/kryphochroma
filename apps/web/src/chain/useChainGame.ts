@@ -28,7 +28,7 @@ import { TABLE_ADDRESS } from "./config";
 import { useProfiles } from "@/components/profile/useProfiles";
 import { tableCode } from "@/lib/invite";
 import { friendlyError } from "./errors";
-import { sepoliaTransport } from "./rpc";
+import { RECEIPT_POLL_MS, sepoliaTransport } from "./rpc";
 import { toGameEvents } from "./events";
 
 const POLL_MS = 2000;
@@ -64,7 +64,7 @@ export function useChainGame(id: bigint, colorBlind: boolean, watchOnly = false)
   const burner = useMemo(() => loadBurner(window.sessionStorage), []);
   const clients = useMemo(() => {
     const transport = sepoliaTransport();
-    const publicClient = createPublicClient({ chain: sepolia, transport });
+    const publicClient = createPublicClient({ chain: sepolia, transport, pollingInterval: RECEIPT_POLL_MS });
     const walletClient = createWalletClient({ account: burner, chain: sepolia, transport });
     const sdk = new ZamaSDK(createConfig({ chains: [zamaSepolia], publicClient, walletClient, relayers: { [zamaSepolia.id]: web() } }));
     return { publicClient, sdk };

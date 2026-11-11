@@ -44,11 +44,13 @@ describe("keeper plan", () => {
     expect(nextKeeperAction({ ...base, stage: 42 }, 999n)).toEqual({ kind: "idle" });
   });
 
-  it("pre-shuffles only pool tables in the lobby", () => {
+  it("pre-shuffles pool tables and lobbies someone already sits at, so a friends table is ready when it starts", () => {
     const pool = "0xAbc";
-    expect(nextKeeperAction({ ...base, stage: 0, setupStep: 10, creator: "0xabc" }, 0n, pool)).toEqual({ kind: "setupStep", remaining: 60 });
+    expect(nextKeeperAction({ ...base, stage: 0, setupStep: 10, joined: 0, creator: "0xabc" }, 0n, pool)).toEqual({ kind: "setupStep", remaining: 60 });
     expect(nextKeeperAction({ ...base, stage: 0, setupStep: 70, creator: "0xabc" }, 0n, pool)).toEqual({ kind: "idle" });
-    expect(nextKeeperAction({ ...base, stage: 0, setupStep: 10, creator: "0xdef" }, 0n, pool)).toEqual({ kind: "idle" });
+    expect(nextKeeperAction({ ...base, stage: 0, setupStep: 10, joined: 1, creator: "0xdef" }, 0n, pool)).toEqual({ kind: "setupStep", remaining: 60 });
+    expect(nextKeeperAction({ ...base, stage: 0, setupStep: 10, joined: 0, creator: "0xdef" }, 0n, pool)).toEqual({ kind: "idle" });
+    expect(nextKeeperAction({ ...base, stage: 0, setupStep: 10, joined: 1, creator: "0xdef" }, 0n)).toEqual({ kind: "idle" });
   });
 
   it("runs urgent steps first and gives every background shuffle a batch, started tables and the pool before refills", () => {

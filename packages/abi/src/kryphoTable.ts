@@ -1546,6 +1546,57 @@ export const kryphoTableAbi = [
   {
     "inputs": [
       {
+        "components": [
+          {
+            "internalType": "uint8",
+            "name": "seats",
+            "type": "uint8"
+          },
+          {
+            "internalType": "uint32",
+            "name": "turnTimeout",
+            "type": "uint32"
+          },
+          {
+            "internalType": "uint16",
+            "name": "targetScore",
+            "type": "uint16"
+          },
+          {
+            "internalType": "bool",
+            "name": "singleRound",
+            "type": "bool"
+          },
+          {
+            "internalType": "bool",
+            "name": "stackDrawTwo",
+            "type": "bool"
+          }
+        ],
+        "internalType": "struct IKryphoTable.Config",
+        "name": "config",
+        "type": "tuple"
+      },
+      {
+        "internalType": "address",
+        "name": "session",
+        "type": "address"
+      }
+    ],
+    "name": "openTable",
+    "outputs": [
+      {
+        "internalType": "uint256",
+        "name": "id",
+        "type": "uint256"
+      }
+    ],
+    "stateMutability": "nonpayable",
+    "type": "function"
+  },
+  {
+    "inputs": [
+      {
         "internalType": "uint256",
         "name": "id",
         "type": "uint256"

@@ -122,12 +122,15 @@ async function sitsAt(publicClient: PublicClient, id: bigint, session: Hex): Pro
   return false;
 }
 
-export async function openTable(deps: SeatDeps, config: { readonly seats: number; readonly turnTimeout: number; readonly stackDrawTwo: boolean }): Promise<bigint> {
-  const data = encodeFunctionData({
-    abi: kryphoTableAbi,
-    functionName: "createTable",
-    args: [{ seats: config.seats, turnTimeout: config.turnTimeout, targetScore: 500, singleRound: true, stackDrawTwo: config.stackDrawTwo }],
-  });
+export async function openTable(
+  deps: SeatDeps,
+  config: { readonly seats: number; readonly turnTimeout: number; readonly stackDrawTwo: boolean },
+  seatHost = false,
+): Promise<bigint> {
+  const tableConfig = { seats: config.seats, turnTimeout: config.turnTimeout, targetScore: 500, singleRound: true, stackDrawTwo: config.stackDrawTwo };
+  const data = seatHost
+    ? encodeFunctionData({ abi: kryphoTableAbi, functionName: "openTable", args: [tableConfig, deps.burner.address] })
+    : encodeFunctionData({ abi: kryphoTableAbi, functionName: "createTable", args: [tableConfig] });
   const hash = await sendWhenFunded(() => burnerSend(deps.publicClient, deps.burner, data));
   const receipt = await confirm(deps.publicClient, hash, "Opening the table");
   const created = parseEventLogs({ abi: kryphoTableAbi, logs: receipt.logs, eventName: "TableCreated" })[0];

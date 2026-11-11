@@ -238,6 +238,32 @@ describe("KryphoTable guards", function () {
     expect((await table.noncesOf(id))[1 - turn]).to.equal(1n);
   });
 
+  it("opens a table and seats the host in one call", async function () {
+    const table = await deployTable(ethers, ethers.ZeroAddress);
+    await expect(table.connect(s[0]!).openTable(config, ethers.ZeroAddress)).to.be.revertedWithCustomError(table, "BadSession");
+    await expect(table.connect(s[0]!).openTable(config, s[5]!.address)).to.emit(table, "Joined").withArgs(1n, 0, s[0]!.address, s[5]!.address);
+    const t = await table.getTable(1n);
+    expect([t.creator, Number(t.joined)]).to.deep.equal([s[0]!.address, 1]);
+    await expect(table.connect(s[0]!).join(1n, s[6]!.address)).to.be.revertedWithCustomError(table, "AlreadySeated");
+  });
+
+  it("keeps a partial lobby shuffle when the game starts", async function () {
+    const table = await deployTable(ethers, ethers.ZeroAddress);
+    await (await table.createTable(config)).wait();
+    const id = await table.tableCount();
+    for (let step = 0; step < 10; step++) await (await table.setupStep(id, { gasLimit: 16_700_000 })).wait();
+    await (await table.join(id, s[0]!.address)).wait();
+    await (await table.connect(s[1]!).join(id, s[1]!.address)).wait();
+    await (await table.start(id)).wait();
+    let t = await table.getTable(id);
+    expect([Number(t.stage), Number(t.setupStep)]).to.deep.equal([1, 10]);
+    for (let step = 10; step < 70; step++) await (await table.setupStep(id, { gasLimit: 16_700_000 })).wait();
+    t = await table.getTable(id);
+    expect([Number(t.stage), Number(t.setupStep)]).to.deep.equal([2, 70]);
+    await (await table.dealSeat(id, 0)).wait();
+    await (await table.dealSeat(id, 1)).wait();
+  });
+
   it("pre-shuffles in the lobby and deals right after start", async function () {
     const table = await deployTable(ethers, ethers.ZeroAddress);
     await (await table.createTable(config)).wait();

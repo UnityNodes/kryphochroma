@@ -48,7 +48,7 @@ const stageName = (stage: number): string => STAGE[stage] ?? "Unknown";
 export function nextKeeperAction(table: TableView, nowSeconds: bigint, poolOwner?: string): KeeperAction {
   switch (stageName(table.stage)) {
     case "Lobby":
-      if (poolOwner && table.creator?.toLowerCase() === poolOwner.toLowerCase() && table.setupStep < SETUP_STEPS) {
+      if (poolOwner && table.setupStep < SETUP_STEPS && (table.creator?.toLowerCase() === poolOwner.toLowerCase() || table.joined >= 1)) {
         return { kind: "setupStep", remaining: SETUP_STEPS - table.setupStep };
       }
       return { kind: "idle" };

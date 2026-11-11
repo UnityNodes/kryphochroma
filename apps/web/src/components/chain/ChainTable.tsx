@@ -7,7 +7,7 @@ import { createPublicClient } from "viem";
 import { sepolia } from "viem/chains";
 import { loadBurner } from "@/chain/burner";
 import { friendlyError } from "@/chain/errors";
-import { sepoliaTransport } from "@/chain/rpc";
+import { RECEIPT_POLL_MS, sepoliaTransport } from "@/chain/rpc";
 import { type Funder, type SeatDeps, fundBurner, requestBots, serviceDrip as drip, leaveTable, startTable, takeSeat } from "@/chain/seat";
 import { useChainGame } from "@/chain/useChainGame";
 import { useFunder } from "@/components/wallet/useFunder";
@@ -15,7 +15,7 @@ import { TableView, useColorBlind } from "@/components/table/Table";
 import { PreGame } from "./PreGame";
 
 function seatDeps(funder: Funder): SeatDeps {
-  return { publicClient: createPublicClient({ chain: sepolia, transport: sepoliaTransport() }), burner: loadBurner(window.sessionStorage), funder, drip };
+  return { publicClient: createPublicClient({ chain: sepolia, transport: sepoliaTransport(), pollingInterval: RECEIPT_POLL_MS }), burner: loadBurner(window.sessionStorage), funder, drip };
 }
 
 export function ChainTable({ id, watch }: { readonly id: string; readonly watch?: boolean }) {
