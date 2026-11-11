@@ -18,7 +18,7 @@ export default function DocsLayout({ children }: { readonly children: React.Reac
   return (
     <div className="min-h-dvh bg-bg text-cream">
       <header className="sticky top-0 z-20 border-b border-cream/10 bg-bg/90 backdrop-blur">
-        <div className="mx-auto flex max-w-7xl items-center justify-between gap-4 px-4 py-3 sm:px-6">
+        <div className="mx-auto flex max-w-[1280px] items-center justify-between gap-4 px-4 py-3 sm:px-6 lg:px-8">
           <Link href="/" className="flex items-center gap-2 font-display text-2xl text-sun">
             Kryphochroma
             <span className="flex items-center gap-1 rounded-full border border-cream/20 px-2 py-0.5 font-sans text-xs text-muted">
@@ -37,7 +37,7 @@ export default function DocsLayout({ children }: { readonly children: React.Reac
           </nav>
         </div>
       </header>
-      <div className="mx-auto grid max-w-7xl gap-8 px-4 py-8 sm:px-6 lg:grid-cols-[230px_minmax(0,1fr)] lg:py-12">
+      <div className="mx-auto grid max-w-[1280px] gap-8 px-4 py-8 sm:px-6 lg:grid-cols-[240px_minmax(0,1fr)] lg:gap-12 lg:px-8 lg:py-14">
         <Sidebar groups={GROUPS} />
         {children}
       </div>

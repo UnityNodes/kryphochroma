@@ -22,12 +22,12 @@ export default async function DocPage({ params }: { readonly params: Promise<{ s
   const prev = DOCS[index - 1];
   const next = DOCS[index + 1];
   return (
-    <div className="grid gap-10 xl:grid-cols-[minmax(0,1fr)_200px]">
-      <article className="min-w-0 max-w-3xl">
+    <div className="grid gap-12 xl:grid-cols-[minmax(0,1fr)_220px]">
+      <article className="min-w-0 max-w-[760px]">
         <p className="text-xs font-semibold tracking-[.12em] text-muted uppercase">{doc.group}</p>
-        <h1 className="mt-2 font-display text-5xl leading-none text-cream">{doc.title}</h1>
-        <p className="mt-4 text-lg text-muted">{doc.summary}</p>
-        <div className="mt-10">{doc.body(readDeployment())}</div>
+        <h1 className="mt-3 font-display text-5xl leading-none tracking-wide text-cream lg:text-6xl">{doc.title}</h1>
+        <p className="mt-5 max-w-[60ch] text-xl leading-relaxed text-muted">{doc.summary}</p>
+        <div className="mt-12 border-t border-cream/10 pt-10">{doc.body(readDeployment())}</div>
         <nav className="mt-16 grid gap-3 border-t border-cream/10 pt-6 sm:grid-cols-2" aria-label="Pages">
           {prev ? (
             <Link href={`/docs/${prev.slug}`} className="group rounded-2xl border border-cream/15 p-4 hover:border-sun/60">

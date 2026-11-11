@@ -58,24 +58,22 @@
   --border: #f4e6c824;
 }
 
-*,
-*::before,
-*::after {
-  box-sizing: border-box;
-  margin: 0;
-}
+@layer base {
+  html,
+  body {
+    height: 100%;
+  }
 
-html,
-body {
-  height: 100%;
-}
+  body {
+    background: var(--color-bg);
+    color: var(--color-cream);
+    font-family: var(--font-sans);
+    -webkit-tap-highlight-color: transparent;
+  }
 
-body {
-  background: var(--color-bg);
-  color: var(--color-cream);
-  font-family: var(--font-sans);
-  overflow: hidden;
-  -webkit-tap-highlight-color: transparent;
+  body:has(.kc-app) {
+    overflow: hidden;
+  }
 }
 
 button {
@@ -86,4 +84,20 @@ button {
 :focus-visible {
   outline: 2px solid var(--color-sun);
   outline-offset: 3px;
+}
+
+@keyframes kc-float {
+  50% {
+    translate: 0 -10px;
+  }
+}
+
+.kc-fan-card {
+  animation: kc-float 4.8s ease-in-out infinite;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .kc-fan-card {
+    animation: none;
+  }
 }

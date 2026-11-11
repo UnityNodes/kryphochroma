@@ -24,14 +24,14 @@ const EXPLORER = "https://sepolia.etherscan.io";
 
 function H2({ id, children }: { readonly id: string; readonly children: ReactNode }) {
   return (
-    <h2 id={id} className="mt-12 scroll-mt-24 font-display text-3xl text-sun first:mt-0">
+    <h2 id={id} className="mt-14 mb-1 scroll-mt-24 font-display text-[32px] leading-tight tracking-wide text-sun first:mt-0">
       {children}
     </h2>
   );
 }
 
 function P({ children }: { readonly children: ReactNode }) {
-  return <p className="my-4 leading-relaxed text-cream/90">{children}</p>;
+  return <p className="my-4 text-[17px] leading-[1.75] text-cream/85">{children}</p>;
 }
 
 function C({ children }: { readonly children: ReactNode }) {
@@ -42,18 +42,20 @@ function Table({ head, rows }: { readonly head: readonly string[]; readonly rows
   return (
     <div className="my-5 overflow-x-auto rounded-2xl border border-cream/15" tabIndex={0} role="region" aria-label="Table, scroll sideways on small screens">
       <table className="w-full min-w-[520px] border-collapse text-left text-sm">
-        <thead className="bg-black/30 text-xs tracking-[.08em] text-muted uppercase">
-          <tr>
-            {head.map((h) => (
-              <th key={h} scope="col" className="px-4 py-3 font-semibold">
-                {h}
-              </th>
-            ))}
-          </tr>
-        </thead>
+        {head.some(Boolean) && (
+          <thead className="bg-black/30 text-xs tracking-[.08em] text-muted uppercase">
+            <tr>
+              {head.map((h, i) => (
+                <th key={i} scope="col" className="px-4 py-3 font-semibold">
+                  {h}
+                </th>
+              ))}
+            </tr>
+          </thead>
+        )}
         <tbody>
           {rows.map((row, i) => (
-            <tr key={i} className="border-t border-cream/10 align-top">
+            <tr key={i} className="border-t border-cream/10 align-top first:border-t-0">
               {row.map((cell, j) => (
                 <td key={j} className="px-4 py-3 text-cream/90">
                   {cell}
@@ -165,7 +167,7 @@ export const DOCS: readonly DocPage[] = [
         <Callout title="One bit at a time">A doubted veil or a challenged Wild +4 reveals exactly one encrypted bit. The rest of the hand stays sealed.</Callout>
         <H2 id="at-a-glance">At a glance</H2>
         <Table
-          head={["", ""]}
+          head={["Topic", "Value"]}
           rows={[
             ["Players", "2 to 4, humans and bots in any mix"],
             ["Deck", "138 cards: 5 colours, spyglasses, wilds"],

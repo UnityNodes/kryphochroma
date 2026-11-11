@@ -11,9 +11,10 @@ async function seriousViolations(page: Page, exclude: readonly string[] = []) {
 test("landing points to play, practice and the privacy page", async ({ page }) => {
   await page.goto("/");
   await expect(page.getByRole("heading", { name: "Kryphochroma" })).toBeVisible();
-  await expect(page.getByRole("link", { name: "Play on Sepolia" })).toHaveAttribute("href", "/new");
-  await expect(page.getByRole("link", { name: "Practice offline" })).toHaveAttribute("href", "/play");
-  await expect(page.getByRole("link", { name: "How it stays secret" })).toHaveAttribute("href", "/secret");
+  await expect(page.getByRole("link", { name: "Play on Sepolia", exact: true })).toHaveAttribute("href", "/new");
+  await expect(page.getByRole("link", { name: "Practice offline", exact: true })).toHaveAttribute("href", "/play");
+  await expect(page.getByRole("link", { name: "How it stays secret" }).first()).toHaveAttribute("href", "/secret");
+  await expect(page.getByRole("heading", { name: "Four moves that only work encrypted" })).toBeVisible();
   expect(await seriousViolations(page)).toEqual([]);
 });
 
