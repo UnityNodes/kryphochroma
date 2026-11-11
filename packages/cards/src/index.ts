@@ -15,9 +15,10 @@ export function sharedDefs(): string {
 }
 
 function quarters(cx: number, cy: number, r: number): string {
+  const span = (Math.PI * 2) / CARD_COLORS.length;
   const wedges = CARD_COLORS.map((c, i) => {
-    const a0 = (i * Math.PI) / 2 - Math.PI / 2;
-    const a1 = a0 + Math.PI / 2;
+    const a0 = i * span - Math.PI / 2;
+    const a1 = a0 + span;
     return `<path d="M${f(cx)} ${f(cy)}L${f(cx + r * Math.cos(a0))} ${f(cy + r * Math.sin(a0))}A${f(r)} ${f(r)} 0 0 1 ${f(cx + r * Math.cos(a1))} ${f(cy + r * Math.sin(a1))}Z" fill="${c.base}"/>`;
   }).join("");
   return `${wedges}<circle cx="${f(cx)}" cy="${f(cy)}" r="${f(r)}" fill="none" stroke="${INK}" stroke-width="${f(r / 9)}"/>`;
@@ -35,6 +36,14 @@ function skipGlyph(cx: number, cy: number, s: number, fill: string): string {
   return `<g stroke="${INK}" stroke-width="${f(9 * s)}" fill="none" stroke-linecap="round" transform="translate(${f(1.5 * s)} ${f(1.5 * s)})">${shape}</g><g stroke="${fill}" stroke-width="${f(6 * s)}" fill="none" stroke-linecap="round">${shape}</g>`;
 }
 
+function spyglassGlyph(cx: number, cy: number, s: number, fill: string): string {
+  const eye = `M${f(cx - 17 * s)} ${f(cy)}Q${f(cx)} ${f(cy - 15 * s)} ${f(cx + 17 * s)} ${f(cy)}Q${f(cx)} ${f(cy + 15 * s)} ${f(cx - 17 * s)} ${f(cy)}Z`;
+  const outline = `<path d="${eye}" fill="${CREAM}" stroke="${INK}" stroke-width="${f(3.2 * s)}" stroke-linejoin="round"/>`;
+  const iris = `<circle cx="${f(cx)}" cy="${f(cy)}" r="${f(7 * s)}" fill="${fill}" stroke="${INK}" stroke-width="${f(2.4 * s)}"/>`;
+  const pupil = `<circle cx="${f(cx)}" cy="${f(cy)}" r="${f(2.8 * s)}" fill="${INK}"/>`;
+  return `<g transform="translate(${f(1.5 * s)} ${f(1.5 * s)})"><path d="${eye}" fill="${INK}"/></g>${outline}${iris}${pupil}`;
+}
+
 function reverseGlyph(cx: number, cy: number, s: number, fill: string): string {
   const d = `M${f(cx - 14 * s)} ${f(cy - 6 * s)}H${f(cx + 11 * s)}M${f(cx + 4 * s)} ${f(cy - 13 * s)}L${f(cx + 11 * s)} ${f(cy - 6 * s)}L${f(cx + 4 * s)} ${f(cy + s)}M${f(cx + 14 * s)} ${f(cy + 7 * s)}H${f(cx - 11 * s)}M${f(cx - 4 * s)} ${f(cy)}L${f(cx - 11 * s)} ${f(cy + 7 * s)}L${f(cx - 4 * s)} ${f(cy + 14 * s)}`;
   const line = `fill="none" stroke-linecap="round" stroke-linejoin="round"`;
@@ -49,6 +58,7 @@ export function glyph(card: Card, cx: number, cy: number, s: number, fill: strin
   if (rank <= 9) return text(String(rank), cx, cy, 48 * s, fill);
   if (rank === RANK.drawTwo) return text("+2", cx, cy, 34 * s, fill);
   if (rank === RANK.skip) return skipGlyph(cx, cy, s, fill);
+  if (rank === RANK.spyglass) return spyglassGlyph(cx, cy, s, fill);
   return reverseGlyph(cx, cy, s, fill);
 }
 
@@ -73,6 +83,13 @@ export function colorShape(color: number, cx: number, cy: number, size: number):
       return `<path d="M${f(cx)} ${f(cy - h)}L${f(cx + h)} ${f(cy)}L${f(cx)} ${f(cy + h)}L${f(cx - h)} ${f(cy)}Z" ${common}/>`;
     case 3:
       return `<rect x="${f(cx - h)}" y="${f(cy - h)}" width="${f(size)}" height="${f(size)}" ${common}/>`;
+    case 4: {
+      const points = Array.from({ length: 6 }, (_, k) => {
+        const a = (k * Math.PI) / 3;
+        return `${f(cx + h * Math.cos(a))},${f(cy + h * Math.sin(a))}`;
+      }).join(" ");
+      return `<polygon points="${points}" ${common}/>`;
+    }
     default:
       return "";
   }
@@ -82,7 +99,7 @@ function waves(card: Card): string {
   const wild = isWild(card);
   const color = CARD_COLORS[colorOf(card)];
   return Array.from({ length: 10 }, (_, i) => {
-    const stroke = wild ? (CARD_COLORS[i % 4]?.base ?? CREAM) : (color?.dark ?? INK);
+    const stroke = wild ? (CARD_COLORS[i % CARD_COLORS.length]?.base ?? CREAM) : (color?.dark ?? INK);
     return `<path d="M-60 ${i * 24 - 30} q 20 -11 40 0 t 40 0 t 40 0 t 40 0 t 40 0" stroke="${stroke}" stroke-width="9" fill="none" opacity="${wild ? 0.55 : 0.42}"/>`;
   }).join("");
 }

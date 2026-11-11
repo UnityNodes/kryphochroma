@@ -8,11 +8,12 @@ import { Dialog, DialogContent, DialogDescription, DialogTitle } from "@/compone
 const SEEN_KEY = "kc-howto-seen";
 
 const RULES = [
-  "Match the top card by colour or number. Wild cards go on anything and pick the next colour.",
+  "Five colours: red, sun, teal, blue and violet. Match the top card by colour or number. Wild cards go on anything and pick the next colour.",
   "Skip, Reverse and Draw Two work as you expect. A Wild +4 makes the next player take 4, unless they challenge it.",
-  "No card to play? Draw one. If it fits you may play it, otherwise pass.",
-  "Down to one card? Press Mono! before the next player moves, or anyone can catch you for 2 cards.",
-  "Empty your hand first. You score the points left in everyone else's hand.",
+  "Spyglass: play it on its colour and look at one card in an opponent's hand. Only your key can decrypt it.",
+  "Veil, once per round: lay any card face down and name a number card that fits. The next player may doubt it. A lie draws 4, a wrong doubt draws 2.",
+  "Secret colour: you get a hidden colour at the deal. Go out on a card of that colour and the round counts double.",
+  "No card to play? Draw one. If it fits you may play it, otherwise pass. Down to one card? Press Mono! or get caught for 2.",
 ] as const;
 
 const KEYS = [
@@ -45,7 +46,7 @@ export function HowToPlay({ autoOpen }: { readonly autoOpen?: boolean }) {
       <Dialog open={open} onOpenChange={setOpen}>
         <DialogContent className="kc-box max-h-[90dvh] overflow-auto border-2 border-cream bg-ink text-left sm:max-w-[480px]">
           <DialogTitle className="font-display text-[30px] font-normal text-sun">How to play</DialogTitle>
-          <DialogDescription className="text-muted">A shedding game in the Crazy Eights family. Nobody can see your hand, not even the contract.</DialogDescription>
+          <DialogDescription className="text-muted">A shedding card game where hidden information is part of the play. Nobody can see your hand, not even the contract.</DialogDescription>
           <ol className="grid list-decimal gap-2 pl-5 text-sm text-cream">
             {RULES.map((rule) => (
               <li key={rule}>{rule}</li>

@@ -47,6 +47,18 @@ export function toGameEvents(logs: readonly Log[], id: bigint): GameEvent[] {
       case "TimedOut":
         events.push({ type: "TimedOut", seat: num(args.seat) });
         break;
+      case "Veiled":
+        events.push({ type: "Veiled", seat: num(args.seat), slot: num(args.slot), claim: num(args.claim) });
+        break;
+      case "VeilDoubted":
+        events.push({ type: "VeilDoubted", seat: num(args.seat) });
+        break;
+      case "VeilResolved":
+        events.push({ type: "VeilResolved", truth: Boolean(args.truth) });
+        break;
+      case "Peeked":
+        events.push({ type: "Peeked", seat: num(args.seat), target: num(args.target), slot: num(args.slot) });
+        break;
       case "SeatAbandoned":
         events.push({ type: "SeatAbandoned", seat: num(args.seat) });
         break;
@@ -58,7 +70,7 @@ export function toGameEvents(logs: readonly Log[], id: bigint): GameEvent[] {
         break;
       case "RoundSettled": {
         const winner = num(args.winner);
-        events.push({ type: "RoundSettled", winner: winner < 0 ? null : winner, points: num(args.points), cheaters: maskToSeats(num(args.cheaters)) });
+        events.push({ type: "RoundSettled", winner: winner < 0 ? null : winner, points: num(args.points), cheaters: maskToSeats(num(args.cheaters)), bonus: Boolean(args.bonus) });
         break;
       }
       default:

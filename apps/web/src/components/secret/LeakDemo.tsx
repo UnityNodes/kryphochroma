@@ -8,23 +8,23 @@ import { CardBack, CardFace } from "@/components/table/CardSvg";
 import { cn } from "@/lib/utils";
 
 const DEMO_SEED = 7;
-const DECK_PREVIEW = 10;
+const DECK_PREVIEW = 8;
 const NAMES = ["You", "Mira", "Delta", "Orin"] as const;
 
 function Row({ label, cards, open, note }: { readonly label: string; readonly cards: readonly number[]; readonly open: boolean; readonly note: string }) {
   return (
-    <div className="grid gap-2">
-      <div className="flex items-baseline justify-between gap-2 text-sm">
+    <div className="grid content-start gap-2 rounded-2xl border border-cream/10 bg-black/20 p-3">
+      <div className="flex flex-wrap items-baseline justify-between gap-x-3 gap-y-1 text-sm">
         <b className="text-cream">{label}</b>
         <span className="flex items-center gap-1 text-xs text-muted">
           {open ? <Eye className="size-3.5" aria-hidden /> : <Lock className="size-3.5" aria-hidden />}
           {note}
         </span>
       </div>
-      <ul className="flex flex-wrap gap-1.5" aria-label={open ? `${label}: ${cards.map(cardLabel).join(", ")}` : `${label}: ${cards.length} sealed cards`}>
+      <ul className="grid grid-cols-[repeat(auto-fill,minmax(38px,1fr))] gap-1.5" aria-label={open ? `${label}: ${cards.map(cardLabel).join(", ")}` : `${label}: ${cards.length} sealed cards`}>
         {cards.map((card, i) => (
-          <li key={`${i}:${card}`} className="w-[42px] sm:w-[52px]" aria-hidden>
-            <div className="aspect-[2/3] [&_svg]:size-full">{open ? <CardFace card={card} colorBlind={false} /> : <CardBack />}</div>
+          <li key={`${i}:${card}`} aria-hidden>
+            <div className="aspect-[2/3] [&_svg]:block [&_svg]:size-full">{open ? <CardFace card={card} colorBlind={false} /> : <CardBack />}</div>
           </li>
         ))}
       </ul>
@@ -38,26 +38,43 @@ export function LeakDemo() {
   const hands = state.hands.map((hand) => hand.filter((c): c is number => c !== null));
 
   return (
-    <section aria-labelledby="leak-title" className={cn("kc-box grid gap-5 text-left transition-shadow", leak && "shadow-[6px_6px_0_var(--r)]")}>
-      <div aria-hidden dangerouslySetInnerHTML={{ __html: sharedDefs() }} />
-      <div className="flex flex-wrap items-center justify-between gap-3">
-        <h2 id="leak-title" className="font-display text-2xl text-sun">
+    <section aria-labelledby="leak-title" className="grid gap-6 lg:grid-cols-[minmax(0,1fr)_minmax(0,1.6fr)] lg:items-start">
+      <div aria-hidden className="absolute size-0 overflow-hidden" dangerouslySetInnerHTML={{ __html: sharedDefs() }} />
+      <div className="grid gap-4 lg:sticky lg:top-8">
+        <h2 id="leak-title" className="font-display text-3xl text-sun">
           The same table, two contracts
         </h2>
-        <button type="button" role="switch" aria-checked={leak} className={cn("kc-chip", leak && "kc-chip-on")} onClick={() => setLeak((v) => !v)}>
-          {leak ? <Eye aria-hidden /> : <EyeOff aria-hidden />}
-          Show what an open contract would leak
+        <p className="text-muted">Flip the switch to see the table the way a plain smart contract would store it: in storage anyone can read through an RPC.</p>
+        <button
+          type="button"
+          role="switch"
+          aria-checked={leak}
+          onClick={() => setLeak((v) => !v)}
+          className={cn("flex w-full items-center gap-3 rounded-2xl border-2 px-4 py-3 text-left transition-colors", leak ? "border-red bg-red/15" : "border-cream/30 bg-black/20")}
+        >
+          <span className={cn("relative h-7 w-12 shrink-0 rounded-full transition-colors", leak ? "bg-red" : "bg-cream/25")}>
+            <span className={cn("absolute top-1 size-5 rounded-full bg-cream transition-transform", leak ? "translate-x-6" : "translate-x-1")} />
+          </span>
+          <span className="grid">
+            <b className="text-cream">Show what an open contract would leak</b>
+            <span className="text-sm text-muted">{leak ? "Leaking: every hand and the draw pile are public" : "Sealed: FHE ciphertexts, only your hand decrypts"}</span>
+          </span>
+          {leak ? <Eye className="ml-auto size-5 text-red" aria-hidden /> : <EyeOff className="ml-auto size-5 text-sun" aria-hidden />}
         </button>
+        <p className="text-sm text-muted" aria-live="polite">
+          {leak
+            ? "With every card readable, bluffing with a veil, spying with a spyglass, the +4 challenge and the draw pile all stop meaning anything."
+            : "Kryphochroma stores every card as an FHE ciphertext. Your session key decrypts your own hand. Nobody else, not the contract and not us, can read the rest."}
+        </p>
       </div>
-      <p className="text-sm text-muted" aria-live="polite">
-        {leak
-          ? "A plain contract keeps hands and the deck in readable storage. Anyone with an RPC sees every card, so bluffing, the +4 challenge and the draw pile mean nothing."
-          : "Kryphochroma stores every card as an FHE ciphertext. Your session key decrypts your own hand. Nobody else, not the contract and not us, can read the rest."}
-      </p>
-      {hands.map((cards, seat) => (
-        <Row key={NAMES[seat]} label={NAMES[seat] ?? `Seat ${seat}`} cards={cards} open={seat === 0 || leak} note={seat === 0 ? "decrypted for you only" : leak ? "readable by anyone" : "sealed · FHE.allow to its owner"} />
-      ))}
-      <Row label={`Next ${DECK_PREVIEW} cards of the deck`} cards={state.deck.slice(0, DECK_PREVIEW)} open={leak} note={leak ? "you know every draw in advance" : "order unknown to everyone"} />
+      <div className={cn("grid gap-3 rounded-[28px] border-2 p-3 transition-colors sm:p-4", leak ? "border-red shadow-[6px_6px_0_var(--color-red)]" : "border-cream shadow-[6px_6px_0_var(--color-red)]")} style={{ background: "radial-gradient(120% 90% at 50% 40%, var(--felt1), var(--felt2))" }}>
+        <div className="grid gap-3 sm:grid-cols-2">
+          {hands.map((cards, seat) => (
+            <Row key={NAMES[seat]} label={NAMES[seat] ?? `Seat ${seat}`} cards={cards} open={seat === 0 || leak} note={seat === 0 ? "decrypted for you only" : leak ? "readable by anyone" : "sealed · FHE.allow to its owner"} />
+          ))}
+        </div>
+        <Row label={`Next ${DECK_PREVIEW} cards of the deck`} cards={state.deck.slice(0, DECK_PREVIEW)} open={leak} note={leak ? "you know every draw in advance" : "order unknown to everyone"} />
+      </div>
     </section>
   );
 }

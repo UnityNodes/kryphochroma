@@ -16,6 +16,7 @@ export const CARD_COLORS = [
   { name: "Sun", base: "#f2b134", dark: "#b87714" },
   { name: "Teal", base: "#1f9e8a", dark: "#0f6b5d" },
   { name: "Blue", base: "#3b5ba5", dark: "#24407e" },
+  { name: "Violet", base: "#9b4fc9", dark: "#64288c" },
 ] as const;
 
 export const CARD_VIEWBOX = "0 0 100 150";

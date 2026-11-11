@@ -17,6 +17,8 @@ export interface ChainTable {
   readonly pendingDraw: number;
   readonly monoWindow: number;
   readonly drawFourBy: number;
+  readonly veilBy?: number;
+  readonly veilJudge?: number;
   readonly prevColor: number;
   readonly candidate: number;
   readonly config: { readonly seats?: number; readonly targetScore: number; readonly singleRound: boolean; readonly stackDrawTwo: boolean };
@@ -29,6 +31,7 @@ export interface ChainSeat {
   readonly timeouts: number;
   readonly abandoned: boolean;
   readonly score: number;
+  readonly veilUsed?: boolean;
 }
 
 const STAGES: Record<number, Stage> = { 3: "Playing", 4: "AwaitChallenge", 5: "Revealing", 6: "RoundOver", 7: "MatchOver" };
@@ -51,7 +54,10 @@ export function toPublicState(table: ChainTable, seats: readonly ChainSeat[], di
     timeouts: s.timeouts,
     abandoned: s.abandoned,
     score: s.score,
+    veilUsed: Boolean(s.veilUsed),
   }));
+  const veilBy = table.veilBy ?? NO_SEAT;
+  const veilJudge = table.veilJudge ?? NO_SEAT;
   return {
     config: {
       seats: table.joined,
@@ -70,6 +76,7 @@ export function toPublicState(table: ChainTable, seats: readonly ChainSeat[], di
     seats: publicSeats,
     drawnSlot: orNull(table.drawnSlot),
     drawFour: table.drawFourBy === NO_SEAT ? null : { by: table.drawFourBy, prevColor: table.prevColor as Color },
+    veil: Number(veilBy) === NO_SEAT ? null : { by: Number(veilBy), judge: Number(veilJudge), claim: table.topCard },
     pendingDraw: table.pendingDraw,
     monoWindow: orNull(table.monoWindow),
     candidate: orNull(table.candidate),

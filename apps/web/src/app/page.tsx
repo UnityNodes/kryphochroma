@@ -9,7 +9,7 @@ export default function Home() {
         <div className="kc-grain" />
         <section className="relative z-10 col-[1/-1] row-[1/-1] mx-4 grid max-w-xl gap-6 place-self-center py-10 text-center">
           <h1 className="font-display text-5xl text-sun [text-shadow:3px_3px_0_var(--r),6px_6px_0_var(--ink)] sm:text-7xl">Kryphochroma</h1>
-          <p className="text-lg text-cream">A shedding card game in the Crazy Eights family where nobody can peek. Hands and the deck are Zama FHE ciphertexts on Sepolia.</p>
+          <p className="text-lg text-cream">A five colour shedding game where hiding is the game. Bluff with a veiled card, spy on one sealed card, chase a secret colour. Hands and the deck are Zama FHE ciphertexts on Sepolia.</p>
           <div className="flex flex-wrap justify-center gap-3">
             <Link href="/new" className="kc-btn kc-mono">
               <Play aria-hidden />
@@ -19,9 +19,14 @@ export default function Home() {
               Practice offline
             </Link>
           </div>
-          <Link href="/secret" className="justify-self-center text-sm text-sun underline underline-offset-4">
-            How it stays secret
-          </Link>
+          <div className="flex flex-wrap justify-center gap-5 text-sm">
+            <Link href="/secret" className="text-sun underline underline-offset-4">
+              How it stays secret
+            </Link>
+            <Link href="/docs" className="text-sun underline underline-offset-4">
+              Docs
+            </Link>
+          </div>
           <ul className="grid gap-3 text-left text-sm text-muted sm:grid-cols-3">
             <li className="flex gap-2">
               <EyeOff className="size-5 shrink-0 text-sun" aria-hidden />
@@ -33,7 +38,7 @@ export default function Home() {
             </li>
             <li className="flex gap-2">
               <Swords className="size-5 shrink-0 text-sun" aria-hidden />
-              A Wild Draw Four challenge reveals exactly one bit
+              Doubt a veiled card and exactly one bit is revealed
             </li>
           </ul>
         </section>

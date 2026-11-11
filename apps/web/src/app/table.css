@@ -73,8 +73,8 @@
 .kc-box{max-width:360px;width:100%;padding:24px;border-radius:28px;background:var(--ink);border:2px solid var(--cream);box-shadow:6px 6px 0 var(--r),12px 12px 0 #0008;text-align:center;animation:pop .35s cubic-bezier(.3,1.6,.5,1)}
 .kc-box h2{font-family:Tanker;font-weight:400;font-size:30px;color:var(--y);letter-spacing:.02em}
 .kc-box p{font-size:14px;color:var(--muted);margin-top:6px;line-height:1.45}
-.kc-sw{display:grid;grid-template-columns:repeat(2,72px);gap:14px;justify-content:center;margin-top:18px}
-.kc-sw button{width:72px;height:72px;border-radius:50%;border:3px solid var(--cream);background:var(--c);cursor:pointer;transition:transform .15s}
+.kc-sw{display:grid;grid-template-columns:repeat(3,64px);gap:14px;justify-content:center;margin-top:18px}
+.kc-sw button{width:64px;height:64px;border-radius:50%;border:3px solid var(--cream);background:var(--c);cursor:pointer;transition:transform .15s}
 .kc-sw button:hover{transform:scale(1.08)}
 .kc-box .kc-btn{margin-top:18px}
 .kc-flyer{position:fixed;left:0;top:0;width:var(--cw);aspect-ratio:2/3;z-index:30;pointer-events:none;perspective:900px}

@@ -15,4 +15,7 @@ export interface TableController {
   readonly restart?: () => void;
   readonly chips?: readonly string[];
   readonly watching?: boolean;
+  readonly secretColor?: number | null;
+  readonly peek?: { readonly seat: number; readonly slot: number; readonly card: number | null } | null;
+  readonly clearPeek?: () => void;
 }

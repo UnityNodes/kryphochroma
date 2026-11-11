@@ -97,6 +97,14 @@ export async function animateEvents(before: GameState, after: GameState, events:
         duration: MS.play,
         delay: 0,
       });
+    } else if (event.type === "Veiled") {
+      await Promise.all(draws.splice(0));
+      const source = event.seat === me ? anchors.get(anchorKey.hand(event.slot)) : anchors.get(anchorKey.fan(event.seat));
+      const raw = source?.getBoundingClientRect();
+      if (!raw) continue;
+      const from = event.seat === me ? raw : centered(raw, pile.width * MINI_SCALE, pile.height * MINI_SCALE);
+      if (event.seat === me && source) source.style.visibility = "hidden";
+      await fly({ front: null, back: cardBack(), from, to: pile, rotateTo: pileTilt(pileIndex++), flip: false, duration: MS.play, delay: 0 });
     } else if (event.type === "Drew") {
       const zone = event.seat === me ? rectOf(anchors, anchorKey.handBox) : rectOf(anchors, anchorKey.fan(event.seat));
       if (!zone) continue;

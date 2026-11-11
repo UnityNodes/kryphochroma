@@ -1,4 +1,4 @@
-import { kryphoTableAbi } from "@kryphochroma/abi";
+import { kryphoTableAbi, peekField } from "@kryphochroma/abi";
 import { type Hand, type Move, botCatchTarget, chooseMove } from "@kryphochroma/rules";
 import { ZamaSDK } from "@zama-fhe/sdk";
 import { sepolia as zamaSepolia } from "@zama-fhe/sdk/chains";
@@ -25,7 +25,11 @@ const log = (entry: Record<string, unknown>) =>
 function functionFor(move: Move, seat: number, handles: readonly Hex[]): { functionName: string; args: (id: bigint) => readonly unknown[] } {
   switch (move.type) {
     case "play":
-      return { functionName: "play", args: (id) => [id, move.slot, move.card, move.color ?? 0, handles[move.slot]] };
+      return { functionName: "play", args: (id) => [id, move.slot, move.card, move.peek ? peekField(move.peek.seat, move.peek.slot) : (move.color ?? 0), handles[move.slot]] };
+    case "veil":
+      return { functionName: "veil", args: (id) => [id, move.slot, move.claim, handles[move.slot]] };
+    case "doubt":
+      return { functionName: "doubtVeil", args: (id) => [id] };
     case "draw":
       return { functionName: "draw", args: (id) => [id] };
     case "pass":

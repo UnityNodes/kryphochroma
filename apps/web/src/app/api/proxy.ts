@@ -3,7 +3,8 @@ const WINDOW_MS = 60_000;
 const LIMIT_PER_WINDOW = 6;
 const ACT_LIMIT_PER_WINDOW = 240;
 const STREAM_LIMIT_PER_WINDOW = 30;
-const GLOBAL_LIMIT_PER_WINDOW: Record<string, number> = { "/drip": 60, "/quick": 60, "/fill": 60, "/act": 6000, "/stream": 600 };
+const OPEN_LIMIT_PER_WINDOW = 30;
+const GLOBAL_LIMIT_PER_WINDOW: Record<string, number> = { "/drip": 60, "/quick": 60, "/fill": 60, "/act": 6000, "/stream": 600, "/open": 600 };
 const PRUNE_EVERY = 500;
 const UPSTREAM_TIMEOUT_MS: Record<string, number> = { "/fill": 120_000, "/drip": 60_000, "/quick": 30_000, "/act": 15_000 };
 const hits = new Map<string, number[]>();
@@ -49,7 +50,7 @@ export function sameOrigin(request: Request): boolean {
 export function admit(request: Request, path: string): Response | null {
   if (request.method === "POST" && !sameOrigin(request)) return Response.json({ error: "cross-site request" }, { status: 403 });
   const now = Date.now();
-  const limit = path === "/act" ? ACT_LIMIT_PER_WINDOW : path === "/stream" ? STREAM_LIMIT_PER_WINDOW : LIMIT_PER_WINDOW;
+  const limit = path === "/act" ? ACT_LIMIT_PER_WINDOW : path === "/stream" ? STREAM_LIMIT_PER_WINDOW : path === "/open" ? OPEN_LIMIT_PER_WINDOW : LIMIT_PER_WINDOW;
   if (!allowed(`global:${path}`, GLOBAL_LIMIT_PER_WINDOW[path] ?? LIMIT_PER_WINDOW, now)) return Response.json({ error: "busy, try again in a minute" }, { status: 429 });
   if (!allowed(`${path}:${clientIp(request)}`, limit, now)) return Response.json({ error: "slow down" }, { status: 429 });
   return null;

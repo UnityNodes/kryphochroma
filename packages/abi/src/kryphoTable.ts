@@ -42,6 +42,11 @@ export const kryphoTableAbi = [
   },
   {
     "inputs": [],
+    "name": "BadPeek",
+    "type": "error"
+  },
+  {
+    "inputs": [],
     "name": "BadSession",
     "type": "error"
   },
@@ -122,6 +127,11 @@ export const kryphoTableAbi = [
   },
   {
     "inputs": [],
+    "name": "NoVeil",
+    "type": "error"
+  },
+  {
+    "inputs": [],
     "name": "NotCreator",
     "type": "error"
   },
@@ -163,6 +173,11 @@ export const kryphoTableAbi = [
   {
     "inputs": [],
     "name": "TurnNotExpired",
+    "type": "error"
+  },
+  {
+    "inputs": [],
+    "name": "VeilUsed",
     "type": "error"
   },
   {
@@ -505,6 +520,37 @@ export const kryphoTableAbi = [
       {
         "indexed": false,
         "internalType": "uint8",
+        "name": "target",
+        "type": "uint8"
+      },
+      {
+        "indexed": false,
+        "internalType": "uint8",
+        "name": "slot",
+        "type": "uint8"
+      }
+    ],
+    "name": "Peeked",
+    "type": "event"
+  },
+  {
+    "anonymous": false,
+    "inputs": [
+      {
+        "indexed": true,
+        "internalType": "uint256",
+        "name": "id",
+        "type": "uint256"
+      },
+      {
+        "indexed": false,
+        "internalType": "uint8",
+        "name": "seat",
+        "type": "uint8"
+      },
+      {
+        "indexed": false,
+        "internalType": "uint8",
         "name": "slot",
         "type": "uint8"
       },
@@ -607,6 +653,12 @@ export const kryphoTableAbi = [
         "internalType": "uint8",
         "name": "cheaters",
         "type": "uint8"
+      },
+      {
+        "indexed": false,
+        "internalType": "bool",
+        "name": "bonus",
+        "type": "bool"
       }
     ],
     "name": "RoundSettled",
@@ -738,6 +790,75 @@ export const kryphoTableAbi = [
       }
     ],
     "name": "TimedOut",
+    "type": "event"
+  },
+  {
+    "anonymous": false,
+    "inputs": [
+      {
+        "indexed": true,
+        "internalType": "uint256",
+        "name": "id",
+        "type": "uint256"
+      },
+      {
+        "indexed": false,
+        "internalType": "uint8",
+        "name": "seat",
+        "type": "uint8"
+      }
+    ],
+    "name": "VeilDoubted",
+    "type": "event"
+  },
+  {
+    "anonymous": false,
+    "inputs": [
+      {
+        "indexed": true,
+        "internalType": "uint256",
+        "name": "id",
+        "type": "uint256"
+      },
+      {
+        "indexed": false,
+        "internalType": "bool",
+        "name": "truth",
+        "type": "bool"
+      }
+    ],
+    "name": "VeilResolved",
+    "type": "event"
+  },
+  {
+    "anonymous": false,
+    "inputs": [
+      {
+        "indexed": true,
+        "internalType": "uint256",
+        "name": "id",
+        "type": "uint256"
+      },
+      {
+        "indexed": false,
+        "internalType": "uint8",
+        "name": "seat",
+        "type": "uint8"
+      },
+      {
+        "indexed": false,
+        "internalType": "uint8",
+        "name": "slot",
+        "type": "uint8"
+      },
+      {
+        "indexed": false,
+        "internalType": "uint8",
+        "name": "claim",
+        "type": "uint8"
+      }
+    ],
+    "name": "Veiled",
     "type": "event"
   },
   {
@@ -927,6 +1048,19 @@ export const kryphoTableAbi = [
         "type": "uint256"
       }
     ],
+    "name": "doubtVeil",
+    "outputs": [],
+    "stateMutability": "nonpayable",
+    "type": "function"
+  },
+  {
+    "inputs": [
+      {
+        "internalType": "uint256",
+        "name": "id",
+        "type": "uint256"
+      }
+    ],
     "name": "draw",
     "outputs": [],
     "stateMutability": "nonpayable",
@@ -1024,6 +1158,11 @@ export const kryphoTableAbi = [
             "internalType": "uint16",
             "name": "score",
             "type": "uint16"
+          },
+          {
+            "internalType": "bool",
+            "name": "veilUsed",
+            "type": "bool"
           }
         ],
         "internalType": "struct KryphoTable.Seat",
@@ -1186,6 +1325,16 @@ export const kryphoTableAbi = [
           {
             "internalType": "uint8",
             "name": "drawFourBy",
+            "type": "uint8"
+          },
+          {
+            "internalType": "uint8",
+            "name": "veilBy",
+            "type": "uint8"
+          },
+          {
+            "internalType": "uint8",
+            "name": "veilJudge",
             "type": "uint8"
           },
           {
@@ -1590,6 +1739,30 @@ export const kryphoTableAbi = [
         "type": "uint256"
       },
       {
+        "internalType": "uint8",
+        "name": "seat",
+        "type": "uint8"
+      }
+    ],
+    "name": "secretOf",
+    "outputs": [
+      {
+        "internalType": "euint8",
+        "name": "",
+        "type": "bytes32"
+      }
+    ],
+    "stateMutability": "view",
+    "type": "function"
+  },
+  {
+    "inputs": [
+      {
+        "internalType": "uint256",
+        "name": "id",
+        "type": "uint256"
+      },
+      {
         "internalType": "bytes",
         "name": "cleartexts",
         "type": "bytes"
@@ -1672,6 +1845,34 @@ export const kryphoTableAbi = [
       }
     ],
     "name": "takeDraws",
+    "outputs": [],
+    "stateMutability": "nonpayable",
+    "type": "function"
+  },
+  {
+    "inputs": [
+      {
+        "internalType": "uint256",
+        "name": "id",
+        "type": "uint256"
+      },
+      {
+        "internalType": "uint8",
+        "name": "slot",
+        "type": "uint8"
+      },
+      {
+        "internalType": "uint8",
+        "name": "claim",
+        "type": "uint8"
+      },
+      {
+        "internalType": "bytes32",
+        "name": "seenHandle",
+        "type": "bytes32"
+      }
+    ],
+    "name": "veil",
     "outputs": [],
     "stateMutability": "nonpayable",
     "type": "function"

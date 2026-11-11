@@ -1,7 +1,7 @@
 "use client";
 
 import { type Move, RuleError, applyCatch } from "@kryphochroma/rules";
-import { useCallback, useEffect, useRef } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import type { TableController } from "./controller";
 import { HUMAN, SEAT_NAMES, humanMove, newOfflineGame, nextAutoStep } from "./offline";
 import { useTransitionQueue } from "./useTransitionQueue";
@@ -14,6 +14,7 @@ export function useOfflineGame(seats: number, stackDrawTwo: boolean, colorBlind:
   const initial = useRef(newOfflineGame({ seats, stackDrawTwo, seed: seed.current }).state);
   const queue = useTransitionQueue(initial.current, HUMAN, SEAT_NAMES, colorBlind);
   const { shown: state, busy, enqueue, reset } = queue;
+  const [peek, setPeek] = useState<TableController["peek"]>(null);
 
   useEffect(() => {
     if (busy) return;
@@ -28,6 +29,7 @@ export function useOfflineGame(seats: number, stackDrawTwo: boolean, colorBlind:
       if (busy) return "Wait for the table";
       try {
         enqueue(humanMove(state, move));
+        if (move.type === "play" && move.peek) setPeek({ ...move.peek, card: state.hands[move.peek.seat]?.[move.peek.slot] ?? null });
         return null;
       } catch (error) {
         return error instanceof RuleError ? error.code : "Move failed";
@@ -48,5 +50,21 @@ export function useOfflineGame(seats: number, stackDrawTwo: boolean, colorBlind:
     reset(newOfflineGame({ seats, stackDrawTwo, seed: seed.current }).state);
   }, [seats, stackDrawTwo, reset]);
 
-  return { mode: "practice", state, me: HUMAN, names: SEAT_NAMES, busy, feed: queue.feed, anchors: queue.anchors, act, catchSeat, restart };
+  const clearPeek = useCallback(() => setPeek(null), []);
+
+  return {
+    mode: "practice",
+    state,
+    me: HUMAN,
+    names: SEAT_NAMES,
+    busy,
+    feed: queue.feed,
+    anchors: queue.anchors,
+    act,
+    catchSeat,
+    restart,
+    secretColor: state.secrets[HUMAN] ?? null,
+    peek,
+    clearPeek,
+  };
 }

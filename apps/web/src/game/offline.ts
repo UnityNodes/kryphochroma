@@ -81,6 +81,14 @@ export function describe(event: GameEvent, names: readonly string[] = SEAT_NAMES
     case "DrawFourAccepted":
     case "DrawsTaken":
       return { icon: "draw", text: `${name(event.seat)} took the penalty`, sub: "sealed cards" };
+    case "Veiled":
+      return { icon: "lock", text: `${name(event.seat)} veiled a card as ${cardLabel(event.claim)}`, sub: "face down · encrypted · once per round" };
+    case "VeilDoubted":
+      return { icon: "challenge", text: `${name(event.seat)} doubts the veil`, sub: "revealing exactly 1 bit" };
+    case "VeilResolved":
+      return { icon: "lock", text: event.truth ? "The veil was true: the doubter draws 2" : "The veil was a bluff: the bluffer draws 4", sub: "FHE.eq · FHE.checkSignatures" };
+    case "Peeked":
+      return { icon: "play", text: `${name(event.seat)} peeked at ${name(event.target)}'s card ${event.slot + 1}`, sub: "spyglass · FHE.allow to one key" };
     case "Reshuffled":
       return { icon: "shuffle", text: `${event.count} discards reshuffled into the deck`, sub: "new encrypted order · FHE.randEbool" };
     case "TimedOut":

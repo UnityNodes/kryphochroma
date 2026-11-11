@@ -77,6 +77,7 @@ export function PreGame({ id, snapshot, address, watching, onFill, onStart, onJo
                   </button>
                 )}
               </div>
+              {free > 0 && <p className="text-sm">Share the invite link: friends sit down as guests or with a wallet. {isCreator ? "Start when everyone is in, or fill the empty seats with bots." : "The host starts the game."}</p>}
               <div className="flex flex-wrap justify-center gap-3 text-sm">
                 <button type="button" className="kc-chip" onClick={() => void copyInvite(id)}>
                   <Link2 aria-hidden />

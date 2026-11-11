@@ -134,6 +134,23 @@ async function poolTables(): Promise<{ id: bigint; view: LobbyView }[]> {
   return found;
 }
 
+const OPEN_CACHE_MS = 6000;
+let openCache: { at: number; tables: { id: string; joined: number; seats: number; creator: string; setupStep: number }[] } = { at: 0, tables: [] };
+
+async function openTables(): Promise<typeof openCache.tables> {
+  if (Date.now() - openCache.at < OPEN_CACHE_MS) return openCache.tables;
+  const count = (await publicClient.readContract({ address: table, abi: kryphoTableAbi, functionName: "tableCount" })) as bigint;
+  const tables: typeof openCache.tables = [];
+  for (let id = count > WATCH_WINDOW ? count - WATCH_WINDOW + 1n : 1n; id <= count; id++) {
+    const view = await readLobby(id);
+    const free = Number(view.config.seats) - Number(view.joined);
+    if (Number(view.stage) !== 0 || free < 1 || Number(view.joined) === 0 || view.creator.toLowerCase() === keeper.address.toLowerCase()) continue;
+    tables.push({ id: id.toString(), joined: Number(view.joined), seats: Number(view.config.seats), creator: view.creator, setupStep: Number(view.setupStep) });
+  }
+  openCache = { at: Date.now(), tables: tables.reverse() };
+  return openCache.tables;
+}
+
 async function ensurePool(): Promise<void> {
   if (poolCreating) return;
   const free = (await poolTables()).filter((p) => !isReserved(p.id));
@@ -293,6 +310,7 @@ const server = createServer(async (req, res) => {
       }
       return;
     }
+    if (req.method === "GET" && url.pathname === "/open") return reply(res, 200, { tables: await openTables() });
     if (req.method === "GET" && url.pathname === "/health") {
       const now = Date.now();
       const ages = { relayMs: now - beats.relay, keeperMs: now - beats.keeper, shufflerMs: Number.isFinite(beats.shuffler) ? now - beats.shuffler : null };

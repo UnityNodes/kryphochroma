@@ -13,12 +13,12 @@ describe("chain events", () => {
     const logs = [
       log("Played", { id: 7n }, { types: [{ type: "uint8" }, { type: "uint8" }, { type: "uint8" }, { type: "uint8" }], values: [1, 3, 39, 2] }),
       log("Drew", { id: 8n }, { types: [{ type: "uint8" }, { type: "uint8" }], values: [0, 4] }),
-      log("RoundSettled", { id: 7n }, { types: [{ type: "int8" }, { type: "uint16" }, { type: "uint8" }], values: [-1, 0, 5] }),
+      log("RoundSettled", { id: 7n }, { types: [{ type: "int8" }, { type: "uint16" }, { type: "uint8" }, { type: "bool" }], values: [-1, 0, 5, false] }),
       log("ChallengeResolved", { id: 7n }, { types: [{ type: "bool" }], values: [true] }),
     ];
     expect(toGameEvents(logs, 7n)).toEqual([
       { type: "Played", seat: 1, slot: 3, card: 39, color: 2 },
-      { type: "RoundSettled", winner: null, points: 0, cheaters: [0, 2] },
+      { type: "RoundSettled", winner: null, points: 0, cheaters: [0, 2], bonus: false },
       { type: "ChallengeResolved", bit: true },
     ]);
   });

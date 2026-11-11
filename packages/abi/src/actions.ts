@@ -1,11 +1,17 @@
 import type { Card, Color, GameEvent, GameState, Move } from "@kryphochroma/rules";
-import { HAND_SLOTS, RuleError, applyCatch, applyMove } from "@kryphochroma/rules";
+import { HAND_SLOTS, RuleError, WILD_COLOR, applyCatch, applyMove, colorOf, isSpyglass } from "@kryphochroma/rules";
 import { type ChainSeat, type ChainTable, toPublicState } from "./view.js";
 
 export const UNKNOWN_CARD = -1;
 export const ZERO_HANDLE = `0x${"0".repeat(64)}` as const;
 
-export const ACTION_KIND = { play: 0, draw: 1, pass: 2, take: 3, mono: 4, accept: 5, challenge: 6, catch: 7 } as const;
+export const ACTION_KIND = { play: 0, draw: 1, pass: 2, take: 3, mono: 4, accept: 5, challenge: 6, catch: 7, veil: 8, doubt: 9 } as const;
+export const PEEK_SEAT_SHIFT = 5;
+const PEEK_SLOT_MASK = 31;
+
+export function peekField(seat: number, slot: number): number {
+  return (seat << PEEK_SEAT_SHIFT) | slot;
+}
 
 export const ACTION_TYPES = {
   Action: [
@@ -43,7 +49,16 @@ export function fieldsFor(table: bigint, seat: number, move: Move | { readonly t
   const base = { table, seat, slot: 0, card: 0, color: 0, seenHandle: ZERO_HANDLE as `0x${string}`, nonce };
   switch (move.type) {
     case "play":
-      return { ...base, kind: ACTION_KIND.play, slot: move.slot, card: move.card, color: move.color ?? 0, seenHandle: handles[move.slot] ?? ZERO_HANDLE };
+      return {
+        ...base,
+        kind: ACTION_KIND.play,
+        slot: move.slot,
+        card: move.card,
+        color: move.peek ? peekField(move.peek.seat, move.peek.slot) : (move.color ?? 0),
+        seenHandle: handles[move.slot] ?? ZERO_HANDLE,
+      };
+    case "veil":
+      return { ...base, kind: ACTION_KIND.veil, slot: move.slot, card: move.claim, seenHandle: handles[move.slot] ?? ZERO_HANDLE };
     case "catch":
       return { ...base, kind: ACTION_KIND.catch, slot: move.target };
     default:
@@ -54,7 +69,12 @@ export function fieldsFor(table: bigint, seat: number, move: Move | { readonly t
 export function moveOf(action: ActionFields): Move | { readonly type: "catch"; readonly target: number } | null {
   switch (action.kind) {
     case ACTION_KIND.play:
-      return { type: "play", slot: action.slot, card: action.card, ...(action.card >> 4 === 4 ? { color: action.color as Color } : {}) };
+      if (isSpyglass(action.card)) return { type: "play", slot: action.slot, card: action.card, peek: { seat: action.color >> PEEK_SEAT_SHIFT, slot: action.color & PEEK_SLOT_MASK } };
+      return { type: "play", slot: action.slot, card: action.card, ...(colorOf(action.card) === WILD_COLOR ? { color: action.color as Color } : {}) };
+    case ACTION_KIND.veil:
+      return { type: "veil", slot: action.slot, claim: action.card };
+    case ACTION_KIND.doubt:
+      return { type: "doubt" };
     case ACTION_KIND.draw:
       return { type: "draw" };
     case ACTION_KIND.pass:
@@ -96,7 +116,16 @@ export function projectChain(
   const hands = pub.seats.map((seat, i) =>
     Array.from({ length: HAND_SLOTS }, (_, slot) => (seat.slots[slot] ? (known.get(i)?.[slot] ?? UNKNOWN_CARD) : null)),
   );
-  return { pub, deck: Array.from({ length: pub.deckCount }, () => UNKNOWN_CARD), hands, honest: pub.seats.map(() => true), hadColor: null, rng: 1 };
+  return {
+    pub,
+    deck: Array.from({ length: pub.deckCount }, () => UNKNOWN_CARD),
+    hands,
+    honest: pub.seats.map(() => true),
+    hadColor: null,
+    veilTrue: null,
+    secrets: pub.seats.map(() => UNKNOWN_CARD),
+    rng: 1,
+  };
 }
 
 export function project(chain: GameState, chainNonces: readonly number[], log: readonly SignedAction[]): { state: GameState; valid: SignedAction[] } {

@@ -1,8 +1,8 @@
 "use client";
 
 import { CARD_COLORS, sharedDefs } from "@kryphochroma/cards";
-import { type Color, canDraw, canSayMono, botCatchTarget, isPlayable, isWild, legalMoves } from "@kryphochroma/rules";
-import { Eye, House, Layers, Shapes, Shuffle, Swords, Trophy, Volume2, VolumeX, WifiOff } from "lucide-react";
+import { type Color, type Peek, canDraw, cardLabel, canSayMono, botCatchTarget, isPlayable, isSpyglass, isWild, legalMoves, veilClaims } from "@kryphochroma/rules";
+import { Eye, EyeOff, House, Layers, Shapes, Shuffle, Swords, Trophy, Volume2, VolumeX, WifiOff } from "lucide-react";
 import Link from "next/link";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { toast } from "sonner";
@@ -18,6 +18,7 @@ import { Center } from "./Center";
 import { Feed } from "./Feed";
 import { Hand } from "./Hand";
 import { HowToPlay } from "./HowToPlay";
+import { PeekDialog, PeekResult, SecretChip, VeilDialog } from "./Mechanics";
 import { Seat } from "./Seat";
 
 const POSITIONS: Record<number, readonly ("left" | "top" | "right")[]> = { 2: ["top"], 3: ["left", "right"], 4: ["left", "top", "right"] };
@@ -27,6 +28,9 @@ const ERROR_TEXT: Record<string, string> = {
   MustPlayDrawnCard: "You can only play the card you just drew",
   MustStackOrTake: "Stack a draw two or take the cards",
   CannotPass: "Draw a card before passing",
+  VeilUsed: "You already veiled a card this round",
+  NoVeil: "There is no veil to doubt",
+  BadPeek: "Pick a card in an opponent's hand",
 };
 
 export interface TableProps {
@@ -62,6 +66,8 @@ export function TableView({ controller: game, colorBlind, onToggleShapes }: Tabl
   const mine = pub.turn === HUMAN && !busy && pub.stage === "Playing";
   const moves = useMemo(() => legalMoves(pub, HUMAN, hand), [pub, hand]);
   const [pickingSlot, setPickingSlot] = useState<number | null>(null);
+  const [peekSlot, setPeekSlot] = useState<number | null>(null);
+  const [veiling, setVeiling] = useState(false);
   const sound = useSound();
   const { play: playSound } = sound;
   const lastLine = game.feed[0];
@@ -101,10 +107,18 @@ export function TableView({ controller: game, colorBlind, onToggleShapes }: Tabl
       const card = hand[slot];
       if (card === null || card === undefined) return;
       if (isWild(card)) setPickingSlot(slot);
+      else if (isSpyglass(card)) setPeekSlot(slot);
       else run({ type: "play", slot, card });
     },
     [hand, run],
   );
+
+  const peekAt = (peek: Peek) => {
+    const slot = peekSlot;
+    const card = slot === null ? null : hand[slot];
+    setPeekSlot(null);
+    if (slot !== null && card !== null && card !== undefined) run({ type: "play", slot, card, peek });
+  };
 
   const pick = (color: Color) => {
     const slot = pickingSlot;
@@ -118,7 +132,10 @@ export function TableView({ controller: game, colorBlind, onToggleShapes }: Tabl
   const onDraw = () => run({ type: drawLabel === "Pass" ? "pass" : "draw" });
   const monoHot = canSayMono(pub, HUMAN) && hand.some((c) => c !== null && isPlayable(pub, c));
   const catchable = botCatchTarget(pub, HUMAN);
-  const status = statusText(pub.stage, pub.turn, game.watching ? -1 : HUMAN, names, busy, drawn, pub.drawFour !== null, pub.pendingDraw);
+  const meSeat = pub.seats[HUMAN];
+  const canVeil = mine && !!meSeat && !meSeat.veilUsed && meSeat.handSize >= 2 && pub.pendingDraw === 0 && pub.drawFour === null && veilClaims(pub).length > 0;
+  const canDoubt = mine && pub.veil !== null && pub.veil.judge === HUMAN && pub.drawnSlot === null;
+  const status = canDoubt && pub.veil ? `${names[pub.veil.by] ?? "Someone"} veiled a card as ${cardLabel(pub.veil.claim)}: doubt it or play on` : statusText(pub.stage, pub.turn, game.watching ? -1 : HUMAN, names, busy, drawn, pub.drawFour !== null, pub.pendingDraw);
   const seats = pub.config.seats;
   const opponents = POSITIONS[seats] ?? [];
   const result = pub.lastResult;
@@ -240,6 +257,7 @@ export function TableView({ controller: game, colorBlind, onToggleShapes }: Tabl
                   <Eye aria-hidden />
                   only you can see this hand
                 </span>
+                {game.secretColor !== undefined && <SecretChip color={game.secretColor} />}
               </div>
             </div>
             {mine && pub.drawFour ? (
@@ -262,6 +280,18 @@ export function TableView({ controller: game, colorBlind, onToggleShapes }: Tabl
               <button type="button" className="kc-btn" onClick={onDraw} disabled={!mine}>
                 <Layers aria-hidden />
                 <span>{drawLabel}</span>
+              </button>
+            )}
+            {canDoubt && (
+              <button type="button" className="kc-btn kc-hot" onClick={() => run({ type: "doubt" })}>
+                <Swords aria-hidden />
+                Doubt
+              </button>
+            )}
+            {canVeil && (
+              <button type="button" className="kc-btn" onClick={() => setVeiling(true)} disabled={busy}>
+                <EyeOff aria-hidden />
+                Veil
               </button>
             )}
             {catchable !== null ? (
@@ -287,14 +317,40 @@ export function TableView({ controller: game, colorBlind, onToggleShapes }: Tabl
           </div>
         </DialogContent>
       </Dialog>
+      <VeilDialog
+        open={veiling}
+        pub={pub}
+        hand={hand}
+        colorBlind={colorBlind}
+        onClose={() => setVeiling(false)}
+        onVeil={(slot, claim) => {
+          setVeiling(false);
+          run({ type: "veil", slot, claim });
+        }}
+      />
+      <PeekDialog open={peekSlot !== null} pub={pub} me={HUMAN} names={names} onClose={() => setPeekSlot(null)} onPeek={peekAt} />
+      <PeekResult peek={game.peek ?? null} names={names} colorBlind={colorBlind} onClose={() => game.clearPeek?.()} />
       <Dialog open={pub.stage === "MatchOver" && !busy}>
         <DialogContent className="kc-box border-2 border-cream bg-ink sm:max-w-[360px]" showCloseButton={false}>
           <DialogTitle className="font-display text-[30px] font-normal text-sun">
             {result?.winner === HUMAN ? "You win!" : result?.winner === null ? "No winner" : `${names[result?.winner ?? 0] ?? "Seat"} wins`}
           </DialogTitle>
           <DialogDescription className="text-muted">
-            {result ? `${result.points} points · every honesty bit checked${result.cheaters.length > 0 ? ` · liars: ${result.cheaters.map((s) => (s === HUMAN ? "you" : names[s])).join(", ")}` : ""}` : ""}
+            {result ? `${result.points} points${result.bonus ? " · doubled by the secret colour" : ""} · every honesty bit checked${result.cheaters.length > 0 ? ` · liars: ${result.cheaters.map((s) => (s === HUMAN ? "you" : names[s])).join(", ")}` : ""}` : ""}
           </DialogDescription>
+          {result?.secrets && result.secrets.some((c) => c >= 0) && (
+            <ul className="grid gap-1 text-sm text-cream">
+              {result.secrets.map((color, seat) => (
+                <li key={seat} className="flex items-center justify-between gap-3">
+                  <span>{seat === HUMAN && !game.watching ? "You" : names[seat]}</span>
+                  <span className="flex items-center gap-1" style={{ color: CARD_COLORS[color]?.base }}>
+                    <span className="inline-block size-2.5 rounded-full" style={{ background: CARD_COLORS[color]?.base }} aria-hidden />
+                    {CARD_COLORS[color]?.name ?? "hidden"}
+                  </span>
+                </li>
+              ))}
+            </ul>
+          )}
           <div className="flex flex-wrap justify-center gap-3">
             {game.restart && (
               <button type="button" className="kc-btn" onClick={game.restart}>
@@ -317,8 +373,9 @@ function Logo() {
   return (
     <svg viewBox="0 0 40 40" aria-hidden>
       {CARD_COLORS.map((c, i) => {
-        const a0 = (i * Math.PI) / 2 - Math.PI / 2;
-        const a1 = a0 + Math.PI / 2;
+        const span = (Math.PI * 2) / CARD_COLORS.length;
+        const a0 = i * span - Math.PI / 2;
+        const a1 = a0 + span;
         return <path key={c.name} d={`M20 20L${20 + 17 * Math.cos(a0)} ${20 + 17 * Math.sin(a0)}A17 17 0 0 1 ${20 + 17 * Math.cos(a1)} ${20 + 17 * Math.sin(a1)}Z`} fill={c.base} />;
       })}
       <circle cx="20" cy="20" r="17" fill="none" stroke="var(--cream)" strokeWidth="2.5" />
