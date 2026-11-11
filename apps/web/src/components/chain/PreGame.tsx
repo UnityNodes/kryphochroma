@@ -1,11 +1,16 @@
 "use client";
 
-import { SETUP_STEPS } from "@kryphochroma/abi";
-import { Armchair, Bot, Eye, Link2, Lock, Play, Shuffle, Users } from "lucide-react";
+import { DECK_SIZE, SETUP_STEPS } from "@kryphochroma/abi";
+import { Armchair, Bot, Eye, Link2, Play, Shuffle, Users } from "lucide-react";
 import Link from "next/link";
 import { toast } from "sonner";
 import type { ChainSnapshot } from "@/chain/useChainGame";
+import { AvatarGlyph, avatarColor } from "@/components/profile/Avatar";
+import { ProfileChip } from "@/components/profile/ProfileChip";
+import { useMyProfile } from "@/components/profile/useMyProfile";
+import { useProfiles } from "@/components/profile/useProfiles";
 import { WalletBar } from "@/components/wallet/WalletBar";
+import { tableCode, tablePath } from "@/lib/invite";
 
 export interface PreGameProps {
   readonly id: string;
@@ -19,7 +24,7 @@ export interface PreGameProps {
 }
 
 async function copyInvite(id: string): Promise<void> {
-  const url = `${window.location.origin}/t/${id}`;
+  const url = `${window.location.origin}${tablePath(id)}`;
   try {
     await navigator.clipboard.writeText(url);
     toast.success("Invite link copied");
@@ -30,6 +35,8 @@ async function copyInvite(id: string): Promise<void> {
 
 export function PreGame({ id, snapshot, address, watching, onFill, onStart, onJoin, working }: PreGameProps) {
   const { table, seats } = snapshot;
+  const profiles = useProfiles(seats.map((s) => s.session));
+  const myProfile = useMyProfile();
   const free = (table.config.seats ?? seats.length) - seats.length;
   const canJoin = !watching && snapshot.me < 0 && free > 0;
   const stage = Number(table.stage);
@@ -44,18 +51,31 @@ export function PreGame({ id, snapshot, address, watching, onFill, onStart, onJo
           {stage === 0 && (
             <>
               <h2>Table lobby</h2>
+              <div className="font-display text-3xl tracking-wide text-sun">{tableCode(id)}</div>
               <p>
                 <Users className="mr-1 inline size-4" aria-hidden />
                 {seats.length} of {table.config.seats ?? seats.length} seats taken
               </p>
               <ol className="grid gap-2 text-left text-sm">
-                {seats.map((s, i) => (
-                  <li key={s.player} className="flex items-center gap-2">
-                    <Lock className="size-4 text-sun" aria-hidden />
-                    Seat {i + 1}: {i === snapshot.me || s.player.toLowerCase() === address.toLowerCase() ? "you" : `${s.player.slice(0, 6)}…${s.player.slice(-4)}`}
-                  </li>
-                ))}
+                {seats.map((s, i) => {
+                  const profile = profiles[s.session.toLowerCase()];
+                  const mine = i === snapshot.me || s.player.toLowerCase() === address.toLowerCase();
+                  const label = profile?.name ?? `${s.player.slice(0, 6)}…${s.player.slice(-4)}`;
+                  return (
+                    <li key={s.player} className="flex items-center gap-2">
+                      <span className="kc-avatar size-8 text-sm" style={{ "--c": avatarColor(profile?.avatar, "var(--muted)") } as React.CSSProperties} aria-hidden>
+                        <AvatarGlyph avatar={profile?.avatar} letter={String(i + 1)} />
+                      </span>
+                      <span>
+                        Seat {i + 1}: <b className="text-cream">{label}</b>
+                        {mine && " (you)"}
+                        {i === 0 && " · host"}
+                      </span>
+                    </li>
+                  );
+                })}
               </ol>
+              {snapshot.me >= 0 && <ProfileChip profile={myProfile.profile} onSave={myProfile.update} />}
               {canJoin && <WalletBar disabled={working} />}
               <div className="flex flex-wrap justify-center gap-3">
                 {canJoin && (
@@ -102,7 +122,7 @@ export function PreGame({ id, snapshot, address, watching, onFill, onStart, onJo
               <div className="h-3 overflow-hidden rounded-full bg-black/40" role="progressbar" aria-valuenow={progress} aria-valuemin={0} aria-valuemax={100}>
                 <div className="h-full bg-sun transition-[width] duration-500" style={{ width: `${progress}%` }} />
               </div>
-              <p>Nobody, not even the contract, knows the order of the 108 cards.</p>
+              <p>Nobody, not even the contract, knows the order of the {DECK_SIZE} cards.</p>
             </>
           )}
           {stage === 2 && (

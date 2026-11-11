@@ -11,8 +11,11 @@ import { loadBurner } from "@/chain/burner";
 import { friendlyError } from "@/chain/errors";
 import { sepoliaTransport } from "@/chain/rpc";
 import { type SeatDeps, fundBurner, openTable, requestBots, serviceDrip as drip, startTable, takeSeat } from "@/chain/seat";
+import { ProfileChip } from "@/components/profile/ProfileChip";
+import { useMyProfile } from "@/components/profile/useMyProfile";
 import { WalletBar } from "@/components/wallet/WalletBar";
 import { useFunder } from "@/components/wallet/useFunder";
+import { tableCode, tablePath } from "@/lib/invite";
 import { cn } from "@/lib/utils";
 
 type Flow = "quick" | "friends" | "bots";
@@ -58,6 +61,7 @@ function useOpenTables(): readonly OpenTable[] {
 export function NewTable() {
   const router = useRouter();
   const funderState = useFunder();
+  const me = useMyProfile();
   const openTables = useOpenTables();
   const [seats, setSeats] = useState(4);
   const [stack, setStack] = useState(false);
@@ -102,7 +106,7 @@ export function NewTable() {
       setDone(2);
       await requestBots(d.burner, id).catch(() => undefined);
       setDone(3);
-      router.push(`/t/${pool.id}`);
+      router.push(tablePath(pool.id));
     });
 
   const friends = () =>
@@ -115,7 +119,7 @@ export function NewTable() {
       setDone(2);
       await takeSeat(d, id);
       setDone(4);
-      router.push(`/t/${id}`);
+      router.push(tablePath(id));
     });
 
   const withBots = () =>
@@ -132,7 +136,7 @@ export function NewTable() {
       setDone(4);
       await startTable(d, id);
       setDone(5);
-      router.push(`/t/${id}`);
+      router.push(tablePath(id));
     });
 
   const disabled = running || !funderState.ready;
@@ -152,6 +156,7 @@ export function NewTable() {
                 ? "Your wallet signs one join for a session key that lives only in this tab. The session key plays the moves, it can never move your funds."
                 : "You play with a key that lives only in this tab. We send it a little test ETH, so you do not need a wallet."}
             </p>
+            <ProfileChip profile={me.profile} onSave={me.update} />
             <WalletBar disabled={running} />
             <div className="grid gap-3">
               <button type="button" className="kc-btn kc-mono justify-center" onClick={quick} disabled={disabled}>
@@ -213,12 +218,12 @@ export function NewTable() {
                 {openTables.map((t) => (
                   <li key={t.id} className="flex items-center justify-between gap-3 rounded-2xl border border-cream/15 px-3 py-2">
                     <span className="text-sm">
-                      <b className="text-cream">Table #{t.id}</b>
+                      <b className="text-cream">{tableCode(t.id)}</b>
                       <span className="block text-muted">
                         {t.joined} of {t.seats} seats · host {t.creator.slice(0, 6)}…{t.creator.slice(-4)}
                       </span>
                     </span>
-                    <Link href={`/t/${t.id}`} className="kc-chip kc-chip-on">
+                    <Link href={tablePath(t.id)} className="kc-chip kc-chip-on">
                       Join
                     </Link>
                   </li>

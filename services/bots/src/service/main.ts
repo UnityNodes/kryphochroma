@@ -1,6 +1,6 @@
 import { createServer, type IncomingMessage, type ServerResponse } from "node:http";
-import { readFileSync } from "node:fs";
-import { fillMessage, kryphoTableAbi } from "@kryphochroma/abi";
+import { readFileSync, writeFileSync } from "node:fs";
+import { BOT_PROFILES, type Profile, STAND_IN_PROFILE, fillMessage, kryphoTableAbi, profileMessage, validProfile } from "@kryphochroma/abi";
 import { parseSignedAction, parseTableId } from "./parse.js";
 import { type Hex, createPublicClient, createWalletClient, nonceManager, parseEther, parseEventLogs, recoverMessageAddress } from "viem";
 import { rpcTransport } from "../rpc.js";
@@ -12,6 +12,7 @@ import { type SignedAction } from "@kryphochroma/abi";
 import { createRelay, encodeMessage } from "../relay/hub.js";
 import { type DripLedger, decideDrip, releaseDrip } from "./drip.js";
 import { pickBots, planPool } from "./pool.js";
+import { type ProfileStore, fromDisk, lookup, parseAddresses, putProfile, toDisk } from "./profiles.js";
 
 const ACTIVE_STAGES = new Set([3, 4]);
 const WATCH_WINDOW = 20n;
@@ -307,6 +308,39 @@ function parseAction(raw: Record<string, unknown>): SignedAction {
   return parseSignedAction(raw, knownTables);
 }
 
+const PROFILE_FILE = process.env.PROFILE_FILE ?? new URL("../../profiles.json", import.meta.url).pathname;
+const PROFILE_SAVE_MS = 2000;
+const fixedProfiles = new Map<string, Profile>([
+  ...bots.map((b, i): [string, Profile] => [b.address.toLowerCase(), BOT_PROFILES[i % BOT_PROFILES.length] ?? { name: "Bot", avatar: "moon-1" }]),
+  [privateKeyToAccount(takeoverKey).address.toLowerCase(), STAND_IN_PROFILE],
+]);
+let profiles: ProfileStore = (() => {
+  try {
+    return fromDisk(readFileSync(PROFILE_FILE, "utf8"));
+  } catch {
+    return fromDisk("[]");
+  }
+})();
+let profileSave: ReturnType<typeof setTimeout> | null = null;
+
+async function saveProfile(body: Record<string, unknown>): Promise<{ ok: boolean; error?: string }> {
+  const profile = validProfile(body);
+  const signature = String(body.signature ?? "");
+  if (!profile || !/^0x[0-9a-fA-F]{130}$/.test(signature)) return { ok: false, error: "bad profile" };
+  const address = await recoverMessageAddress({ message: profileMessage(profile), signature: signature as Hex });
+  if (fixedProfiles.has(address.toLowerCase())) return { ok: false, error: "reserved" };
+  profiles = putProfile(profiles, address, profile, Date.now());
+  profileSave ??= setTimeout(() => {
+    profileSave = null;
+    try {
+      writeFileSync(PROFILE_FILE, toDisk(profiles));
+    } catch (error) {
+      log({ event: "profile-save-failed", message: (error as Error).message.slice(0, 120) });
+    }
+  }, PROFILE_SAVE_MS);
+  return { ok: true };
+}
+
 const server = createServer(async (req, res) => {
   try {
     const url = new URL(req.url ?? "/", "http://local");
@@ -327,6 +361,7 @@ const server = createServer(async (req, res) => {
       return;
     }
     if (req.method === "GET" && url.pathname === "/open") return reply(res, 200, { tables: await openTables() });
+    if (req.method === "GET" && url.pathname === "/profiles") return reply(res, 200, { profiles: lookup(profiles, fixedProfiles, parseAddresses(url.searchParams.get("ids"))) });
     if (req.method === "GET" && url.pathname === "/health") {
       const now = Date.now();
       const ages = { relayMs: now - beats.relay, keeperMs: now - beats.keeper, shufflerMs: Number.isFinite(beats.shuffler) ? now - beats.shuffler : null };
@@ -341,6 +376,10 @@ const server = createServer(async (req, res) => {
       const result = await fill(tableId(body.id), signature as Hex);
       if ("error" in result) log({ event: "fill-refused", id: String(body.id), reason: result.error });
       return reply(res, "error" in result ? 403 : 200, result);
+    }
+    if (url.pathname === "/profile") {
+      const result = await saveProfile(body);
+      return reply(res, result.ok ? 200 : 400, result);
     }
     if (url.pathname === "/drip") return reply(res, 200, await drip(String(body.address ?? "")));
     if (url.pathname === "/quick") return reply(res, 200, await quick());

@@ -7,6 +7,7 @@ export interface TableController {
   readonly state: GameState;
   readonly me: number;
   readonly names: readonly string[];
+  readonly avatars?: readonly (string | null)[];
   readonly busy: boolean;
   readonly feed: readonly FeedLine[];
   readonly anchors: Anchors;

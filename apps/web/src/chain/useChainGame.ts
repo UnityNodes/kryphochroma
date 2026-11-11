@@ -25,6 +25,8 @@ import type { TableController } from "@/game/controller";
 import { useTransitionQueue } from "@/game/useTransitionQueue";
 import { loadBurner } from "./burner";
 import { TABLE_ADDRESS } from "./config";
+import { useProfiles } from "@/components/profile/useProfiles";
+import { tableCode } from "@/lib/invite";
 import { friendlyError } from "./errors";
 import { sepoliaTransport } from "./rpc";
 import { toGameEvents } from "./events";
@@ -73,7 +75,13 @@ export function useChainGame(id: bigint, colorBlind: boolean, watchOnly = false)
   const [error, setError] = useState<string | null>(null);
   const seated = (snapshot?.me ?? -1) >= 0;
   const me = Math.max(snapshot?.me ?? 0, 0);
-  const names = useMemo(() => (snapshot?.seats ?? []).map((s, i) => (seated && i === me ? "You" : `Seat ${i + 1} · ${s.player.slice(2, 6)}`)), [snapshot, me, seated]);
+  const sessions = useMemo(() => (snapshot?.seats ?? []).map((s) => s.session), [snapshot]);
+  const profiles = useProfiles(sessions);
+  const names = useMemo(
+    () => (snapshot?.seats ?? []).map((s, i) => (seated && i === me ? "You" : (profiles[s.session.toLowerCase()]?.name ?? `Seat ${i + 1} · ${s.player.slice(2, 6)}`))),
+    [snapshot, me, seated, profiles],
+  );
+  const avatars = useMemo(() => sessions.map((s) => profiles[s.toLowerCase()]?.avatar ?? null), [sessions, profiles]);
   const queue = useTransitionQueue(placeholder(snapshot?.table.joined ?? 2), seated ? me : -1, names, colorBlind);
   const { enqueue, reset } = queue;
 
@@ -265,12 +273,13 @@ export function useChainGame(id: bigint, colorBlind: boolean, watchOnly = false)
     state: queue.shown,
     me,
     names,
+    avatars,
     busy: queue.busy || sending,
     feed: queue.feed,
     anchors: queue.anchors,
     act,
     catchSeat,
-    chips: seated ? [`Table #${id}`] : [`Table #${id}`, "Watching"],
+    chips: seated ? [tableCode(id)] : [tableCode(id), "Watching"],
     watching: !seated,
     secretColor: seated ? secretColor : undefined,
     peek,

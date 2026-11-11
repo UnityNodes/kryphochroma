@@ -22,6 +22,7 @@ import { Hand } from "./Hand";
 import { HowToPlay } from "./HowToPlay";
 import { PeekDialog, PeekResult, SecretBadge, SecretChip, SonarDialog, SonarResult, VeilDialog } from "./Mechanics";
 import { RadioChip } from "./RadioChip";
+import { AvatarGlyph, avatarColor } from "@/components/profile/Avatar";
 import { Seat } from "./Seat";
 
 const POSITIONS: Record<number, readonly ("left" | "top" | "right")[]> = { 2: ["top"], 3: ["left", "right"], 4: ["left", "top", "right"] };
@@ -213,6 +214,7 @@ export function TableView({ controller: game, colorBlind, onToggleShapes }: Tabl
               position={position}
               name={names[seat] ?? `Seat ${seat}`}
               color={SEAT_COLORS[seat] ?? "var(--y)"}
+              avatar={game.avatars?.[seat] ?? null}
               handSize={s.handSize}
               active={pub.turn === seat}
               saidMono={s.saidMono && s.handSize === 1}
@@ -225,6 +227,7 @@ export function TableView({ controller: game, colorBlind, onToggleShapes }: Tabl
             position="bottom"
             name={names[HUMAN] ?? `Seat ${HUMAN}`}
             color={SEAT_COLORS[HUMAN] ?? "var(--y)"}
+            avatar={game.avatars?.[HUMAN] ?? null}
             handSize={pub.seats[HUMAN].handSize}
             active={pub.turn === HUMAN}
             saidMono={pub.seats[HUMAN].saidMono && pub.seats[HUMAN].handSize === 1}
@@ -256,8 +259,8 @@ export function TableView({ controller: game, colorBlind, onToggleShapes }: Tabl
           />
           <div className="kc-actions">
             <div className={cn("kc-who kc-me", mine && "kc-active")}>
-              <div className="kc-avatar relative" style={{ "--c": SEAT_COLORS[HUMAN] ?? "var(--y)" } as React.CSSProperties}>
-                Y
+              <div className="kc-avatar relative" style={{ "--c": avatarColor(game.avatars?.[HUMAN], SEAT_COLORS[HUMAN] ?? "var(--y)") } as React.CSSProperties}>
+                <AvatarGlyph avatar={game.avatars?.[HUMAN]} letter="Y" />
                 {game.secretColor !== undefined && <SecretBadge color={game.secretColor} />}
               </div>
               <div className="kc-meta">

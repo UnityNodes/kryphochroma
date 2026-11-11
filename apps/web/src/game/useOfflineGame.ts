@@ -2,6 +2,8 @@
 
 import { type Move, RuleError, applyCatch, sonarCount } from "@kryphochroma/rules";
 import { useCallback, useEffect, useRef, useState } from "react";
+import { BOT_PROFILES } from "@kryphochroma/abi";
+import { useMyProfile } from "@/components/profile/useMyProfile";
 import type { TableController } from "./controller";
 import { HUMAN, SEAT_NAMES, humanMove, newOfflineGame, nextAutoStep } from "./offline";
 import { useTransitionQueue } from "./useTransitionQueue";
@@ -15,6 +17,7 @@ export function useOfflineGame(seats: number, stackDrawTwo: boolean, colorBlind:
   const queue = useTransitionQueue(initial.current, HUMAN, SEAT_NAMES, colorBlind);
   const { shown: state, busy, enqueue, reset } = queue;
   const [peek, setPeek] = useState<TableController["peek"]>(null);
+  const myProfile = useMyProfile();
   const [sonar, setSonar] = useState<TableController["sonar"]>(null);
 
   useEffect(() => {
@@ -60,6 +63,7 @@ export function useOfflineGame(seats: number, stackDrawTwo: boolean, colorBlind:
     state,
     me: HUMAN,
     names: SEAT_NAMES,
+    avatars: [myProfile.profile?.avatar ?? null, ...BOT_PROFILES.map((p) => p.avatar)],
     busy,
     feed: queue.feed,
     anchors: queue.anchors,
