@@ -74,12 +74,14 @@ flowchart LR
 
 | | |
 |---|---|
-| `KryphoTable` | [`0x307eD4b34D5555D0AeF1efFD32374B5493a1D070`](https://sepolia.etherscan.io/address/0x307eD4b34D5555D0AeF1efFD32374B5493a1D070) |
-| `KryphoDeck` library | [`0xfEd30119323C3905fFCC40C61767E6C08763ABda`](https://sepolia.etherscan.io/address/0xfEd30119323C3905fFCC40C61767E6C08763ABda) |
-| `KryphoScore` library | [`0x773c6279fb1864CDcC70FEcB6F82bae24BaEa051`](https://sepolia.etherscan.io/address/0x773c6279fb1864CDcC70FEcB6F82bae24BaEa051) |
-| Deployment | [`0x226200…f9c4`](https://sepolia.etherscan.io/tx/0x2262007e0cc840a72ea03d0803c2172d1acd3b3795071e12df96a744c188f9c4), block 12111132 |
+| `KryphoTable` | [`0x1284a04Fe8535b5eb625a76AfDe707D4274E3Ff7`](https://sepolia.etherscan.io/address/0x1284a04Fe8535b5eb625a76AfDe707D4274E3Ff7) |
+| `KryphoDeck` library | [`0x4b2f1dFde9244d3A20D2778Aedf59eF434B96F4d`](https://sepolia.etherscan.io/address/0x4b2f1dFde9244d3A20D2778Aedf59eF434B96F4d) |
+| `KryphoScore` library | [`0xa6A95302f7Ceb700984E4E3BD1FcAcCB682BA5a7`](https://sepolia.etherscan.io/address/0xa6A95302f7Ceb700984E4E3BD1FcAcCB682BA5a7) |
+| `KryphoRadio` library (sonar, signatures) | [`0x3F1680C1A8B8D5a4155858eB0Fce03a405ef61A1`](https://sepolia.etherscan.io/address/0x3F1680C1A8B8D5a4155858eB0Fce03a405ef61A1) |
+| `KryphoLobby` library (join, leave) | [`0x276F3b5a468819ebDDD435091C046cd92269Bc0B`](https://sepolia.etherscan.io/address/0x276F3b5a468819ebDDD435091C046cd92269Bc0B) |
+| Deployment | [`0x395438…d0de`](https://sepolia.etherscan.io/tx/0x395438bd37c3964c9f1284123b8244627965e41b6e930c65286d021d3245d0de), block 12113115 |
 
-A full round on chain, table 2: one human, three bots, three veils, one spyglass, Mono, a timeout and the reveal.
+A full round on chain on the previous deployment with the same rules, table 2: one human, three bots, three veils, one spyglass, Mono, a timeout and the reveal.
 
 | Step | Transaction |
 |---|---|
@@ -131,9 +133,9 @@ Trust assumptions we accept for a testnet game:
 | Suite | What it covers |
 |---|---|
 | `packages/rules` (76) | every rule including veil, spyglass, sonar and secret colour; scoring; bots; 1,000 simulated games |
-| `contracts` (27) | parity with the rules engine move by move on the FHEVM mock, including relayed batches with veils, spyglasses and sonar pings; forged and replayed proofs; privacy of hands, peeks, sonar answers and secret colours; relay signatures and out of gas griefing; takeover; background refill |
-| `services/bots` (33) | keeper planning and scheduling, quick game pool, hub reads pinned to one block, faucet policy, action parsing, chain view |
-| `apps/web` (23 unit, 12 e2e) | seat flows, sounds, the radio, offline game; a judge scenario in Playwright with axe accessibility checks on phone and desktop |
+| `contracts` (29) | parity with the rules engine move by move on the FHEVM mock, including relayed batches with veils, spyglasses and sonar pings; forged and replayed proofs; privacy of hands, peeks, sonar answers and secret colours; relay signatures and out of gas griefing; leaving a lobby and host handover; takeover; background refill |
+| `services/bots` (38) | keeper planning and scheduling, quick game pool, hub reads pinned to one block, faucet policy, action parsing, chain view |
+| `apps/web` (31 unit, 12 e2e) | seat flows, sounds, the radio, offline game; a judge scenario in Playwright with axe accessibility checks on phone and desktop |
 
 Before going public the contracts had two independent security passes and the services one; every high finding is fixed and has a test that fails without the fix.
 
