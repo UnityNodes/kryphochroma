@@ -22,12 +22,13 @@ test("the privacy page shows what an open contract would leak", async ({ page })
   const mira = page.getByRole("list", { name: /^Mira:/ });
   await expect(mira).toHaveAttribute("aria-label", /sealed cards/);
   await expect(page.getByRole("list", { name: /^You:/ })).not.toHaveAttribute("aria-label", /sealed/);
-  const toggle = page.getByRole("switch", { name: "Show what an open contract would leak" });
+  const toggle = page.getByRole("switch", { name: /Show what an open contract would leak/ });
   await toggle.click();
   await expect(toggle).toHaveAttribute("aria-checked", "true");
   await expect(mira).not.toHaveAttribute("aria-label", /sealed/);
   await expect(page.getByText("readable by anyone").first()).toBeVisible();
   await expect(page.getByRole("heading", { name: "What is hidden, from whom, until when" })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Hidden information is the game" })).toBeVisible();
   expect(await seriousViolations(page)).toEqual([]);
 });
 
@@ -67,7 +68,38 @@ test("a practice game teaches the rules, plays a move and keeps the table access
 test("a new table can start as a guest without a wallet", async ({ page }) => {
   await page.goto("/new");
   await expect(page.getByText("No browser wallet found")).toBeVisible();
-  await expect(page.getByRole("button", { name: "Quick game" })).toBeEnabled();
-  await expect(page.getByRole("button", { name: "Own table" })).toBeEnabled();
+  await expect(page.getByRole("button", { name: /Quick game/ })).toBeEnabled();
+  await expect(page.getByRole("button", { name: "With friends" })).toBeEnabled();
+  await expect(page.getByRole("button", { name: "With bots" })).toBeEnabled();
+  await expect(page.getByRole("heading", { name: "Open tables" })).toBeVisible();
   expect(await seriousViolations(page)).toEqual([]);
 });
+
+test("the docs open on every page with navigation", async ({ page }) => {
+  await page.goto("/docs");
+  await expect(page).toHaveURL(/\/docs\/overview$/);
+  await expect(page.getByRole("heading", { level: 1, name: "Overview" })).toBeVisible();
+  await page.goto("/docs/mechanics");
+  await expect(page.getByRole("heading", { level: 2, name: "Veil" })).toBeVisible();
+  await page.getByRole("link", { name: /Privacy model/ }).last().click();
+  await expect(page).toHaveURL(/\/docs\/privacy$/);
+  expect(await seriousViolations(page)).toEqual([]);
+});
+
+test("a practice table offers the veil and can go back to the menu", async ({ page }) => {
+  await page.addInitScript(() => window.localStorage.setItem("kc-howto-seen", "1"));
+  await page.goto("/play?seats=2");
+  await expect(page.locator(".kc-status")).toHaveText(/Your turn|Play the drawn card|doubt it/, { timeout: 20_000 });
+  await expect(page.getByTitle(/Your secret colour/).filter({ visible: true }).first()).toBeVisible();
+  const veil = page.getByRole("button", { name: "Veil" });
+  if (await veil.isVisible()) {
+    await veil.click();
+    const dialog = page.getByRole("dialog", { name: "Veil a card" });
+    await dialog.getByRole("button", { name: /^Hide / }).first().click();
+    await dialog.getByRole("button", { name: /^Name it / }).first().click();
+    await expect(page.locator(".kc-feed").getByText(/^You veiled a card as/)).toBeVisible({ timeout: 20_000 });
+  }
+  await page.getByRole("link", { name: /back to the menu/ }).click();
+  await expect(page).toHaveURL(/\/$/);
+});
+

@@ -1,6 +1,7 @@
 import { createServer, type IncomingMessage, type ServerResponse } from "node:http";
 import { readFileSync } from "node:fs";
 import { fillMessage, kryphoTableAbi } from "@kryphochroma/abi";
+import { parseSignedAction, parseTableId } from "./parse.js";
 import { type Hex, createPublicClient, createWalletClient, http, nonceManager, parseEther, recoverMessageAddress } from "viem";
 import { privateKeyToAccount } from "viem/accounts";
 import { sepolia } from "viem/chains";
@@ -101,7 +102,6 @@ const POOL_SEATS = 4;
 const POOL_TURN_TIMEOUT = 120;
 const RESERVE_MS = 120_000;
 const MAX_POOL_TABLES = 3;
-const TABLE_ID = /^[0-9]{1,12}$/;
 const STREAM_REFRESH_MS = 2000;
 let knownTables = (await publicClient.readContract({ address: table, abi: kryphoTableAbi, functionName: "tableCount" })) as bigint;
 const lastStreamRefresh = new Map<string, number>();
@@ -261,34 +261,11 @@ function reply(res: ServerResponse, status: number, data: unknown): void {
 }
 
 function tableId(raw: unknown): bigint {
-  const text = String(raw ?? "");
-  if (!TABLE_ID.test(text)) throw new Error("bad table");
-  const id = BigInt(text);
-  if (id < 1n || id > knownTables) throw new Error("unknown table");
-  return id;
+  return parseTableId(raw, knownTables);
 }
 
 function parseAction(raw: Record<string, unknown>): SignedAction {
-  const int = (v: unknown, max: number) => {
-    const n = Number(v);
-    if (!Number.isInteger(n) || n < 0 || n > max) throw new Error("bad field");
-    return n;
-  };
-  const hex = (v: unknown, len: number) => {
-    if (typeof v !== "string" || !new RegExp(`^0x[0-9a-fA-F]{${len}}$`).test(v)) throw new Error("bad hex");
-    return v as `0x${string}`;
-  };
-  return {
-    table: tableId(raw.table),
-    seat: int(raw.seat, 3),
-    kind: int(raw.kind, 7),
-    slot: int(raw.slot, 23),
-    card: int(raw.card, 255),
-    color: int(raw.color, 3),
-    seenHandle: hex(raw.seenHandle, 64),
-    nonce: int(raw.nonce, 2 ** 32 - 1),
-    signature: hex(raw.signature, 130),
-  };
+  return parseSignedAction(raw, knownTables);
 }
 
 const server = createServer(async (req, res) => {

@@ -24,7 +24,7 @@ export function Code({ children, title }: { readonly children: string; readonly 
           {copied ? "Copied" : "Copy"}
         </button>
       </figcaption>
-      <pre className="overflow-x-auto p-4 text-[13px] leading-relaxed text-cream">
+      <pre className="overflow-x-auto p-4 text-[13px] leading-relaxed text-cream" tabIndex={0} aria-label={title ?? "code"}>
         <code>{children}</code>
       </pre>
     </figure>

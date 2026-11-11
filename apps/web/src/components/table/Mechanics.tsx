@@ -149,13 +149,13 @@ export function PeekResult({ peek, names, colorBlind, onClose }: PeekResultProps
   );
 }
 
-export function SecretChip({ color }: { readonly color: number | null }) {
+export function SecretChip({ color, compact }: { readonly color: number | null; readonly compact?: boolean }) {
   const swatch = color === null || color < 0 ? null : CARD_COLORS[color];
   return (
-    <span className="whitespace-nowrap" title="Go out on a card of this colour to double the round">
+    <span className="whitespace-nowrap" title="Your secret colour: go out on a card of this colour to double the round">
       <EyeOff aria-hidden />
-      secret colour
-      <b style={{ color: swatch?.base }}>{swatch ? `● ${swatch.name}` : "decrypting…"}</b>
+      {compact ? "secret" : "secret colour"}
+      <b style={{ color: swatch?.base }}>{swatch ? `● ${swatch.name}` : "…"}</b>
     </span>
   );
 }

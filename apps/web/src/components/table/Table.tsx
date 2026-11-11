@@ -237,6 +237,11 @@ export function TableView({ controller: game, colorBlind, onToggleShapes }: Tabl
         />
         {game.feed.length > 0 && <Feed lines={game.feed} title="Table feed" />}
         <div className="kc-you" hidden={game.watching}>
+          {game.secretColor !== undefined && (
+            <span className="kc-chip mb-1 sm:hidden">
+              <SecretChip color={game.secretColor} compact />
+            </span>
+          )}
           <Hand
             hand={hand}
             mine={mine}
