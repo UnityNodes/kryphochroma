@@ -19,9 +19,8 @@ async function ready(players: Signer[], takeover = ethers.ZeroAddress) {
   await (await table.connect(creator).createTable({ ...config, seats: players.length })).wait();
   const id = await table.tableCount();
   for (const p of players) await (await table.connect(p).join(id, p.address)).wait();
-  await (await table.connect(creator).start(id)).wait();
   for (let step = 0; step < 70; step++) await (await table.setupStep(id, { gasLimit: 16_700_000 })).wait();
-  for (let seat = 0; seat < players.length; seat++) await (await table.dealSeat(id, seat)).wait();
+  await (await table.deal(id)).wait();
   return { table, id };
 }
 
@@ -57,26 +56,32 @@ describe("KryphoTable guards", function () {
     await expect(table.join(id, s[6]!.address)).to.be.revertedWithCustomError(table, "AlreadySeated");
     await expect(table.connect(s[1]!).join(id, s[5]!.address)).to.be.revertedWithCustomError(table, "BadSession");
     await (await table.connect(s[1]!).join(id, s[1]!.address)).wait();
-    await expect(table.connect(s[2]!).join(id, s[2]!.address)).to.be.revertedWithCustomError(table, "TableFull");
-    await expect(table.connect(s[2]!).start(id)).to.be.revertedWithCustomError(table, "NotCreator");
-    await expect(table.dealSeat(id, 0)).to.be.revertedWithCustomError(table, "WrongStage");
-    await expect(table.dealSeat(999, 0)).to.be.revertedWithCustomError(table, "WrongStage");
+    expect(Number((await table.getTable(id)).stage)).to.equal(1);
+    await expect(table.connect(s[2]!).join(id, s[2]!.address)).to.be.revertedWithCustomError(table, "WrongStage");
+    await expect(table.deal(id)).to.be.revertedWithCustomError(table, "WrongStage");
+    await expect(table.deal(999)).to.be.revertedWithCustomError(table, "WrongStage");
+    await expect(table.setStarter(id, "0x", "0x")).to.be.revertedWithCustomError(table, "WrongStage");
   });
 
-  it("deals only after the full shuffle and only once per seat", async function () {
+  it("deals only after the full shuffle and only once", async function () {
     const table = await deployTable(ethers, ethers.ZeroAddress);
     await (await table.createTable(config)).wait();
     const id = await table.tableCount();
     await (await table.join(id, s[0]!.address)).wait();
     await (await table.connect(s[1]!).join(id, s[1]!.address)).wait();
-    await (await table.start(id)).wait();
-    await expect(table.dealSeat(id, 0)).to.be.revertedWithCustomError(table, "WrongStage");
+    await expect(table.deal(id)).to.be.revertedWithCustomError(table, "WrongStage");
     for (let step = 0; step < 70; step++) await (await table.setupStep(id, { gasLimit: 16_700_000 })).wait();
     await expect(table.setupStep(id)).to.be.revertedWithCustomError(table, "WrongStage");
-    await (await table.dealSeat(id, 0)).wait();
-    await expect(table.dealSeat(id, 0)).to.be.revertedWithCustomError(table, "BadSlot");
-    await expect(table.dealSeat(id, 2)).to.be.revertedWithCustomError(table, "BadSlot");
-    await expect(table.setStarter(id, "0x", "0x")).to.be.revertedWithCustomError(table, "NotDealt");
+    await (await table.deal(id)).wait();
+    await expect(table.deal(id)).to.be.revertedWithCustomError(table, "BadSlot");
+    expect(Number((await table.getTable(id)).stage)).to.equal(2);
+    while (Number((await table.getTable(id)).stage) === 2) {
+      const { checkSignaturesArgs } = await starter(table, id);
+      await (await table.setStarter(id, checkSignaturesArgs.abiEncodedCleartexts, checkSignaturesArgs.decryptionProof)).wait();
+    }
+    const t = await table.getTable(id);
+    expect([Number(t.stage), Number(t.deckPtr)]).to.deep.equal([3, 14]);
+    await expect(table.setStarter(id, "0x", "0x")).to.be.revertedWithCustomError(table, "WrongStage");
   });
 
   it("keeps hands private to their session", async function () {
@@ -168,7 +173,7 @@ describe("KryphoTable guards", function () {
 
   it("lets a player leave the lobby, hands the host role on and closes an empty table", async function () {
     const table = await deployTable(ethers, ethers.ZeroAddress);
-    await (await table.connect(s[0]!).createTable({ ...config, seats: 3 })).wait();
+    await (await table.connect(s[0]!).createTable({ ...config, seats: 4 })).wait();
     const id = await table.tableCount();
     for (const p of [s[0]!, s[1]!, s[2]!]) await (await table.connect(p).join(id, p.address)).wait();
     await expect(table.connect(s[3]!).leave(id)).to.be.revertedWithCustomError(table, "NotSeated");
@@ -202,16 +207,15 @@ describe("KryphoTable guards", function () {
     expect(Number((await table.getTable(id)).stage)).to.equal(1);
   });
 
-  it("lets anyone seated start a full table when the host is gone", async function () {
+  it("starts a table by itself when the last seat is taken", async function () {
     const table = await deployTable(ethers, ethers.ZeroAddress);
     await (await table.connect(s[3]!).openTable({ ...config, seats: 3 }, s[3]!.address)).wait();
     const id = await table.tableCount();
     await (await table.connect(s[0]!).join(id, s[0]!.address)).wait();
     await expect(table.connect(s[0]!).start(id)).to.be.revertedWithCustomError(table, "NotCreator");
     await (await table.connect(s[1]!).join(id, s[1]!.address)).wait();
-    await expect(table.connect(s[2]!).start(id)).to.be.revertedWithCustomError(table, "NotCreator");
-    await (await table.connect(s[1]!).start(id)).wait();
     expect(Number((await table.getTable(id)).stage)).to.equal(1);
+    await expect(table.connect(s[1]!).start(id)).to.be.revertedWithCustomError(table, "WrongStage");
   });
 
   it("needs every seat prepared before the final reveal", async function () {
@@ -271,35 +275,39 @@ describe("KryphoTable guards", function () {
     for (let step = 0; step < 10; step++) await (await table.setupStep(id, { gasLimit: 16_700_000 })).wait();
     await (await table.join(id, s[0]!.address)).wait();
     await (await table.connect(s[1]!).join(id, s[1]!.address)).wait();
-    await (await table.start(id)).wait();
     let t = await table.getTable(id);
     expect([Number(t.stage), Number(t.setupStep)]).to.deep.equal([1, 10]);
     for (let step = 10; step < 70; step++) await (await table.setupStep(id, { gasLimit: 16_700_000 })).wait();
     t = await table.getTable(id);
     expect([Number(t.stage), Number(t.setupStep)]).to.deep.equal([2, 70]);
-    await (await table.dealSeat(id, 0)).wait();
-    await (await table.dealSeat(id, 1)).wait();
+    await (await table.deal(id)).wait();
+    expect(Number((await table.getSeat(id, 1)).handSize)).to.equal(7);
   });
 
-  it("pre-shuffles in the lobby and deals right after start", async function () {
+  it("reveals the starter in the lobby and opens play in the join that fills a ready table", async function () {
     const table = await deployTable(ethers, ethers.ZeroAddress);
-    await (await table.createTable(config)).wait();
+    await (await table.connect(s[3]!).createTable(config)).wait();
     const id = await table.tableCount();
     for (let step = 0; step < 70; step++) await (await table.setupStep(id, { gasLimit: 16_700_000 })).wait();
     await expect(table.setupStep(id)).to.be.revertedWithCustomError(table, "ShuffleNotDone");
-    expect(Number((await table.getTable(id)).stage)).to.equal(0);
+    while (Number((await table.getTable(id)).topCard) === 255) {
+      const { checkSignaturesArgs } = await starter(table, id);
+      await (await table.setStarter(id, checkSignaturesArgs.abiEncodedCleartexts, checkSignaturesArgs.decryptionProof)).wait();
+    }
+    let t = await table.getTable(id);
+    expect(Number(t.stage)).to.equal(0);
+    await expect(table.setStarter(id, "0x", "0x")).to.be.revertedWithCustomError(table, "BadCard");
     await (await table.join(id, s[0]!.address)).wait();
-    await (await table.connect(s[1]!).join(id, s[1]!.address)).wait();
-    await (await table.start(id)).wait();
-    const t = await table.getTable(id);
-    expect(Number(t.stage)).to.equal(2);
-    expect(Number(t.setupStep)).to.equal(70);
-    await (await table.dealSeat(id, 0)).wait();
-    await (await table.dealSeat(id, 1)).wait();
-    const { checkSignaturesArgs } = await starter(table, id);
-    await (await table.setStarter(id, checkSignaturesArgs.abiEncodedCleartexts, checkSignaturesArgs.decryptionProof)).wait();
-    expect(Number((await table.getTable(id)).stage)).to.be.oneOf([2, 3]);
+    await (await table.connect(s[0]!).leave(id)).wait();
+    await (await table.join(id, s[0]!.address)).wait();
+    await expect(table.connect(s[1]!).join(id, s[1]!.address)).to.emit(table, "Dealt");
+    t = await table.getTable(id);
+    expect([Number(t.stage), Number(t.deckPtr), Number(t.turn)]).to.deep.equal([3, 14, 0]);
+    expect(Number(t.deckEnd)).to.equal(138 - (await table.discardOf(id)).length);
+    const hand = await table.handOf(id, 1);
+    expect(await fhevm.helpers.decryptUint8({ euint8: hex(hand[0]!), contractAddress: await table.getAddress(), userAddress: s[1]!.address })).to.be.a("number");
   });
+
   it("hands an abandoned seat and its sealed cards to the takeover bot", async function () {
     const takeover = s[9]!;
     const { table, id } = await ready([s[0]!, s[1]!], takeover.address);

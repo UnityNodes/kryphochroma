@@ -1,4 +1,4 @@
-import { kryphoTableAbi } from "@kryphochroma/abi";
+import { JOIN_GAS_LIMIT, kryphoTableAbi } from "@kryphochroma/abi";
 import { ZamaSDK } from "@zama-fhe/sdk";
 import { sepolia as zamaSepolia } from "@zama-fhe/sdk/chains";
 import { node } from "@zama-fhe/sdk/node";
@@ -11,7 +11,7 @@ import { type KeeperAction, type PlannedAction, type TableView, nextKeeperAction
 import { type GasBudget, belowAlert, canSpend, rollBudget, spend, stopRequested } from "./safety.js";
 
 const SETUP_GAS = 16_000_000n;
-const DEAL_GAS = 8_000_000n;
+const DEAL_GAS = JOIN_GAS_LIMIT;
 const URGENT_PIPELINE = 4;
 const BACKGROUND_PIPELINE = 8;
 const ALERT_EVERY_MS = 600_000;
@@ -97,31 +97,26 @@ export async function runKeeper(config: KeeperConfig, env: NodeJS.ProcessEnv, un
     log({ event: functionName, id, sent: count, remaining: remaining - count });
   }
 
-  async function pipelineDeals(id: bigint, seats: readonly number[]): Promise<void> {
-    const hashes: Hex[] = [];
-    for (const seat of seats) {
-      const request = { address, abi: kryphoTableAbi, functionName: "dealSeat", args: [id, seat], account, chain: sepolia, gas: DEAL_GAS } as never;
-      hashes.push(await walletClient.writeContract(request));
-    }
-    for (const hash of hashes) {
-      const receipt = await publicClient.waitForTransactionReceipt({ hash });
-      minBlock = receipt.blockNumber > minBlock ? receipt.blockNumber : minBlock;
-      budget = spend(budget, receipt.gasUsed);
-    }
-    log({ event: "deal", id, seats });
-  }
-
   async function revealAndSend(functionName: string, id: bigint, handles: readonly Hex[]): Promise<void> {
     const result = await sdk.decryption.decryptPublicValues([...handles]);
     await send(functionName, [id, result.abiEncodedClearValues, result.decryptionProof]);
+  }
+
+  /** Dealing and the starter reveal are independent, so the KMS round trip runs while the deal transaction is mined. */
+  async function dealAndReveal(id: bigint, reveal: boolean): Promise<void> {
+    const starter = reveal ? sdk.decryption.decryptPublicValues([...((await read("starterHandles", [id])) as Hex[])]) : null;
+    await send("deal", [id], DEAL_GAS);
+    if (!starter) return;
+    const result = await starter;
+    await send("setStarter", [id, result.abiEncodedClearValues, result.decryptionProof]);
   }
 
   async function act(id: bigint, action: KeeperAction): Promise<void> {
     switch (action.kind) {
       case "setupStep":
         return pipelineSetup(id, action.remaining);
-      case "dealSeat":
-        return pipelineDeals(id, action.seats);
+      case "deal":
+        return dealAndReveal(id, action.reveal);
       case "revealStarter":
         return revealAndSend("setStarter", id, (await read("starterHandles", [id])) as Hex[]);
       case "resolveChallenge":

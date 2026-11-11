@@ -18,7 +18,6 @@ contract KryphoTable is IKryphoTable, ZamaEthereumConfig {
     uint8 internal constant NONE = type(uint8).max;
     uint8 internal constant MAX_TIMEOUTS = 3;
     uint8 internal constant REFILL_AT = 48;
-    uint256 internal constant STARTER_BATCH = 1;
     uint32 internal constant MIN_TURN_TIMEOUT = 30;
     uint32 internal constant MAX_TURN_TIMEOUT = 1 days;
     uint8 internal constant MIN_REFILL = 16;
@@ -150,6 +149,8 @@ contract KryphoTable is IKryphoTable, ZamaEthereumConfig {
         Table storage t = _tables[id];
         t.creator = msg.sender;
         t.config = config;
+        _resetRound(id, t);
+        t.stage = Stage.Lobby;
         emit TableCreated(id, msg.sender, config);
     }
 
@@ -164,6 +165,7 @@ contract KryphoTable is IKryphoTable, ZamaEthereumConfig {
         if (session == address(0) || session == TAKEOVER) revert BadSession();
         if (t.joined >= t.config.seats) revert TableFull();
         KryphoLobby.join(_seats, id, t.joined++, msg.sender, session);
+        if (t.joined == t.config.seats) _begin(id, t);
         if (msg.value > 0) {
             (bool ok, ) = session.call{value: msg.value, gas: SESSION_STIPEND}("");
             if (!ok) revert TransferFailed();
@@ -195,10 +197,17 @@ contract KryphoTable is IKryphoTable, ZamaEthereumConfig {
         Table storage t = _requireStage(id, Stage.Lobby);
         if (!KryphoLobby.canStart(_seats, id, t.joined, t.config.seats, msg.sender, t.creator)) revert NotCreator();
         if (t.joined < 2) revert BadConfig();
-        uint16 done = t.setupStep;
-        _resetRound(id, t);
-        t.setupStep = done;
-        if (done == SETUP_STEPS) t.stage = Stage.Dealing;
+        _begin(id, t);
+    }
+
+    /** A lobby keeps its shuffle and its revealed starter, so a ready table deals and opens play in the same transaction that starts it. */
+    function _begin(uint256 id, Table storage t) internal {
+        if (t.setupStep < SETUP_STEPS) {
+            t.stage = Stage.Shuffling;
+            return;
+        }
+        t.stage = Stage.Dealing;
+        _dealAll(id, t);
     }
 
     function setupStep(uint256 id) external {
@@ -214,7 +223,9 @@ contract KryphoTable is IKryphoTable, ZamaEthereumConfig {
         }
         t.setupStep = step + 1;
         emit ShuffleProgress(id, step + 1, SETUP_STEPS);
-        if (step + 1 == SETUP_STEPS && !early) t.stage = Stage.Dealing;
+        if (step + 1 < SETUP_STEPS) return;
+        _exposeStarter(id, t);
+        if (!early) t.stage = Stage.Dealing;
     }
 
     function reshuffleStep(uint256 id) external {
@@ -245,48 +256,56 @@ contract KryphoTable is IKryphoTable, ZamaEthereumConfig {
         if (t.deckPtr >= t.deckEnd) _swapRefill(id, t);
     }
 
-    function dealSeat(uint256 id, uint8 seat) external {
+    function deal(uint256 id) external {
         Table storage t = _requireStage(id, Stage.Dealing);
-        if (seat >= t.joined || t.dealtMask & (uint8(1) << seat) != 0) revert BadSlot();
-        for (uint8 i = 0; i < HAND_START; i++) {
-            _giveCard(id, seat, i, _deck[id][i * t.joined + seat]);
-        }
-        Seat storage s = _seats[id][seat];
-        s.handSize = HAND_START;
-        s.slots = (uint32(1) << HAND_START) - 1;
-        _honest[id][seat] = FHE.asEbool(true);
-        FHE.allowThis(_honest[id][seat]);
-        euint8 secret = FHE.rem(FHE.randEuint8(), SECRET_COLORS);
-        _secret[id][seat] = secret;
-        FHE.allowThis(secret);
-        FHE.allow(secret, s.session);
-        t.dealtMask |= uint8(1) << seat;
-        if (t.dealtMask == (uint8(1) << t.joined) - 1) {
-            t.deckPtr = HAND_START * t.joined;
-            _exposeStarters(id, t);
-        }
+        if (t.dealtMask != 0) revert BadSlot();
+        _dealAll(id, t);
     }
 
+    function _dealAll(uint256 id, Table storage t) internal {
+        uint8 n = t.joined;
+        for (uint8 seat = 0; seat < n; seat++) {
+            for (uint8 i = 0; i < HAND_START; i++) {
+                _giveCard(id, seat, i, _deck[id][i * n + seat]);
+            }
+            Seat storage s = _seats[id][seat];
+            s.handSize = HAND_START;
+            s.slots = (uint32(1) << HAND_START) - 1;
+            _honest[id][seat] = FHE.asEbool(true);
+            FHE.allowThis(_honest[id][seat]);
+            euint8 secret = FHE.rem(FHE.randEuint8(), SECRET_COLORS);
+            _secret[id][seat] = secret;
+            FHE.allowThis(secret);
+            FHE.allow(secret, s.session);
+        }
+        t.dealtMask = uint8((uint256(1) << n) - 1);
+        t.deckPtr = HAND_START * n;
+        _tryPlay(id, t);
+    }
+
+    /** The starter is the public top of the discard, so it is revealed from the far end of the deck while the table still waits in the lobby; hands are dealt from the front and never touch it. */
     function setStarter(uint256 id, bytes calldata cleartexts, bytes calldata proof) external {
-        Table storage t = _requireStage(id, Stage.Dealing);
-        if (t.dealtMask != (uint8(1) << t.joined) - 1) revert NotDealt();
+        Table storage t = _tables[id];
+        bool lobby = t.stage == Stage.Lobby && t.setupStep == SETUP_STEPS;
+        if (!lobby && t.stage != Stage.Dealing) revert WrongStage(Stage.Dealing, t.stage);
+        if (t.topCard != NONE) revert BadCard();
         bytes32[] memory handles = _starterHandles(id, t);
         FHE.checkSignatures(handles, cleartexts, proof);
-        for (uint256 k = 0; k < handles.length; k++) {
-            uint8 card = uint8(uint256(bytes32(cleartexts[k * 32:(k + 1) * 32])));
-            t.deckPtr++;
-            _discard[id].push(card);
-            if (card.isNumber()) {
-                t.topCard = card;
-                t.color = card.colorOf();
-                t.stage = Stage.Playing;
-                t.turn = uint8(t.round % t.joined);
-                _refreshDeadline(t);
-                emit Dealt(id, t.round, t.turn, card);
-                return;
-            }
-        }
-        _exposeStarters(id, t);
+        uint8 card = uint8(uint256(bytes32(cleartexts[0:32])));
+        t.deckEnd--;
+        _discard[id].push(card);
+        if (!card.isNumber()) return _exposeStarter(id, t);
+        t.topCard = card;
+        t.color = card.colorOf();
+        _tryPlay(id, t);
+    }
+
+    function _tryPlay(uint256 id, Table storage t) internal {
+        if (t.stage != Stage.Dealing || t.topCard == NONE || t.dealtMask == 0) return;
+        t.stage = Stage.Playing;
+        t.turn = uint8(t.round % t.joined);
+        _refreshDeadline(t);
+        emit Dealt(id, t.round, t.turn, t.topCard);
     }
 
     function starterHandles(uint256 id) external view returns (bytes32[] memory) {
@@ -294,16 +313,12 @@ contract KryphoTable is IKryphoTable, ZamaEthereumConfig {
     }
 
     function _starterHandles(uint256 id, Table storage t) internal view returns (bytes32[] memory handles) {
-        uint256 left = KryphoDeck.DECK_SIZE - t.deckPtr;
-        uint256 n = left < STARTER_BATCH ? left : STARTER_BATCH;
-        handles = new bytes32[](n);
-        for (uint256 k = 0; k < n; k++) handles[k] = FHE.toBytes32(_deck[id][t.deckPtr + k]);
+        handles = new bytes32[](1);
+        handles[0] = FHE.toBytes32(_deck[id][t.deckEnd - 1]);
     }
 
-    function _exposeStarters(uint256 id, Table storage t) internal {
-        for (uint256 k = 0; k < STARTER_BATCH && t.deckPtr + k < KryphoDeck.DECK_SIZE; k++) {
-            FHE.makePubliclyDecryptable(_deck[id][t.deckPtr + k]);
-        }
+    function _exposeStarter(uint256 id, Table storage t) internal {
+        FHE.makePubliclyDecryptable(_deck[id][t.deckEnd - 1]);
     }
 
     function play(uint256 id, uint8 slot, uint8 card, uint8 chosenColor, bytes32 seenHandle) public {
@@ -785,6 +800,7 @@ contract KryphoTable is IKryphoTable, ZamaEthereumConfig {
         t.discardBase = 0;
         t.dir = 1;
         t.drawnSlot = NONE;
+        t.topCard = NONE;
         t.pendingDraw = 0;
         t.monoWindow = NONE;
         t.drawFourBy = NONE;

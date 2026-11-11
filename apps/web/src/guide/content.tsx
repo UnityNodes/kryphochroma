@@ -480,8 +480,8 @@ browser <── user decrypt of own cards ── Zama relayer and KMS`}</Code>
     ],
     body: () => (
       <>
-        <H2 id="slow">Why does my hand take a minute?</H2>
-        <P>Dealing, revealing the first card and the first decryption each wait for Sepolia blocks and the Zama coprocessor. After that, moves reach every player in under a second.</P>
+        <H2 id="slow">How long until my first move?</H2>
+        <P>The server shuffles tables ahead of time and reveals their first discard while they wait in the lobby. The join that fills the last seat deals every hand and opens play in one Sepolia block. Your browser then decrypts your hand in a few seconds. After that, moves reach every player in under a second.</P>
         <H2 id="cheat">Can someone cheat by naming a card they do not hold?</H2>
         <P>They can try. Every play updates an encrypted honesty bit, and all bits are revealed at the end of the round. A liar can not win and forfeits points. The veil is the only legal bluff, and it can be doubted.</P>
         <H2 id="wallet">Do I need a wallet?</H2>

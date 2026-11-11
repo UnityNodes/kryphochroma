@@ -1,4 +1,4 @@
-import { fillMessage, kryphoTableAbi } from "@kryphochroma/abi";
+import { JOIN_GAS_LIMIT, fillMessage, kryphoTableAbi } from "@kryphochroma/abi";
 import { type Hex, type PrivateKeyAccount, type PublicClient, type WalletClient, createWalletClient, encodeFunctionData, keccak256, parseEventLogs } from "viem";
 import { sepolia } from "viem/chains";
 import { BURNER_GAS_LIMIT, BURNER_GAS_PRICE, TABLE_ADDRESS } from "./config";
@@ -61,9 +61,9 @@ async function landed(publicClient: PublicClient, hash: Hex): Promise<boolean> {
 }
 
 /** The fallback transport may resend a raw transaction to a second node after the first one already took it, so the hash is computed locally and an error only counts if the chain never saw that hash. */
-async function burnerSend(publicClient: PublicClient, burner: PrivateKeyAccount, data: Hex): Promise<Hex> {
+async function burnerSend(publicClient: PublicClient, burner: PrivateKeyAccount, data: Hex, gas = BURNER_GAS_LIMIT): Promise<Hex> {
   const nonce = await publicClient.getTransactionCount({ address: burner.address, blockTag: "pending" });
-  const serializedTransaction = await burner.signTransaction({ chainId: sepolia.id, to: TABLE_ADDRESS, data, nonce, gas: BURNER_GAS_LIMIT, gasPrice: BURNER_GAS_PRICE, type: "legacy" });
+  const serializedTransaction = await burner.signTransaction({ chainId: sepolia.id, to: TABLE_ADDRESS, data, nonce, gas, gasPrice: BURNER_GAS_PRICE, type: "legacy" });
   const hash = keccak256(serializedTransaction);
   try {
     await burnerWallet(burner).sendRawTransaction({ serializedTransaction });
@@ -114,7 +114,7 @@ export async function takeSeat(deps: SeatDeps, id: bigint): Promise<void> {
   const hash =
     funder.kind === "wallet"
       ? await funder.wallet.writeContract({ address: TABLE_ADDRESS, abi: kryphoTableAbi, functionName: "join", args, account: funder.wallet.account ?? funder.address, chain: sepolia, value: (await needsGas(deps)) ? WALLET_CRUMB : 0n })
-      : await sendWhenFunded(() => burnerSend(publicClient, burner, encodeFunctionData({ abi: kryphoTableAbi, functionName: "join", args })));
+      : await sendWhenFunded(() => burnerSend(publicClient, burner, encodeFunctionData({ abi: kryphoTableAbi, functionName: "join", args }), JOIN_GAS_LIMIT));
   const receipt = await confirm(publicClient, hash, "Taking a seat").catch(async (error: Error) => {
     if (await sitsAt(publicClient, id, burner.address)) return null;
     throw error;
@@ -155,7 +155,10 @@ export async function leaveTable(deps: SeatDeps, id: bigint): Promise<{ readonly
   return { settled: confirm(deps.publicClient, hash, "Leaving the table") };
 }
 
+/** Bots that fill the last seat start the table themselves, so a start that comes after them has nothing left to do. */
 export async function startTable(deps: SeatDeps, id: bigint): Promise<void> {
-  const hash = await sendWhenFunded(() => burnerSend(deps.publicClient, deps.burner, encodeFunctionData({ abi: kryphoTableAbi, functionName: "start", args: [id] })));
-  await confirm(deps.publicClient, hash, "Starting the shuffle");
+  const view = (await deps.publicClient.readContract({ address: TABLE_ADDRESS, abi: kryphoTableAbi, functionName: "getTable", args: [id] })) as { stage: number };
+  if (Number(view.stage) !== 0) return;
+  const hash = await sendWhenFunded(() => burnerSend(deps.publicClient, deps.burner, encodeFunctionData({ abi: kryphoTableAbi, functionName: "start", args: [id] }), JOIN_GAS_LIMIT));
+  await confirm(deps.publicClient, hash, "Starting the game");
 }

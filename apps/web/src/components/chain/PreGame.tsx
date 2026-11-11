@@ -1,7 +1,7 @@
 "use client";
 
 import { DECK_SIZE, SETUP_STEPS } from "@kryphochroma/abi";
-import { Armchair, Bot, Eye, House, Link2, LogOut, Play, Shuffle, Users } from "lucide-react";
+import { Armchair, Bot, Eye, House, Link2, Loader2, LogOut, Play, Shuffle, Users } from "lucide-react";
 import Link from "next/link";
 import { toast } from "sonner";
 import type { ChainSnapshot } from "@/chain/useChainGame";
@@ -22,6 +22,7 @@ export interface PreGameProps {
   readonly onJoin: () => void;
   readonly onLeave: () => void;
   readonly working: boolean;
+  readonly joining: boolean;
 }
 
 async function copyInvite(id: string): Promise<void> {
@@ -34,12 +35,13 @@ async function copyInvite(id: string): Promise<void> {
   }
 }
 
-export function PreGame({ id, snapshot, address, watching, onFill, onStart, onJoin, onLeave, working }: PreGameProps) {
+export function PreGame({ id, snapshot, address, watching, onFill, onStart, onJoin, onLeave, working, joining }: PreGameProps) {
   const { table, seats } = snapshot;
   const profiles = useProfiles(seats.map((s) => s.session));
   const myProfile = useMyProfile();
   const free = (table.config.seats ?? seats.length) - seats.length;
-  const canJoin = !watching && snapshot.me < 0 && free > 0;
+  const pending = !watching && joining && snapshot.me < 0;
+  const canJoin = !watching && snapshot.me < 0 && free > 0 && !pending;
   const stage = Number(table.stage);
   const creator = table.creator.toLowerCase();
   const creatorSeat = seats.findIndex((s) => s.player.toLowerCase() === creator || s.session.toLowerCase() === creator);
@@ -80,8 +82,19 @@ export function PreGame({ id, snapshot, address, watching, onFill, onStart, onJo
                     </li>
                   );
                 })}
+                {pending && (
+                  <li className="flex items-center gap-2" aria-live="polite">
+                    <span className="kc-avatar size-8 text-sm" style={{ "--c": avatarColor(myProfile.profile?.avatar, "var(--y)") } as React.CSSProperties} aria-hidden>
+                      <AvatarGlyph avatar={myProfile.profile?.avatar} letter={String(seats.length + 1)} />
+                    </span>
+                    <span>
+                      Seat {seats.length + 1}: <b className="text-cream">{myProfile.profile?.name ?? "You"}</b> (you) · sitting down on Sepolia
+                      <Loader2 className="ml-1 inline size-4 animate-spin" aria-hidden />
+                    </span>
+                  </li>
+                )}
               </ol>
-              {snapshot.me >= 0 && <ProfileChip profile={myProfile.profile} onSave={myProfile.update} />}
+              {(snapshot.me >= 0 || pending) && <ProfileChip profile={myProfile.profile} onSave={myProfile.update} />}
               {canJoin && <WalletBar disabled={working} />}
               <div className="flex flex-wrap justify-center gap-3">
                 {canJoin && (
@@ -103,8 +116,7 @@ export function PreGame({ id, snapshot, address, watching, onFill, onStart, onJo
                   </button>
                 )}
               </div>
-              {free === 0 && seated && <p className="text-sm">The table is full. Anyone at it can start, the host is not needed.</p>}
-              {free > 0 && <p className="text-sm">Share the invite link: friends sit down as guests or with a wallet. {isCreator ? "Start when everyone is in, or fill the empty seats with bots." : "The host starts the game."}</p>}
+              {free > 0 && <p className="text-sm">Share the invite link: friends sit down as guests or with a wallet. The game starts by itself when the last seat is taken{isCreator ? ", or start earlier and fill the empty seats with bots." : "."}</p>}
               <div className="flex flex-wrap justify-center gap-3 text-sm">
                 {seated && (
                   <button type="button" className="kc-chip" onClick={onLeave} disabled={working}>

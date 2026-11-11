@@ -1,4 +1,4 @@
-import { DECK_SIZE, FILL_CHUNK, MIN_REFILL, NO_SEAT, REFILL_AT, SETUP_STEPS, SHUFFLE_STEPS, STAGE } from "@kryphochroma/abi";
+import { DECK_SIZE, FILL_CHUNK, MIN_REFILL, NO_CARD, NO_SEAT, REFILL_AT, SETUP_STEPS, SHUFFLE_STEPS, STAGE } from "@kryphochroma/abi";
 
 export interface TableView {
   readonly stage: number;
@@ -9,6 +9,7 @@ export interface TableView {
   readonly candidate: number;
   readonly revealPrepared: number;
   readonly creator?: string;
+  readonly topCard?: number;
   readonly deckPtr?: number;
   readonly deckEnd?: number;
   readonly refillSize?: number;
@@ -18,7 +19,7 @@ export interface TableView {
 
 export type KeeperAction =
   | { readonly kind: "setupStep"; readonly remaining: number }
-  | { readonly kind: "dealSeat"; readonly seat: number; readonly seats: readonly number[] }
+  | { readonly kind: "deal"; readonly reveal: boolean }
   | { readonly kind: "revealStarter" }
   | { readonly kind: "resolveChallenge" }
   | { readonly kind: "prepareReveal" }
@@ -44,21 +45,21 @@ function refillAction(table: TableView): KeeperAction {
 }
 
 const stageName = (stage: number): string => STAGE[stage] ?? "Unknown";
+const needsStarter = (table: TableView): boolean => Number(table.topCard ?? NO_CARD) === NO_CARD;
 
 export function nextKeeperAction(table: TableView, nowSeconds: bigint, poolOwner?: string): KeeperAction {
   switch (stageName(table.stage)) {
     case "Lobby":
+      if (table.setupStep === SETUP_STEPS && needsStarter(table)) return { kind: "revealStarter" };
       if (poolOwner && table.setupStep < SETUP_STEPS && (table.creator?.toLowerCase() === poolOwner.toLowerCase() || table.joined >= 1)) {
         return { kind: "setupStep", remaining: SETUP_STEPS - table.setupStep };
       }
       return { kind: "idle" };
     case "Shuffling":
       return { kind: "setupStep", remaining: SETUP_STEPS - table.setupStep };
-    case "Dealing": {
-      const undealt = Array.from({ length: table.joined }, (_, seat) => seat).filter((seat) => (table.dealtMask & (1 << seat)) === 0);
-      if (undealt.length > 0) return { kind: "dealSeat", seat: undealt[0] ?? 0, seats: undealt };
-      return { kind: "revealStarter" };
-    }
+    case "Dealing":
+      if (table.dealtMask === 0) return { kind: "deal", reveal: needsStarter(table) };
+      return needsStarter(table) ? { kind: "revealStarter" } : { kind: "idle" };
     case "AwaitChallenge":
       return { kind: "resolveChallenge" };
     case "Revealing":

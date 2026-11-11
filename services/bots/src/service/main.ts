@@ -1,6 +1,6 @@
 import { createServer, type IncomingMessage, type ServerResponse } from "node:http";
 import { readFileSync, writeFileSync } from "node:fs";
-import { BOT_PROFILES, type Profile, STAND_IN_PROFILE, fillMessage, kryphoTableAbi, profileMessage, validProfile } from "@kryphochroma/abi";
+import { BOT_PROFILES, NO_CARD, type Profile, STAND_IN_PROFILE, fillMessage, kryphoTableAbi, profileMessage, validProfile } from "@kryphochroma/abi";
 import { parseSignedAction, parseTableId } from "./parse.js";
 import { type Hex, createPublicClient, createWalletClient, nonceManager, parseEther, parseEventLogs, recoverMessageAddress } from "viem";
 import { rpcTransport } from "../rpc.js";
@@ -101,6 +101,7 @@ interface LobbyView {
   stage: number;
   joined: number;
   setupStep: number;
+  topCard: number;
   creator: string;
   config: { seats: number };
 }
@@ -179,16 +180,6 @@ async function openTables(): Promise<typeof openCache.tables> {
   return openCache.tables;
 }
 
-async function startPoolTable(id: bigint): Promise<void> {
-  await withKeeperWallet(async () => {
-    const view = await readLobby(id);
-    if (Number(view.stage) !== 0 || Number(view.joined) !== Number(view.config.seats)) return;
-    const hash = await keeperWallet.writeContract({ address: table, abi: kryphoTableAbi, functionName: "start", args: [id], gas: 1_000_000n });
-    await publicClient.waitForTransactionReceipt({ hash });
-    log({ event: "pool-start", id, hash });
-  });
-}
-
 async function createPoolTable(seats: number): Promise<void> {
   const created = await withKeeperWallet(async () => {
     const hash = await keeperWallet.writeContract({
@@ -209,7 +200,6 @@ async function ensurePool(): Promise<void> {
   poolCreating = true;
   try {
     const plan = planPool(await poolView(), MAX_POOL_TABLES);
-    for (const id of plan.start) await startPoolTable(id).catch((e: Error) => log({ event: "pool-start-failed", id, message: e.message.slice(0, 200) }));
     for (const seats of plan.create) await createPoolTable(seats);
   } finally {
     poolCreating = false;
@@ -217,7 +207,7 @@ async function ensurePool(): Promise<void> {
 }
 
 async function poolView(): Promise<PoolTable[]> {
-  return (await poolTables()).map((p) => ({ id: p.id, seats: Number(p.view.config.seats), joined: Number(p.view.joined), reserved: isReserved(p.id), setupStep: Number(p.view.setupStep) }));
+  return (await poolTables()).map((p) => ({ id: p.id, seats: Number(p.view.config.seats), joined: Number(p.view.joined), reserved: isReserved(p.id), setupStep: Number(p.view.setupStep), starter: Number(p.view.topCard) !== NO_CARD }));
 }
 
 async function reserveReady(seats: number): Promise<{ id?: string; warming?: number }> {
@@ -279,8 +269,6 @@ async function fill(id: bigint, signature: Hex): Promise<{ joined: number } | { 
   const free = Number(view.stage) === 0 ? Math.min(Number(view.config.seats) - Number(view.joined), bots.length - seatedBots) : 0;
   const joined = free > 0 ? await seatBots(id, free) : 0;
   log({ event: "fill", id, joined });
-  const after = await readLobby(id);
-  if (Number(after.stage) === 0 && Number(after.joined) === Number(after.config.seats) && after.creator.toLowerCase() === keeper.address.toLowerCase()) await startPoolTable(id);
   return { joined };
 }
 

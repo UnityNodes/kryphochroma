@@ -5,11 +5,13 @@ import { Bot, Check, Loader2, Users, Zap } from "lucide-react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
+import { toast } from "sonner";
 import { createPublicClient } from "viem";
 import { sepolia } from "viem/chains";
 import { loadBurner } from "@/chain/burner";
 import { friendlyError } from "@/chain/errors";
 import { RECEIPT_POLL_MS, sepoliaTransport } from "@/chain/rpc";
+import { trackSeat } from "@/chain/inflight";
 import { type SeatDeps, fundBurner, openTable, requestBots, serviceDrip as drip, startTable, takeSeat } from "@/chain/seat";
 import { ProfileChip } from "@/components/profile/ProfileChip";
 import { useMyProfile } from "@/components/profile/useMyProfile";
@@ -90,46 +92,56 @@ export function NewTable() {
     }
   }
 
+  /** A reserved pool table is already shuffled, so the lobby opens at once and the seat, the bots and the start follow in the background. */
+  function seatInBackground(d: SeatDeps, id: bigint, after?: () => Promise<void>) {
+    const seating = (async () => {
+      await fundBurner(d);
+      await takeSeat(d, id);
+    })();
+    trackSeat(id.toString(), seating)
+      .then(async () => after?.())
+      .catch((e: unknown) => toast.error(friendlyError(e)));
+    router.push(tablePath(id));
+  }
+
+  async function reserve(path: string, body?: unknown): Promise<bigint | null> {
+    const res = await fetch(path, { method: "POST", body: body === undefined ? undefined : JSON.stringify(body) });
+    const pool = (await res.json().catch(() => ({}))) as { id?: string; warming?: number };
+    if (pool.id) return BigInt(pool.id);
+    setWarming(pool.warming ?? 0);
+    return null;
+  }
+
   const quick = () =>
     run("quick", async () => {
-      const pool = (await (await fetch("/api/quick", { method: "POST" })).json()) as { id?: string; warming?: number };
-      if (!pool.id) {
-        setWarming(pool.warming ?? 0);
-        return;
-      }
       const d = deps();
-      const id = BigInt(pool.id);
       setDone(0);
-      if (d.funder.kind === "guest") await fundBurner(d);
-      setDone(1);
-      await takeSeat(d, id);
-      setDone(2);
-      await requestBots(d.burner, id).catch(() => undefined);
+      const id = await reserve("/api/quick");
+      if (id === null) return;
       setDone(3);
-      router.push(tablePath(pool.id));
+      seatInBackground(d, id, () => requestBots(d.burner, id));
     });
 
-  async function seatAtTable(d: SeatDeps): Promise<{ id: bigint; ready: boolean }> {
-    if (!stack) {
-      const ready = (await (await fetch("/api/friends", { method: "POST", body: JSON.stringify({ seats }) })).json().catch(() => ({}))) as { id?: string };
-      if (ready.id) {
-        await takeSeat(d, BigInt(ready.id));
-        return { id: BigInt(ready.id), ready: true };
-      }
-    }
+  async function openOwnTable(d: SeatDeps): Promise<bigint> {
+    await fundBurner(d);
+    setDone(1);
     const guest = d.funder.kind === "guest";
     const id = await openTable(d, { seats, turnTimeout: TURN_TIMEOUT_S, stackDrawTwo: stack }, guest);
     if (!guest) await takeSeat(d, id);
-    return { id, ready: false };
+    return id;
   }
 
   const friends = () =>
     run("friends", async () => {
       const d = deps();
       setDone(0);
-      await fundBurner(d);
-      setDone(1);
-      const { id } = await seatAtTable(d);
+      const ready = stack ? null : await reserve("/api/friends", { seats });
+      if (ready !== null) {
+        setDone(4);
+        return seatInBackground(d, ready);
+      }
+      setWarming(null);
+      const id = await openOwnTable(d);
       setDone(4);
       router.push(tablePath(id));
     });
@@ -138,13 +150,20 @@ export function NewTable() {
     run("bots", async () => {
       const d = deps();
       setDone(0);
-      await fundBurner(d);
-      setDone(1);
-      const { id, ready } = await seatAtTable(d);
+      const ready = stack ? null : await reserve("/api/friends", { seats });
+      if (ready !== null) {
+        setDone(5);
+        return seatInBackground(d, ready, async () => {
+          await requestBots(d.burner, ready);
+          await startTable(d, ready);
+        });
+      }
+      setWarming(null);
+      const id = await openOwnTable(d);
       setDone(3);
       await requestBots(d.burner, id);
       setDone(4);
-      if (!ready) await startTable(d, id);
+      await startTable(d, id);
       setDone(5);
       router.push(tablePath(id));
     });

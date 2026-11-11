@@ -142,11 +142,6 @@ export const kryphoTableAbi = [
   },
   {
     "inputs": [],
-    "name": "NotDealt",
-    "type": "error"
-  },
-  {
-    "inputs": [],
     "name": "NotSeated",
     "type": "error"
   },
@@ -1075,14 +1070,9 @@ export const kryphoTableAbi = [
         "internalType": "uint256",
         "name": "id",
         "type": "uint256"
-      },
-      {
-        "internalType": "uint8",
-        "name": "seat",
-        "type": "uint8"
       }
     ],
-    "name": "dealSeat",
+    "name": "deal",
     "outputs": [],
     "stateMutability": "nonpayable",
     "type": "function"

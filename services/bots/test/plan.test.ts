@@ -8,9 +8,16 @@ describe("keeper plan", () => {
     expect(nextKeeperAction({ ...base, stage: 1, setupStep: 12 }, 0n)).toEqual({ kind: "setupStep", remaining: 58 });
   });
 
-  it("deals missing seats, then reveals the starter", () => {
-    expect(nextKeeperAction({ ...base, stage: 2, dealtMask: 0b001 }, 0n)).toEqual({ kind: "dealSeat", seat: 1, seats: [1, 2] });
-    expect(nextKeeperAction({ ...base, stage: 2, dealtMask: 0b111 }, 0n)).toEqual({ kind: "revealStarter" });
+  it("deals every seat at once, reveals the starter alongside when it is still hidden", () => {
+    expect(nextKeeperAction({ ...base, stage: 2, topCard: 255 }, 0n)).toEqual({ kind: "deal", reveal: true });
+    expect(nextKeeperAction({ ...base, stage: 2, topCard: 17 }, 0n)).toEqual({ kind: "deal", reveal: false });
+    expect(nextKeeperAction({ ...base, stage: 2, dealtMask: 0b111, topCard: 255 }, 0n)).toEqual({ kind: "revealStarter" });
+    expect(nextKeeperAction({ ...base, stage: 2, dealtMask: 0b111, topCard: 17 }, 0n)).toEqual({ kind: "idle" });
+  });
+
+  it("reveals the starter of a shuffled lobby before anyone asks to start", () => {
+    expect(nextKeeperAction({ ...base, stage: 0, setupStep: 70, topCard: 255 }, 0n)).toEqual({ kind: "revealStarter" });
+    expect(nextKeeperAction({ ...base, stage: 0, setupStep: 70, topCard: 17 }, 0n)).toEqual({ kind: "idle" });
   });
 
   it("resolves challenges and reveals", () => {
@@ -47,7 +54,7 @@ describe("keeper plan", () => {
   it("pre-shuffles pool tables and lobbies someone already sits at, so a friends table is ready when it starts", () => {
     const pool = "0xAbc";
     expect(nextKeeperAction({ ...base, stage: 0, setupStep: 10, joined: 0, creator: "0xabc" }, 0n, pool)).toEqual({ kind: "setupStep", remaining: 60 });
-    expect(nextKeeperAction({ ...base, stage: 0, setupStep: 70, creator: "0xabc" }, 0n, pool)).toEqual({ kind: "idle" });
+    expect(nextKeeperAction({ ...base, stage: 0, setupStep: 70, topCard: 17, creator: "0xabc" }, 0n, pool)).toEqual({ kind: "idle" });
     expect(nextKeeperAction({ ...base, stage: 0, setupStep: 10, joined: 1, creator: "0xdef" }, 0n, pool)).toEqual({ kind: "setupStep", remaining: 60 });
     expect(nextKeeperAction({ ...base, stage: 0, setupStep: 10, joined: 0, creator: "0xdef" }, 0n, pool)).toEqual({ kind: "idle" });
     expect(nextKeeperAction({ ...base, stage: 0, setupStep: 10, joined: 1, creator: "0xdef" }, 0n)).toEqual({ kind: "idle" });

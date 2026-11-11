@@ -82,9 +82,8 @@ async function openTable(table: Awaited<ReturnType<typeof deployTable>>, players
   await (await table.connect(creator).createTable({ seats: players.length, turnTimeout: 90, targetScore: 500, singleRound: true, stackDrawTwo: stack })).wait();
   const id = await table.tableCount();
   for (const p of players) await (await table.connect(p).join(id, p.address)).wait();
-  await (await table.connect(creator).start(id)).wait();
   for (let step = 0; step < SETUP_STEPS; step++) await (await table.setupStep(id, { gasLimit: 16_700_000 })).wait();
-  for (let seat = 0; seat < players.length; seat++) await (await table.dealSeat(id, seat)).wait();
+  await (await table.deal(id)).wait();
   const deck: number[] = [];
   for (let i = 0; i < DECK_SIZE; i++) deck.push(await fhevm.cleartextDb.readUint8({ euint8: hex(await table.deckCardAt(id, i)) }));
   while (Number((await table.getTable(id)).stage) === 2) {
@@ -104,7 +103,7 @@ async function compare(table: Awaited<ReturnType<typeof deployTable>>, id: bigin
     dir: Number(t.dir),
     topCard: Number(t.topCard),
     color: Number(t.color),
-    deckCount: DECK_SIZE - Number(t.deckPtr),
+    deckCount: Number(t.deckEnd) - Number(t.deckPtr),
     veil: [Number(t.veilBy), Number(t.veilJudge)],
     drawnSlot: Number(t.drawnSlot),
     pendingDraw: Number(t.pendingDraw),

@@ -7,6 +7,7 @@ import { createPublicClient } from "viem";
 import { sepolia } from "viem/chains";
 import { loadBurner } from "@/chain/burner";
 import { friendlyError } from "@/chain/errors";
+import { trackSeat, useSeatInFlight } from "@/chain/inflight";
 import { RECEIPT_POLL_MS, sepoliaTransport } from "@/chain/rpc";
 import { type Funder, type SeatDeps, fundBurner, requestBots, serviceDrip as drip, leaveTable, startTable, takeSeat } from "@/chain/seat";
 import { useChainGame } from "@/chain/useChainGame";
@@ -39,11 +40,19 @@ export function ChainTable({ id, watch }: { readonly id: string; readonly watch?
     setWorking(false);
   };
 
-  const join = () =>
-    withFunder("Could not join", async (deps) => {
-      if (deps.funder.kind === "guest") await fundBurner(deps);
+  const joining = useSeatInFlight(id);
+  const join = () => {
+    if (!funderState.ready) {
+      toast.error(funderState.reason === "wrong-chain" ? "Switch your wallet to Sepolia first" : "Wallet is still connecting");
+      return;
+    }
+    const deps = seatDeps(funderState.funder);
+    const seating = (async () => {
+      await fundBurner(deps);
       await takeSeat(deps, BigInt(id));
-    });
+    })();
+    trackSeat(id, seating).catch((e: unknown) => toast.error(`Could not join: ${friendlyError(e)}`));
+  };
 
   const fill = async () => {
     setWorking(true);
@@ -84,7 +93,7 @@ export function ChainTable({ id, watch }: { readonly id: string; readonly watch?
     );
   }
   if (Number(game.snapshot.table.stage) < 3) {
-    return <PreGame id={id} snapshot={game.snapshot} address={game.address} watching={Boolean(watch)} onFill={fill} onStart={start} onJoin={join} onLeave={leave} working={working} />;
+    return <PreGame id={id} snapshot={game.snapshot} address={game.address} watching={Boolean(watch)} onFill={fill} onStart={start} onJoin={join} onLeave={leave} working={working} joining={joining} />;
   }
   return <TableView controller={game} colorBlind={colorBlind} onToggleShapes={() => setColorBlind((v) => !v)} />;
 }

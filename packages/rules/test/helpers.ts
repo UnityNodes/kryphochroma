@@ -20,17 +20,17 @@ export function config(seats: number, mode: TableConfig["mode"] = "single", stac
   return { seats, mode, targetScore: 500, stackDrawTwo };
 }
 
-export function deckWith(prefix: readonly Card[]): Card[] {
+export function deckWith(prefix: readonly Card[], tops: readonly Card[] = []): Card[] {
   const rest = fullDeck();
-  for (const card of prefix) {
+  for (const card of [...prefix, ...tops]) {
     const i = rest.indexOf(card);
     if (i < 0) throw new Error(`card ${card} exhausted`);
     rest.splice(i, 1);
   }
-  return [...prefix, ...rest];
+  return [...prefix, ...rest, ...[...tops].reverse()];
 }
 
-export function dealPrefix(hands: readonly (readonly Card[])[], top: readonly Card[]): Card[] {
+export function dealPrefix(hands: readonly (readonly Card[])[]): Card[] {
   const prefix: Card[] = [];
   for (let i = 0; i < 7; i++) {
     for (const hand of hands) {
@@ -39,7 +39,7 @@ export function dealPrefix(hands: readonly (readonly Card[])[], top: readonly Ca
       prefix.push(card);
     }
   }
-  return [...prefix, ...top];
+  return prefix;
 }
 
 export function game(
@@ -50,7 +50,7 @@ export function game(
   stackDrawTwo = false,
 ): GameState {
   const tops = Array.isArray(top) ? top : [top as Card];
-  return initialState(config(hands.length, mode, stackDrawTwo), 7, deckWith([...dealPrefix(hands, tops), ...after])).state;
+  return initialState(config(hands.length, mode, stackDrawTwo), 7, deckWith([...dealPrefix(hands), ...after], tops)).state;
 }
 
 export function totalCards(state: GameState): number {

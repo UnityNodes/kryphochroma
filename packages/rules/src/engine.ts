@@ -120,10 +120,10 @@ function deal(base: GameState, deck: readonly Card[]): Transition {
     }
   }
   const skipped: Card[] = [];
-  let top = d.deck.shift() as Card;
+  let top = d.deck.pop() as Card;
   while (!isNumber(top)) {
     skipped.push(top);
-    top = d.deck.shift() as Card;
+    top = d.deck.pop() as Card;
   }
   d.pub.topCard = top;
   d.pub.color = colorOf(top) as Color;

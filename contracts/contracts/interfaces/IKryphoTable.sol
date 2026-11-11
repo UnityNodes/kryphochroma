@@ -73,7 +73,6 @@ interface IKryphoTable {
     error ShuffleNotDone();
     error BadSession();
     error TransferFailed();
-    error NotDealt();
     error CatchTooEarly();
     error RevealNotReady();
     error StaleHand();

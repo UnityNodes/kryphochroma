@@ -1,4 +1,4 @@
-import { kryphoTableAbi, peekField } from "@kryphochroma/abi";
+import { JOIN_GAS_LIMIT, kryphoTableAbi, peekField } from "@kryphochroma/abi";
 import { type Hand, type Move, botCatchTarget, chooseMove } from "@kryphochroma/rules";
 import { ZamaSDK } from "@zama-fhe/sdk";
 import { sepolia as zamaSepolia } from "@zama-fhe/sdk/chains";
@@ -67,7 +67,7 @@ export function createBot(privateKey: Hex, table: Hex, publicClient: PublicClien
     return true;
   }
 
-  async function send(functionName: string, args: readonly unknown[]): Promise<boolean> {
+  async function send(functionName: string, args: readonly unknown[], gas = BOT_GAS_LIMIT): Promise<boolean> {
     const request = { address: table, abi: kryphoTableAbi, functionName, args, account, chain: sepolia } as never;
     try {
       await publicClient.simulateContract({ ...(request as object), blockNumber: snapshot } as never);
@@ -75,7 +75,7 @@ export function createBot(privateKey: Hex, table: Hex, publicClient: PublicClien
       log({ event: "skip", bot: account.address, functionName, reason: (error as Error).message.slice(0, 160) });
       return false;
     }
-    const hash = await walletClient.writeContract({ ...(request as object), gas: BOT_GAS_LIMIT, gasPrice: BOT_GAS_PRICE } as never);
+    const hash = await walletClient.writeContract({ ...(request as object), gas, gasPrice: BOT_GAS_PRICE } as never);
     const receipt = await publicClient.waitForTransactionReceipt({ hash });
     minBlock = receipt.blockNumber;
     log({ event: "tx", bot: account.address, functionName, args, hash, status: receipt.status });
@@ -122,7 +122,7 @@ export function createBot(privateKey: Hex, table: Hex, publicClient: PublicClien
 
   async function join(id: bigint): Promise<boolean> {
     if (!(await pinSnapshot())) return false;
-    return send("join", [id, account.address]);
+    return send("join", [id, account.address], JOIN_GAS_LIMIT);
   }
 
   return { address: account.address, act, join };
