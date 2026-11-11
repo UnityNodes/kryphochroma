@@ -1,14 +1,14 @@
 import { createServer, type IncomingMessage, type ServerResponse } from "node:http";
 import { readFileSync } from "node:fs";
-import { kryphoTableAbi } from "@kryphochroma/abi";
-import { type Hex, createPublicClient, createWalletClient, http, nonceManager, parseEther } from "viem";
+import { fillMessage, kryphoTableAbi } from "@kryphochroma/abi";
+import { type Hex, createPublicClient, createWalletClient, http, nonceManager, parseEther, recoverMessageAddress } from "viem";
 import { privateKeyToAccount } from "viem/accounts";
 import { sepolia } from "viem/chains";
 import { loadKeeperConfig, runKeeper } from "../keeper/run.js";
 import { createBot } from "../player/run.js";
 import { type SignedAction } from "@kryphochroma/abi";
 import { createRelay, encodeMessage } from "../relay/hub.js";
-import { type DripLedger, decideDrip } from "./drip.js";
+import { type DripLedger, decideDrip, releaseDrip } from "./drip.js";
 
 const ACTIVE_STAGES = new Set([3, 4]);
 const WATCH_WINDOW = 20n;
@@ -17,7 +17,12 @@ const BOT_MIN_WEI = parseEther("0.005");
 const BOT_TOPUP_WEI = parseEther("0.02");
 const MAX_BODY_BYTES = 1024;
 const HEALTH_STALE_MS = 90_000;
-const beats = { relay: Date.now(), keeper: Date.now() };
+const beats = { relay: Date.now(), keeper: Date.now(), shuffler: Date.now() };
+const SHUFFLER_MIN_WEI = parseEther("0.004");
+const SHUFFLER_TOPUP_WEI = parseEther("0.006");
+const SHUFFLER_TOPUP_CHECK_MS = 600_000;
+const SHUFFLER_DAILY_TOPUPS = 5;
+const DAY_MS = 86_400_000;
 
 function env(name: string, fallback?: string): string {
   const value = process.env[name] ?? fallback;
@@ -57,6 +62,7 @@ const relay = createRelay({
   botKeys: env("BOT_KEYS").split(",") as Hex[],
   takeoverKey,
   dailyGas: BigInt(env("RELAY_DAILY_GAS", "2000000000")),
+  tableDailyGas: BigInt(env("RELAY_TABLE_DAILY_GAS", "400000000")),
   log,
 });
 
@@ -69,16 +75,18 @@ function withKeeperWallet<T>(task: () => Promise<T>): Promise<T> {
   return run;
 }
 
+async function topUp(address: Hex, min: bigint, amount: bigint, event: string): Promise<void> {
+  const balance = await publicClient.getBalance({ address });
+  if (balance >= min) return;
+  await withKeeperWallet(async () => {
+    const hash = await keeperWallet.sendTransaction({ to: address, value: amount });
+    await publicClient.waitForTransactionReceipt({ hash });
+    log({ event, address, hash });
+  });
+}
+
 async function topUpBots(): Promise<void> {
-  for (const bot of bots) {
-    const balance = await publicClient.getBalance({ address: bot.address });
-    if (balance >= BOT_MIN_WEI) continue;
-    await withKeeperWallet(async () => {
-      const hash = await keeperWallet.sendTransaction({ to: bot.address, value: BOT_TOPUP_WEI });
-      await publicClient.waitForTransactionReceipt({ hash });
-      log({ event: "bot-topup", bot: bot.address, hash });
-    });
-  }
+  for (const bot of bots) await topUp(bot.address, BOT_MIN_WEI, BOT_TOPUP_WEI, "bot-topup");
 }
 
 interface LobbyView {
@@ -92,6 +100,11 @@ interface LobbyView {
 const POOL_SEATS = 4;
 const POOL_TURN_TIMEOUT = 120;
 const RESERVE_MS = 120_000;
+const MAX_POOL_TABLES = 3;
+const TABLE_ID = /^[0-9]{1,12}$/;
+const STREAM_REFRESH_MS = 2000;
+let knownTables = (await publicClient.readContract({ address: table, abi: kryphoTableAbi, functionName: "tableCount" })) as bigint;
+const lastStreamRefresh = new Map<string, number>();
 const reserved = new Map<string, number>();
 const isReserved = (id: bigint): boolean => (reserved.get(id.toString()) ?? 0) > Date.now();
 let poolCreating = false;
@@ -128,6 +141,7 @@ async function ensurePool(): Promise<void> {
     if (Number(p.view.joined) === 0) log({ event: "pool-seated", id: p.id, bots: await seatBots(p.id, Number(p.view.config.seats) - 1) });
   }
   if (free.length > 0) return;
+  if ((await poolTables()).length >= MAX_POOL_TABLES) return;
   poolCreating = true;
   try {
     await withKeeperWallet(async () => {
@@ -164,15 +178,25 @@ async function seatBots(id: bigint, free: number): Promise<number> {
   return results.filter(Boolean).length;
 }
 
-async function fill(id: bigint): Promise<{ joined: number }> {
-  await topUpBots();
+async function seatedSigner(id: bigint, signature: Hex, joined: number): Promise<boolean> {
+  const signer = (await recoverMessageAddress({ message: fillMessage(id), signature })).toLowerCase();
+  for (let seat = 0; seat < joined; seat++) {
+    const s = (await publicClient.readContract({ address: table, abi: kryphoTableAbi, functionName: "getSeat", args: [id, seat] })) as { player: string; session: string };
+    if (s.player.toLowerCase() === signer || s.session.toLowerCase() === signer) return true;
+  }
+  return false;
+}
+
+async function fill(id: bigint, signature: Hex): Promise<{ joined: number } | { error: string }> {
   const view = await readLobby(id);
+  if (!(await seatedSigner(id, signature, Number(view.joined)))) return { error: "only a seated player can call the bots" };
+  await topUpBots();
   const seatedBots = await seatsTakenByBots(id, Number(view.joined));
   const free = Number(view.stage) === 0 ? Math.min(Number(view.config.seats) - Number(view.joined), bots.length - seatedBots) : 0;
   const joined = free > 0 ? await seatBots(id, free) : 0;
   log({ event: "fill", id, joined });
   const after = await readLobby(id);
-  if (Number(after.stage) === 0 && Number(after.joined) >= 2 && after.creator.toLowerCase() === keeper.address.toLowerCase()) {
+  if (Number(after.stage) === 0 && Number(after.joined) === Number(after.config.seats) && after.creator.toLowerCase() === keeper.address.toLowerCase()) {
     await withKeeperWallet(async () => {
       const hash = await keeperWallet.writeContract({ address: table, abi: kryphoTableAbi, functionName: "start", args: [id], gas: 1_000_000n });
       await publicClient.waitForTransactionReceipt({ hash });
@@ -183,25 +207,33 @@ async function fill(id: bigint): Promise<{ joined: number }> {
 }
 
 async function drip(address: string): Promise<{ ok: boolean; reason?: string; hash?: Hex }> {
-  const decision = decideDrip(ledger, address, Date.now(), dripPolicy);
+  const before = ledger;
+  const decision = decideDrip(before, address, Date.now(), dripPolicy);
   if (!decision.ok) return { ok: false, reason: decision.reason };
-  const balance = await publicClient.getBalance({ address: address as Hex });
-  if (balance >= dripWei / 2n) return { ok: true, reason: "funded" };
   ledger = decision.ledger;
-  const hash = await withKeeperWallet(async () => {
-    const tx = await keeperWallet.sendTransaction({ to: address as Hex, value: dripWei });
-    await publicClient.waitForTransactionReceipt({ hash: tx });
-    return tx;
-  });
-  log({ event: "drip", address, hash });
-  return { ok: true, hash };
+  try {
+    const balance = await publicClient.getBalance({ address: address as Hex });
+    if (balance >= dripWei / 2n) return { ok: true, reason: "funded" };
+    const hash = await withKeeperWallet(async () => {
+      const tx = await keeperWallet.sendTransaction({ to: address as Hex, value: dripWei });
+      await publicClient.waitForTransactionReceipt({ hash: tx });
+      return tx;
+    });
+    log({ event: "drip", address, hash });
+    return { ok: true, hash };
+  } catch (error) {
+    ledger = releaseDrip(ledger, address);
+    throw error;
+  }
 }
 
 async function readBody(req: IncomingMessage): Promise<Record<string, unknown>> {
   let body = "";
+  let bytes = 0;
   for await (const chunk of req) {
+    bytes += (chunk as Buffer).length;
+    if (bytes > MAX_BODY_BYTES) throw new Error("body too large");
     body += chunk;
-    if (body.length > MAX_BODY_BYTES) throw new Error("body too large");
   }
   return body ? (JSON.parse(body) as Record<string, unknown>) : {};
 }
@@ -209,6 +241,14 @@ async function readBody(req: IncomingMessage): Promise<Record<string, unknown>> 
 function reply(res: ServerResponse, status: number, data: unknown): void {
   res.writeHead(status, { "content-type": "application/json" });
   res.end(JSON.stringify(data, (_, v) => (typeof v === "bigint" ? v.toString() : v)));
+}
+
+function tableId(raw: unknown): bigint {
+  const text = String(raw ?? "");
+  if (!TABLE_ID.test(text)) throw new Error("bad table");
+  const id = BigInt(text);
+  if (id < 1n || id > knownTables) throw new Error("unknown table");
+  return id;
 }
 
 function parseAction(raw: Record<string, unknown>): SignedAction {
@@ -222,7 +262,7 @@ function parseAction(raw: Record<string, unknown>): SignedAction {
     return v as `0x${string}`;
   };
   return {
-    table: BigInt(String(raw.table ?? "")),
+    table: tableId(raw.table),
     seat: int(raw.seat, 3),
     kind: int(raw.kind, 7),
     slot: int(raw.slot, 23),
@@ -238,7 +278,7 @@ const server = createServer(async (req, res) => {
   try {
     const url = new URL(req.url ?? "/", "http://local");
     if (req.method === "GET" && url.pathname === "/stream") {
-      const id = BigInt(url.searchParams.get("id") ?? "");
+      const id = tableId(url.searchParams.get("id"));
       res.writeHead(200, { "content-type": "text/event-stream", "cache-control": "no-cache", connection: "keep-alive" });
       const unsubscribe = relay.subscribe(id, (message) => res.write(`data: ${encodeMessage(message)}\n\n`));
       const ping = setInterval(() => res.write(": ping\n\n"), 15_000);
@@ -246,20 +286,26 @@ const server = createServer(async (req, res) => {
         clearInterval(ping);
         unsubscribe();
       });
-      void relay.refresh(id).catch(() => undefined);
+      const key = id.toString();
+      if (Date.now() - (lastStreamRefresh.get(key) ?? 0) > STREAM_REFRESH_MS) {
+        lastStreamRefresh.set(key, Date.now());
+        void relay.refresh(id).catch(() => undefined);
+      }
       return;
     }
     if (req.method === "GET" && url.pathname === "/health") {
       const now = Date.now();
-      const ages = { relayMs: now - beats.relay, keeperMs: now - beats.keeper };
-      const healthy = ages.relayMs < HEALTH_STALE_MS && ages.keeperMs < HEALTH_STALE_MS;
+      const ages = { relayMs: now - beats.relay, keeperMs: now - beats.keeper, shufflerMs: Number.isFinite(beats.shuffler) ? now - beats.shuffler : null };
+      const healthy = ages.relayMs < HEALTH_STALE_MS && ages.keeperMs < HEALTH_STALE_MS && (ages.shufflerMs === null || ages.shufflerMs < HEALTH_STALE_MS);
       return reply(res, healthy ? 200 : 503, { ok: healthy, table, ...ages });
     }
     if (req.method !== "POST") return reply(res, 405, { error: "method" });
     const body = await readBody(req);
     if (url.pathname === "/fill") {
-      const id = BigInt(String(body.id ?? ""));
-      return reply(res, 200, await fill(id));
+      const signature = String(body.signature ?? "");
+      if (!/^0x[0-9a-fA-F]{130}$/.test(signature)) return reply(res, 400, { error: "bad signature" });
+      const result = await fill(tableId(body.id), signature as Hex);
+      return reply(res, "error" in result ? 403 : 200, result);
     }
     if (url.pathname === "/drip") return reply(res, 200, await drip(String(body.address ?? "")));
     if (url.pathname === "/quick") return reply(res, 200, await quick());
@@ -280,9 +326,13 @@ async function relayLoop(): Promise<void> {
     try {
       const block = await publicClient.getBlockNumber({ cacheTime: 0 });
       const count = (await publicClient.readContract({ address: table, abi: kryphoTableAbi, functionName: "tableCount" })) as bigint;
+      knownTables = count;
       for (let id = count > WATCH_WINDOW ? count - WATCH_WINDOW + 1n : 1n; id <= count; id++) {
         const view = (await publicClient.readContract({ address: table, abi: kryphoTableAbi, functionName: "getTable", args: [id] })) as { stage: number };
-        if (!ACTIVE_STAGES.has(Number(view.stage))) continue;
+        if (!ACTIVE_STAGES.has(Number(view.stage))) {
+          relay.forget(id);
+          continue;
+        }
         if (block !== lastBlock) await relay.refresh(id);
         await relay.submit(id);
       }
@@ -298,7 +348,28 @@ async function relayLoop(): Promise<void> {
 
 server.listen(Number(env("BOTS_PORT", "3320")), "127.0.0.1", () => log({ event: "listening", table }));
 void relayLoop();
-await runKeeper({ ...loadKeeperConfig({ ...process.env, TABLE_ADDRESS: table }) }, process.env, async () => {
-  beats.keeper = Date.now();
+const keeperConfig = loadKeeperConfig({ ...process.env, TABLE_ADDRESS: table });
+const shufflerKey = process.env.SHUFFLER_PRIVATE_KEY as Hex | undefined;
+const beat = (lane: "keeper" | "shuffler") => async () => {
+  beats[lane] = Date.now();
   return false;
-});
+};
+if (shufflerKey) {
+  const shuffler = privateKeyToAccount(shufflerKey);
+  let topUps = { day: Math.floor(Date.now() / DAY_MS), count: 0 };
+  const fundShuffler = async () => {
+    const day = Math.floor(Date.now() / DAY_MS);
+    if (day !== topUps.day) topUps = { day, count: 0 };
+    if (topUps.count >= SHUFFLER_DAILY_TOPUPS) return log({ event: "shuffler-topup-capped" });
+    const before = await publicClient.getBalance({ address: shuffler.address });
+    await topUp(shuffler.address, SHUFFLER_MIN_WEI, SHUFFLER_TOPUP_WEI, "shuffler-topup").catch((error: unknown) => log({ event: "shuffler-topup-failed", message: (error as Error).message.split("\n")[0] }));
+    if (before < SHUFFLER_MIN_WEI) topUps = { ...topUps, count: topUps.count + 1 };
+  };
+  await fundShuffler();
+  setInterval(() => void fundShuffler(), SHUFFLER_TOPUP_CHECK_MS);
+  void runKeeper({ ...keeperConfig, privateKey: shufflerKey, lane: "background", poolOwner: keeper.address }, process.env, beat("shuffler"));
+  await runKeeper({ ...keeperConfig, lane: "urgent" }, process.env, beat("keeper"));
+} else {
+  beats.shuffler = Number.POSITIVE_INFINITY;
+  await runKeeper(keeperConfig, process.env, beat("keeper"));
+}

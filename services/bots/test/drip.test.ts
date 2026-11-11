@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { type DripLedger, decideDrip } from "../src/service/drip.js";
+import { type DripLedger, decideDrip, releaseDrip } from "../src/service/drip.js";
 
 const policy = { perAddressMs: 1000, dailyCap: 2 };
 const empty: DripLedger = { lastByAddress: new Map(), dayStart: 0, count: 0 };
@@ -21,5 +21,16 @@ describe("drip policy", () => {
     expect(decideDrip(second.ledger, c, 700, policy)).toEqual({ ok: false, reason: "daily-cap" });
     const nextDay = decideDrip(second.ledger, c, 86_400_001, policy);
     expect(nextDay.ok).toBe(true);
+  });
+
+  it("gives the address and the daily slot back when a drip fails", () => {
+    const empty = { lastByAddress: new Map<string, number>(), dayStart: 0, count: 0 };
+    const address = "0x00000000000000000000000000000000000000aA";
+    const taken = decideDrip(empty, address, 1000, { perAddressMs: 60_000, dailyCap: 5 });
+    if (!taken.ok) throw new Error("expected a drip");
+    const released = releaseDrip(taken.ledger, address);
+    expect(released.count).toBe(0);
+    expect(decideDrip(released, address, 2000, { perAddressMs: 60_000, dailyCap: 5 }).ok).toBe(true);
+    expect(releaseDrip(released, address)).toBe(released);
   });
 });

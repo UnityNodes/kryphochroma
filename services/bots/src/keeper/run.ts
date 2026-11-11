@@ -11,7 +11,8 @@ import { type GasBudget, belowAlert, canSpend, rollBudget, spend, stopRequested 
 
 const SETUP_GAS = 16_000_000n;
 const DEAL_GAS = 8_000_000n;
-const PIPELINE = 4;
+const URGENT_PIPELINE = 4;
+const BACKGROUND_PIPELINE = 8;
 const WATCH_WINDOW = 20n;
 
 export interface KeeperConfig {
@@ -22,7 +23,11 @@ export interface KeeperConfig {
   readonly alertBalance: bigint;
   readonly stopFile: string;
   readonly pollMs: number;
+  readonly lane: KeeperLane;
+  readonly poolOwner?: Hex;
 }
+
+export type KeeperLane = "urgent" | "background" | "both";
 
 function required(env: NodeJS.ProcessEnv, name: string): string {
   const value = env[name];
@@ -39,6 +44,7 @@ export function loadKeeperConfig(env: NodeJS.ProcessEnv): KeeperConfig {
     alertBalance: BigInt(env.KEEPER_ALERT_WEI ?? "10000000000000000"),
     stopFile: env.KEEPER_STOP_FILE ?? "/run/kryphochroma/keeper.stop",
     pollMs: Number(env.KEEPER_POLL_MS ?? "4000"),
+    lane: "both",
   };
 }
 
@@ -72,7 +78,7 @@ export async function runKeeper(config: KeeperConfig, env: NodeJS.ProcessEnv, un
   }
 
   async function pipelineSetup(id: bigint, remaining: number, functionName = "setupStep"): Promise<void> {
-    const count = Math.min(remaining, PIPELINE);
+    const count = Math.min(remaining, config.lane === "background" ? BACKGROUND_PIPELINE : URGENT_PIPELINE);
     if (!canSpend(budget, SETUP_GAS * BigInt(count))) throw new Error("daily gas budget exhausted");
     const request = { address, abi: kryphoTableAbi, functionName, args: [id], account, chain: sepolia } as never;
     await publicClient.simulateContract({ ...(request as object), blockNumber: snapshot } as never);
@@ -130,7 +136,7 @@ export async function runKeeper(config: KeeperConfig, env: NodeJS.ProcessEnv, un
     }
   }
 
-  log({ event: "start", keeper: account.address, table: address });
+  log({ event: "start", keeper: account.address, lane: config.lane, table: address });
   for (;;) {
     if (stopRequested(env, config.stopFile) || (await until())) {
       log({ event: "stopped" });
@@ -149,10 +155,11 @@ export async function runKeeper(config: KeeperConfig, env: NodeJS.ProcessEnv, un
       for (let id = count > WATCH_WINDOW ? count - WATCH_WINDOW + 1n : 1n; id <= count; id++) {
         const table = (await read("getTable", [id])) as TableView;
         const view = table.stage === 3 ? { ...table, spare: ((await read("discardOf", [id])) as readonly number[]).length - 1 } : table;
-        planned.push({ id, stage: Number(table.stage), action: nextKeeperAction(view, now, account.address) });
+        planned.push({ id, stage: Number(table.stage), action: nextKeeperAction(view, now, config.poolOwner ?? account.address) });
       }
       const { urgent, background } = scheduleKeeper(planned);
-      for (const entry of background ? [...urgent, background] : urgent) {
+      const lanes = { urgent, background: background ? [background] : [], both: background ? [...urgent, background] : urgent };
+      for (const entry of lanes[config.lane]) {
         try {
           await act(entry.id, entry.action);
         } catch (error) {

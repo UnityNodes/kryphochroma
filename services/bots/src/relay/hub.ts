@@ -47,6 +47,7 @@ export interface RelayDeps {
   readonly botKeys: readonly Hex[];
   readonly takeoverKey?: Hex;
   readonly dailyGas?: bigint;
+  readonly tableDailyGas?: bigint;
   readonly log: (entry: Record<string, unknown>) => void;
 }
 
@@ -72,6 +73,8 @@ export const encodeMessage = (message: HubMessage): string => json(message);
 export function createRelay(deps: RelayDeps) {
   const hubs = new Map<string, TableHub>();
   let budget: GasBudget = { dayStart: Date.now(), spent: 0n, limit: deps.dailyGas ?? RELAY_GAS * 1000n };
+  const tableBudgets = new Map<string, GasBudget>();
+  const tableBudget = (id: bigint): GasBudget => rollBudget(tableBudgets.get(id.toString()) ?? { dayStart: Date.now(), spent: 0n, limit: deps.tableDailyGas ?? RELAY_GAS * 50n }, Date.now());
   const domain = actionDomain(sepolia.id, deps.table);
   const takeover = deps.takeoverKey ? privateKeyToAccount(deps.takeoverKey).address.toLowerCase() : null;
   const keys = deps.takeoverKey && !deps.botKeys.includes(deps.takeoverKey) ? [...deps.botKeys, deps.takeoverKey] : deps.botKeys;
@@ -209,8 +212,9 @@ export function createRelay(deps: RelayDeps) {
     const batch = project(hub.chain, hub.chainNonces, hub.log).valid.slice(0, MAX_BATCH);
     if (batch.length === 0) return;
     budget = rollBudget(budget, Date.now());
-    if (!canSpend(budget, RELAY_GAS)) {
-      deps.log({ event: "relay-budget-exhausted", id, spent: budget.spent });
+    const perTable = tableBudget(id);
+    if (!canSpend(budget, RELAY_GAS) || !canSpend(perTable, RELAY_GAS)) {
+      deps.log({ event: "relay-budget-exhausted", id, spent: budget.spent, tableSpent: perTable.spent });
       return;
     }
     hub.inflight = true;
@@ -227,6 +231,7 @@ export function createRelay(deps: RelayDeps) {
       } as never);
       const receipt = await deps.publicClient.waitForTransactionReceipt({ hash });
       budget = spend(budget, receipt.gasUsed);
+      tableBudgets.set(id.toString(), spend(tableBudget(id), receipt.gasUsed));
       deps.log({ event: "relay", id, actions: batch.length, hash, status: receipt.status, gas: receipt.gasUsed });
     } catch (error) {
       deps.log({ event: "relay-error", id, message: (error as Error).message.slice(0, 200) });
@@ -244,5 +249,10 @@ export function createRelay(deps: RelayDeps) {
     return () => hub.subscribers.delete(send);
   }
 
-  return { refresh, accept, submit, subscribe, active: () => [...hubs.keys()].map(BigInt) };
+  function forget(id: bigint): void {
+    const hub = hubs.get(id.toString());
+    if (hub && hub.subscribers.size === 0 && hub.log.length === 0) hubs.delete(id.toString());
+  }
+
+  return { refresh, accept, submit, subscribe, forget, active: () => [...hubs.keys()].map(BigInt) };
 }

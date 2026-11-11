@@ -24,3 +24,11 @@ export function decideDrip(ledger: DripLedger, address: string, now: number, pol
   lastByAddress.set(key, now);
   return { ok: true, ledger: { lastByAddress, dayStart: fresh.dayStart, count: fresh.count + 1 } };
 }
+
+export function releaseDrip(ledger: DripLedger, address: string): DripLedger {
+  const key = address.toLowerCase();
+  if (!ledger.lastByAddress.has(key)) return ledger;
+  const lastByAddress = new Map(ledger.lastByAddress);
+  lastByAddress.delete(key);
+  return { lastByAddress, dayStart: ledger.dayStart, count: Math.max(0, ledger.count - 1) };
+}
