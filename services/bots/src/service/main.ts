@@ -43,6 +43,9 @@ const dripWei = BigInt(env("DRIP_WEI", parseEther("0.003").toString()));
 const dripPolicy = { perAddressMs: Number(env("DRIP_PER_ADDRESS_MS", "21600000")), dailyCap: Number(env("DRIP_DAILY_CAP", "200")) };
 let ledger: DripLedger = { lastByAddress: new Map(), dayStart: Date.now(), count: 0 };
 let keeperBusy = Promise.resolve();
+const takeoverKey = env("TAKEOVER_PRIVATE_KEY", env("RELAYER_PRIVATE_KEY", env("DEPLOYER_PRIVATE_KEY"))) as Hex;
+const onChainTakeover = (await publicClient.readContract({ address: table, abi: kryphoTableAbi, functionName: "TAKEOVER" })) as Hex;
+if (onChainTakeover.toLowerCase() !== privateKeyToAccount(takeoverKey).address.toLowerCase()) throw new Error(`takeover key does not match the contract TAKEOVER ${onChainTakeover}`);
 const relayAccount = privateKeyToAccount(env("RELAYER_PRIVATE_KEY", env("DEPLOYER_PRIVATE_KEY")) as Hex, { nonceManager });
 const relay = createRelay({
   publicClient,
@@ -50,6 +53,7 @@ const relay = createRelay({
   table,
   rpcUrl,
   botKeys: env("BOT_KEYS").split(",") as Hex[],
+  takeoverKey,
   log,
 });
 

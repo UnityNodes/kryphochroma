@@ -13,6 +13,11 @@ export default defineConfig({
     },
   },
   networks: {
+    default: {
+      type: "edr-simulated",
+      chainType: "l1",
+      allowUnlimitedContractSize: true,
+    },
     sepolia: {
       type: "http",
       chainType: "l1",

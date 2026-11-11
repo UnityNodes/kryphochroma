@@ -25,6 +25,17 @@ describe("keeper plan", () => {
     expect(nextKeeperAction(base, 101n)).toEqual({ kind: "forceTimeout" });
   });
 
+  it("starts the discard refill only when the deck runs low and continues it to the end", () => {
+    const playing = { ...base, turnDeadline: 1000n, deckPtr: 50, deckEnd: 108, spare: 30 };
+    expect(nextKeeperAction(playing, 0n)).toEqual({ kind: "idle" });
+    expect(nextKeeperAction({ ...playing, deckPtr: 84 }, 0n)).toEqual({ kind: "reshuffleStep", remaining: 57 });
+    expect(nextKeeperAction({ ...playing, deckPtr: 84, spare: 70 }, 0n)).toEqual({ kind: "reshuffleStep", remaining: 59 });
+    expect(nextKeeperAction({ ...playing, deckPtr: 84, spare: 0 }, 0n)).toEqual({ kind: "idle" });
+    expect(nextKeeperAction({ ...playing, refillSize: 30, refillStep: 50 }, 0n)).toEqual({ kind: "reshuffleStep", remaining: 8 });
+    expect(nextKeeperAction({ ...playing, refillSize: 30, refillStep: 58 }, 0n)).toEqual({ kind: "idle" });
+    expect(nextKeeperAction({ ...playing, deckPtr: 108 }, 2000n)).toEqual({ kind: "forceTimeout" });
+  });
+
   it("idles in the lobby and after the match", () => {
     expect(nextKeeperAction({ ...base, stage: 0 }, 999n)).toEqual({ kind: "idle" });
     expect(nextKeeperAction({ ...base, stage: 7 }, 999n)).toEqual({ kind: "idle" });

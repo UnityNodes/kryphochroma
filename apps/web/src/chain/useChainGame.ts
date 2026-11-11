@@ -110,7 +110,7 @@ export function useChainGame(id: bigint, colorBlind: boolean): ChainGame {
     const table = (await read("getTable", [id])) as ChainSnapshot["table"];
     const seats = (await Promise.all(Array.from({ length: Number(table.joined) }, (_, i) => read("getSeat", [id, i])))) as ChainSnapshot["seats"];
     const mine = burner.address.toLowerCase();
-    const seat = seats.findIndex((s) => s.player.toLowerCase() === mine || s.session.toLowerCase() === mine);
+    const seat = seats.findIndex((s) => s.session.toLowerCase() === mine || (s.player.toLowerCase() === mine && !s.abandoned));
     meRef.current = Math.max(seat, 0);
     setSnapshot({ table, seats, me: seat });
     if (Number(table.stage) < 3) {

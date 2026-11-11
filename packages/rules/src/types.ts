@@ -48,6 +48,7 @@ export interface PublicState {
   readonly monoWindow: number | null;
   readonly candidate: number | null;
   readonly lastResult: RoundResult | null;
+  readonly recycles?: boolean;
 }
 
 export type Hand = readonly (Card | null)[];

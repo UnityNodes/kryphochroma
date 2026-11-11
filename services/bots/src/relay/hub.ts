@@ -11,7 +11,7 @@ import {
   projectChain,
   toContractAction,
 } from "@kryphochroma/abi";
-import { type Card, type GameEvent, type GameState, chooseMove } from "@kryphochroma/rules";
+import { type Card, type GameEvent, type GameState, type Move, botCatchTarget, chooseMove } from "@kryphochroma/rules";
 import { ZamaSDK } from "@zama-fhe/sdk";
 import { sepolia as zamaSepolia } from "@zama-fhe/sdk/chains";
 import { node } from "@zama-fhe/sdk/node";
@@ -24,6 +24,7 @@ const MAX_BATCH = 12;
 const RELAY_GAS = 16_000_000n;
 const GAS_PRICE = 5_000_000n;
 const THINK_MS = [250, 600] as const;
+const CATCH_DELAY_BLOCKS = 2n;
 
 export type HubMessage =
   | { readonly type: "action"; readonly action: SignedAction; readonly events: readonly GameEvent[] }
@@ -43,6 +44,7 @@ export interface RelayDeps {
   readonly table: Hex;
   readonly rpcUrl: string;
   readonly botKeys: readonly Hex[];
+  readonly takeoverKey?: Hex;
   readonly log: (entry: Record<string, unknown>) => void;
 }
 
@@ -51,18 +53,26 @@ interface TableHub {
   chainNonces: number[];
   sessions: string[];
   log: SignedAction[];
+  signers: Map<string, string>;
+  abandoned: boolean[];
   inflight: boolean;
   thinking: Set<number>;
+  monoSeat: number;
+  catchableAt: bigint | null;
+  block: bigint;
   subscribers: Set<(message: HubMessage) => void>;
 }
 
+const actionKey = (action: SignedAction): string => `${action.seat}:${action.nonce}`;
 const json = (value: unknown) => JSON.stringify(value, (_, v) => (typeof v === "bigint" ? v.toString() : v));
 export const encodeMessage = (message: HubMessage): string => json(message);
 
 export function createRelay(deps: RelayDeps) {
   const hubs = new Map<string, TableHub>();
   const domain = actionDomain(sepolia.id, deps.table);
-  const bots: Bot[] = deps.botKeys.map((key) => {
+  const takeover = deps.takeoverKey ? privateKeyToAccount(deps.takeoverKey).address.toLowerCase() : null;
+  const keys = deps.takeoverKey && !deps.botKeys.includes(deps.takeoverKey) ? [...deps.botKeys, deps.takeoverKey] : deps.botKeys;
+  const bots: Bot[] = keys.map((key) => {
     const account = privateKeyToAccount(key);
     const walletClient = createWalletClient({ account, chain: sepolia, transport: http(deps.rpcUrl) });
     const sdk = new ZamaSDK(createConfig({ chains: [zamaSepolia], publicClient: deps.publicClient, walletClient, relayers: { [zamaSepolia.id]: node() } }));
@@ -73,7 +83,7 @@ export function createRelay(deps: RelayDeps) {
     const key = id.toString();
     let hub = hubs.get(key);
     if (!hub) {
-      hub = { chain: null, chainNonces: [0, 0, 0, 0], sessions: [], log: [], inflight: false, thinking: new Set(), subscribers: new Set() };
+      hub = { chain: null, chainNonces: [0, 0, 0, 0], sessions: [], log: [], signers: new Map(), abandoned: [], inflight: false, thinking: new Set(), monoSeat: 255, catchableAt: null, block: 0n, subscribers: new Set() };
       hubs.set(key, hub);
     }
     return hub;
@@ -107,19 +117,26 @@ export function createRelay(deps: RelayDeps) {
     const hub = hubOf(id);
     const read = (functionName: string, args: readonly unknown[]) =>
       deps.publicClient.readContract({ address: deps.table, abi: kryphoTableAbi, functionName, args } as never) as Promise<unknown>;
-    const table = (await read("getTable", [id])) as ChainTable & { joined: number };
+    const table = (await read("getTable", [id])) as ChainTable & { joined: number; monoBlock: bigint };
+    hub.block = await deps.publicClient.getBlockNumber();
     const seats = (await Promise.all(Array.from({ length: Number(table.joined) }, (_, i) => read("getSeat", [id, i])))) as (ChainSeat & { session: Hex })[];
     const discard = ((await read("discardOf", [id])) as readonly number[]).map(Number);
     const nonces = ((await read("noncesOf", [id])) as readonly number[]).map(Number);
     const known = new Map<number, readonly (Card | null)[]>();
     for (const [seat, s] of seats.entries()) {
-      const bot = bots.find((b) => b.account.address.toLowerCase() === s.session.toLowerCase());
+      const session = s.session.toLowerCase();
+      const bot = session === takeover && !s.abandoned ? undefined : bots.find((b) => b.account.address.toLowerCase() === session);
       if (bot && Number(table.stage) >= 3) known.set(seat, await decryptBotHand(bot, id, seat, Number(s.slots)));
     }
     hub.chain = projectChain(table, seats, discard, known);
     hub.chainNonces = nonces;
     hub.sessions = seats.map((s) => s.session.toLowerCase());
-    hub.log = hub.log.filter((a) => a.nonce >= (nonces[a.seat] ?? 0));
+    hub.monoSeat = Number(table.monoWindow);
+    hub.catchableAt = hub.monoSeat === 255 ? null : BigInt(table.monoBlock) + CATCH_DELAY_BLOCKS;
+    hub.abandoned = seats.map((s) => Boolean(s.abandoned));
+    hub.log = hub.log.filter((a) => a.nonce >= (nonces[a.seat] ?? 0) && hub.signers.get(actionKey(a)) === hub.sessions[a.seat]);
+    const kept = new Set(hub.log.map(actionKey));
+    for (const key of [...hub.signers.keys()]) if (!kept.has(key)) hub.signers.delete(key);
     driveBots(id, hub);
   }
 
@@ -135,25 +152,37 @@ export function createRelay(deps: RelayDeps) {
     const next = stepAction(current.state, action);
     if (!next) return { ok: false, reason: "IllegalMove" };
     hub.log.push(action);
+    hub.signers.set(actionKey(action), signer.toLowerCase());
     broadcast(hub, { type: "action", action, events: next.events });
     driveBots(action.table, hub);
     return { ok: true };
   }
 
+  const botFor = (hub: TableHub, seat: number): Bot | undefined => {
+    const session = hub.sessions[seat];
+    if (session === takeover && !hub.abandoned[seat]) return undefined;
+    return bots.find((b) => b.account.address.toLowerCase() === session);
+  };
+
+  function decide(hub: TableHub, state: GameState, seat: number): Move | { readonly type: "catch"; readonly target: number } | null {
+    const target = botCatchTarget(state.pub, seat);
+    const confirmed = target !== null && target === hub.monoSeat && hub.catchableAt !== null && hub.block >= hub.catchableAt;
+    if (confirmed) return { type: "catch", target };
+    return chooseMove(state.pub, seat, state.hands[seat] ?? []);
+  }
+
   function driveBots(id: bigint, hub: TableHub) {
     const current = projected(hub);
     if (!current || current.state.pub.stage !== "Playing") return;
-    for (const bot of bots) {
-      const seat = hub.sessions.indexOf(bot.account.address.toLowerCase());
-      if (seat < 0 || hub.thinking.has(seat)) continue;
-      const move = chooseMove(current.state.pub, seat, current.state.hands[seat] ?? []);
-      if (!move) continue;
+    for (const seat of hub.sessions.keys()) {
+      const bot = botFor(hub, seat);
+      if (!bot || hub.thinking.has(seat) || !decide(hub, current.state, seat)) continue;
       hub.thinking.add(seat);
       setTimeout(async () => {
         try {
           const now = projected(hub);
-          if (!now) return;
-          const again = chooseMove(now.state.pub, seat, now.state.hands[seat] ?? []);
+          if (!now || now.state.pub.stage !== "Playing") return;
+          const again = decide(hub, now.state, seat);
           if (!again) return;
           const nonce = (hub.chainNonces[seat] ?? 0) + now.valid.filter((a) => a.seat === seat).length;
           const handles = (await deps.publicClient.readContract({ address: deps.table, abi: kryphoTableAbi, functionName: "handOf", args: [id, seat] } as never)) as readonly Hex[];

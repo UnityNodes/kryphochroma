@@ -47,6 +47,12 @@ export function toGameEvents(logs: readonly Log[], id: bigint): GameEvent[] {
       case "TimedOut":
         events.push({ type: "TimedOut", seat: num(args.seat) });
         break;
+      case "SeatAbandoned":
+        events.push({ type: "SeatAbandoned", seat: num(args.seat) });
+        break;
+      case "Reshuffled":
+        events.push({ type: "Reshuffled", count: num(args.count) });
+        break;
       case "RevealStarted":
         events.push({ type: "RevealStarted", candidate: num(args.candidate) });
         break;

@@ -82,7 +82,11 @@ export function describe(event: GameEvent, names: readonly string[] = SEAT_NAMES
     case "DrawsTaken":
       return { icon: "draw", text: `${name(event.seat)} took the penalty`, sub: "sealed cards" };
     case "Reshuffled":
-      return { icon: "shuffle", text: "Discard reshuffled into the deck", sub: "new encrypted order" };
+      return { icon: "shuffle", text: `${event.count} discards reshuffled into the deck`, sub: "new encrypted order · FHE.randEbool" };
+    case "TimedOut":
+      return { icon: "pass", text: `${name(event.seat)} ran out of time`, sub: "forceTimeout · drew for them" };
+    case "SeatAbandoned":
+      return { icon: "lock", text: `${name(event.seat)} left the table`, sub: "a bot takes over the sealed hand · FHE.allow" };
     case "RoundSettled":
       return {
         icon: "trophy",

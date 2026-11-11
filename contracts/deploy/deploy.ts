@@ -4,13 +4,17 @@ import { network } from "hardhat";
 const { ethers } = await network.connect();
 const [deployer] = await ethers.getSigners();
 if (!deployer) throw new Error("no deployer");
-const table = await ethers.deployContract("KryphoTable");
+const takeoverKey = process.env.TAKEOVER_PRIVATE_KEY;
+if (!takeoverKey) throw new Error("TAKEOVER_PRIVATE_KEY is not set");
+const takeover = new ethers.Wallet(takeoverKey).address;
+const table = await ethers.deployContract("KryphoTable", [takeover]);
 await table.waitForDeployment();
 const receipt = await table.deploymentTransaction()?.wait();
 const record = {
   chainId: Number((await ethers.provider.getNetwork()).chainId),
   KryphoTable: await table.getAddress(),
   deployer: deployer.address,
+  takeover,
   tx: receipt?.hash,
   block: receipt?.blockNumber,
 };

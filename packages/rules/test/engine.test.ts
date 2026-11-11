@@ -168,6 +168,13 @@ describe("draw and pass", () => {
     expect(state.deck).toHaveLength(1);
   });
 
+  it("waits for the chain reshuffle instead of recycling when recycles is off", () => {
+    let s = initialState(config(2), 3).state;
+    s = { ...s, deck: [], pub: { ...s.pub, deckCount: 0, discard: [R(1), R(2), s.pub.topCard], recycles: false } };
+    expectRule(() => applyDraw(s, 0), "CannotDraw");
+    expect(applyPass(s, 0).state.pub.discard).toHaveLength(3);
+  });
+
   it("allows pass without drawing when nothing can be drawn", () => {
     let s = initialState(config(2), 3).state;
     s = { ...s, deck: [], pub: { ...s.pub, deckCount: 0, discard: [s.pub.topCard] } };

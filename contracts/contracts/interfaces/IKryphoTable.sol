@@ -68,6 +68,7 @@ interface IKryphoTable {
     event ChallengeResolved(uint256 indexed id, bool hadColor);
     event TimedOut(uint256 indexed id, uint8 seat);
     event SeatAbandoned(uint256 indexed id, uint8 seat);
+    event Reshuffled(uint256 indexed id, uint8 count);
     event RevealStarted(uint256 indexed id, uint8 candidate);
     event RoundSettled(uint256 indexed id, int8 winner, uint16 points, uint8 cheaters);
     event MatchOver(uint256 indexed id, int8 winner);

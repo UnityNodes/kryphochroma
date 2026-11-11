@@ -61,11 +61,11 @@ export function freeSlot(slots: readonly boolean[]): number {
 export function canDraw(pub: PublicState, seat: number): boolean {
   const s = pub.seats[seat];
   if (!s || freeSlot(s.slots) < 0) return false;
-  return pub.deckCount > 0 || pub.discard.length > 1;
+  return pub.deckCount > 0 || (pub.recycles !== false && pub.discard.length > 1);
 }
 
 function recycle(d: Draft): void {
-  if (d.pub.discard.length <= 1) return;
+  if (d.pub.recycles === false || d.pub.discard.length <= 1) return;
   const top = d.pub.discard[d.pub.discard.length - 1] as Card;
   const rest = d.pub.discard.slice(0, -1);
   const shuffled = shuffle(rest, d.rng);

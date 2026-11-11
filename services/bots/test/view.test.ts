@@ -1,6 +1,6 @@
 import { chooseMove, initialState } from "@kryphochroma/rules";
 import { describe, expect, it } from "vitest";
-import { type ChainSeat, type ChainTable, toPublicState } from "@kryphochroma/abi";
+import { type ChainSeat, type ChainTable, chainDeckCount, toPublicState } from "@kryphochroma/abi";
 
 describe("chain view", () => {
   it("rebuilds the engine public state from contract reads", () => {
@@ -32,9 +32,16 @@ describe("chain view", () => {
       score: s.score,
     }));
     const view = toPublicState(table, seats, pub.discard);
-    expect(view).toEqual(pub);
+    expect(view).toEqual({ ...pub, recycles: false });
     const hand = state.hands[pub.turn] ?? [];
     expect(chooseMove(view!, pub.turn, hand)).toEqual(chooseMove(pub, pub.turn, hand));
+  });
+
+  it("counts a finished background refill as drawable cards", () => {
+    expect(chainDeckCount({ deckPtr: 100 })).toBe(8);
+    expect(chainDeckCount({ deckPtr: 100, deckEnd: 108, refillSize: 30, refillStep: 57 })).toBe(8);
+    expect(chainDeckCount({ deckPtr: 108, deckEnd: 108, refillSize: 30, refillStep: 58 })).toBe(30);
+    expect(chainDeckCount({ deckPtr: 3, deckEnd: 30 })).toBe(27);
   });
 
   it("returns null before play starts", () => {

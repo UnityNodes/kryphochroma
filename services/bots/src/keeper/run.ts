@@ -71,10 +71,10 @@ export async function runKeeper(config: KeeperConfig, env: NodeJS.ProcessEnv, un
     log({ event: "tx", functionName, args, hash, gas: receipt.gasUsed, status: receipt.status });
   }
 
-  async function pipelineSetup(id: bigint, remaining: number): Promise<void> {
+  async function pipelineSetup(id: bigint, remaining: number, functionName = "setupStep"): Promise<void> {
     const count = Math.min(remaining, PIPELINE);
     if (!canSpend(budget, SETUP_GAS * BigInt(count))) throw new Error("daily gas budget exhausted");
-    const request = { address, abi: kryphoTableAbi, functionName: "setupStep", args: [id], account, chain: sepolia } as never;
+    const request = { address, abi: kryphoTableAbi, functionName, args: [id], account, chain: sepolia } as never;
     await publicClient.simulateContract({ ...(request as object), blockNumber: snapshot } as never);
     const hashes: Hex[] = [];
     for (let i = 0; i < count; i++) {
@@ -85,7 +85,7 @@ export async function runKeeper(config: KeeperConfig, env: NodeJS.ProcessEnv, un
       minBlock = receipt.blockNumber > minBlock ? receipt.blockNumber : minBlock;
       budget = spend(budget, receipt.gasUsed);
     }
-    log({ event: "setup", id, sent: count, remaining: remaining - count });
+    log({ event: functionName, id, sent: count, remaining: remaining - count });
   }
 
   async function pipelineDeals(id: bigint, seats: readonly number[]): Promise<void> {
@@ -123,6 +123,8 @@ export async function runKeeper(config: KeeperConfig, env: NodeJS.ProcessEnv, un
         return revealAndSend("finishReveal", id, (await read("revealHandles", [id])) as Hex[]);
       case "forceTimeout":
         return send("forceTimeout", [id]);
+      case "reshuffleStep":
+        return pipelineSetup(id, action.remaining, "reshuffleStep");
       case "idle":
         return;
     }
@@ -144,7 +146,8 @@ export async function runKeeper(config: KeeperConfig, env: NodeJS.ProcessEnv, un
       const count = (await read("tableCount", [])) as bigint;
       const now = latest.timestamp;
       for (let id = count > WATCH_WINDOW ? count - WATCH_WINDOW + 1n : 1n; id <= count; id++) {
-        const view = (await read("getTable", [id])) as TableView;
+        const table = (await read("getTable", [id])) as TableView;
+        const view = table.stage === 3 ? { ...table, spare: ((await read("discardOf", [id])) as readonly number[]).length - 1 } : table;
         const action = nextKeeperAction(view, now, account.address);
         if (action.kind === "idle") continue;
         try {

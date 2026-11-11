@@ -17,11 +17,11 @@ contract DeckHarness is ZamaEthereumConfig {
     }
 
     function shuffleStep(uint16 step) external {
-        KryphoDeck.shuffleStep(_deck, step);
+        KryphoDeck.shuffleStep(_deck, step, 0, KryphoDeck.DECK_SIZE);
     }
 
     function pairsIn(uint8 distance) external pure returns (uint8) {
-        return KryphoDeck.pairsIn(distance);
+        return KryphoDeck.pairsIn(distance, KryphoDeck.DECK_SIZE);
     }
 
     function deckAt(uint8 i) external view returns (euint8) {

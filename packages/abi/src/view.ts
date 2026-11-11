@@ -1,4 +1,4 @@
-import { NO_SEAT } from "./constants.js";
+import { DECK_SIZE, FILL_CHUNK, NO_SEAT, SHUFFLE_STEPS } from "./constants.js";
 import { type Color, HAND_SLOTS, type PublicSeat, type PublicState, type Stage } from "@kryphochroma/rules";
 
 export interface ChainTable {
@@ -10,6 +10,9 @@ export interface ChainTable {
   readonly color: number;
   readonly round: number;
   readonly deckPtr: number;
+  readonly deckEnd?: number;
+  readonly refillSize?: number;
+  readonly refillStep?: number;
   readonly drawnSlot: number;
   readonly pendingDraw: number;
   readonly monoWindow: number;
@@ -29,6 +32,13 @@ export interface ChainSeat {
 }
 
 const STAGES: Record<number, Stage> = { 3: "Playing", 4: "AwaitChallenge", 5: "Revealing", 6: "RoundOver", 7: "MatchOver" };
+export function chainDeckCount(table: Pick<ChainTable, "deckPtr" | "deckEnd" | "refillSize" | "refillStep">): number {
+  const live = Number(table.deckEnd ?? DECK_SIZE) - Number(table.deckPtr);
+  const size = Number(table.refillSize ?? 0);
+  const ready = size > 0 && Number(table.refillStep ?? 0) === Math.ceil(size / FILL_CHUNK) + SHUFFLE_STEPS;
+  return live + (ready ? size : 0);
+}
+
 const orNull = (value: number): number | null => (value === NO_SEAT ? null : value);
 
 export function toPublicState(table: ChainTable, seats: readonly ChainSeat[], discard: readonly number[]): PublicState | null {
@@ -55,7 +65,7 @@ export function toPublicState(table: ChainTable, seats: readonly ChainSeat[], di
     dir: table.dir < 0 ? -1 : 1,
     topCard: table.topCard,
     color: table.color as Color,
-    deckCount: 108 - table.deckPtr,
+    deckCount: chainDeckCount(table),
     discard,
     seats: publicSeats,
     drawnSlot: orNull(table.drawnSlot),
@@ -64,5 +74,6 @@ export function toPublicState(table: ChainTable, seats: readonly ChainSeat[], di
     monoWindow: orNull(table.monoWindow),
     candidate: orNull(table.candidate),
     lastResult: null,
+    recycles: false,
   };
 }
