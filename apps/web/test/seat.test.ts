@@ -1,5 +1,5 @@
 import { kryphoTableAbi } from "@kryphochroma/abi";
-import { type Hex, type PublicClient, type WalletClient, encodeAbiParameters, encodeEventTopics } from "viem";
+import { type Hex, type PublicClient, RpcRequestError, type WalletClient, encodeAbiParameters, encodeEventTopics } from "viem";
 import { privateKeyToAccount } from "viem/accounts";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
@@ -29,7 +29,7 @@ vi.mock("viem", async (original) => {
   };
 });
 
-const { fundBurner, takeSeat, WALLET_CRUMB, MIN_BURNER_BALANCE } = await import("@/chain/seat");
+const { fundBurner, seatWithRetry, takeSeat, WALLET_CRUMB, MIN_BURNER_BALANCE } = await import("@/chain/seat");
 
 const burner = privateKeyToAccount("0x59c6995e998f97a5a0044966f0945389dc9e86dae88c7a8412f4603b6b78690d");
 const player = "0x00000000000000000000000000000000000000aa" as Hex;
@@ -165,5 +165,30 @@ describe("funding the session key", () => {
     const drip = vi.fn(async () => true);
     await fundBurner({ publicClient: client(MIN_BURNER_BALANCE), burner, funder: { kind: "guest" }, drip });
     expect(drip).not.toHaveBeenCalled();
+  });
+});
+
+describe("seating in the background", () => {
+  it("tries again when the node drops the request and sits once it answers", async () => {
+    vi.useFakeTimers();
+    let failures = 1;
+    const base = client(MIN_BURNER_BALANCE);
+    const publicClient = {
+      ...base,
+      getTransactionCount: async () => {
+        if (failures-- > 0) throw new RpcRequestError({ body: {}, error: { code: 429, message: "rate limited" }, url: "https://node" });
+        return 0;
+      },
+      readContract: async () => ({ joined: 0 }),
+    } as unknown as PublicClient;
+    const seated = seatWithRetry({ publicClient, burner, funder: { kind: "guest" }, drip: async () => true }, 7n);
+    await vi.advanceTimersByTimeAsync(3000);
+    await expect(seated).resolves.toBeUndefined();
+    vi.useRealTimers();
+  });
+
+  it("gives up on errors that a retry can not fix", async () => {
+    const publicClient = { ...client(0n), getBalance: async () => 0n } as unknown as PublicClient;
+    await expect(seatWithRetry({ publicClient, burner, funder: { kind: "guest" }, drip: async () => false }, 7n)).rejects.toThrow(/faucet/);
   });
 });

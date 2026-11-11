@@ -4,7 +4,7 @@ import { sepolia } from "viem/chains";
 import { BURNER_GAS_LIMIT, BURNER_GAS_PRICE, TABLE_ADDRESS } from "./config";
 import { sepoliaTransport } from "./rpc";
 import { confirm } from "./confirm";
-import { isFundsLag } from "./errors";
+import { isFundsLag, isNodeFailure } from "./errors";
 
 export const MIN_BURNER_BALANCE = 500_000_000_000_000n;
 export const WALLET_CRUMB = 2_000_000_000_000_000n;
@@ -122,6 +122,24 @@ export async function takeSeat(deps: SeatDeps, id: bigint): Promise<void> {
   if (!receipt) return;
   const seated = parseEventLogs({ abi: kryphoTableAbi, logs: receipt.logs, eventName: "Joined" }).some((l) => l.args.session.toLowerCase() === burner.address.toLowerCase());
   if (!seated) throw new Error("Could not take a seat, please try again");
+}
+
+const SEAT_TRIES = 3;
+const SEAT_RETRY_MS = 3000;
+
+/** Public nodes drop requests under load, so a seat taken in the background tries again, and first checks the chain in case the earlier join did land. */
+export async function seatWithRetry(deps: SeatDeps, id: bigint): Promise<void> {
+  for (let attempt = 1; ; attempt++) {
+    try {
+      await fundBurner(deps);
+      await takeSeat(deps, id);
+      return;
+    } catch (error) {
+      if (!isNodeFailure(error) || attempt >= SEAT_TRIES) throw error;
+      await new Promise((r) => setTimeout(r, SEAT_RETRY_MS * attempt));
+      if (await sitsAt(deps.publicClient, id, deps.burner.address).catch(() => false)) return;
+    }
+  }
 }
 
 /** A slow RPC can miss the receipt of a join that did land, so the seat list on chain decides. */

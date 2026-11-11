@@ -1,4 +1,4 @@
-import { BaseError, InsufficientFundsError, InvalidParamsRpcError, RpcRequestError, UserRejectedRequestError } from "viem";
+import { BaseError, HttpRequestError, InsufficientFundsError, InvalidParamsRpcError, RpcRequestError, UserRejectedRequestError } from "viem";
 import { describe, expect, it } from "vitest";
 import { friendlyError, isFundsLag } from "@/chain/errors";
 
@@ -6,6 +6,8 @@ describe("friendly errors", () => {
   it("explains the common chain failures in plain words", () => {
     expect(friendlyError(new InsufficientFundsError())).toMatch(/test ETH/);
     expect(friendlyError(new RpcRequestError({ body: {}, error: { code: -32603, message: "boom" }, url: "https://x" }))).toMatch(/Sepolia node/);
+    expect(friendlyError(new RpcRequestError({ body: {}, error: { code: -32603, message: "boom" }, url: "https://x" }))).toContain("(code -32603)");
+    expect(friendlyError(new HttpRequestError({ status: 429, url: "https://x" }))).toBe("The Sepolia node did not answer (HTTP 429), please try again");
     expect(friendlyError(new InvalidParamsRpcError(new Error("Missing or invalid parameters")))).toMatch(/Sepolia node/);
     expect(friendlyError(new UserRejectedRequestError(new Error("no")))).toMatch(/cancelled/);
     expect(friendlyError(new Error("The faucet is busy, try again in a minute"))).toBe("The faucet is busy, try again in a minute");

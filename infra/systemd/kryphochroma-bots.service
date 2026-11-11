@@ -10,10 +10,12 @@ WorkingDirectory=@REPO@/services/bots
 Environment=NODE_ENV=production
 Environment=NODE_OPTIONS=--dns-result-order=ipv4first
 Environment=KEEPER_STOP_FILE=/run/kryphochroma/keeper.stop
+Environment=PROFILE_FILE=/var/lib/kryphochroma/profiles.json
 EnvironmentFile=@REPO@/.env
 ExecStart=@NODE@ dist/service/main.js
 RuntimeDirectory=kryphochroma
 RuntimeDirectoryPreserve=yes
+StateDirectory=kryphochroma
 Restart=always
 RestartSec=5
 StandardOutput=journal

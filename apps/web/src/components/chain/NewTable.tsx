@@ -12,7 +12,7 @@ import { loadBurner } from "@/chain/burner";
 import { friendlyError } from "@/chain/errors";
 import { RECEIPT_POLL_MS, sepoliaTransport } from "@/chain/rpc";
 import { trackSeat } from "@/chain/inflight";
-import { type SeatDeps, fundBurner, openTable, requestBots, serviceDrip as drip, startTable, takeSeat } from "@/chain/seat";
+import { type SeatDeps, fundBurner, openTable, requestBots, seatWithRetry, serviceDrip as drip, startTable, takeSeat } from "@/chain/seat";
 import { ProfileChip } from "@/components/profile/ProfileChip";
 import { useMyProfile } from "@/components/profile/useMyProfile";
 import { WalletBar } from "@/components/wallet/WalletBar";
@@ -94,13 +94,9 @@ export function NewTable() {
 
   /** A reserved pool table is already shuffled, so the lobby opens at once and the seat, the bots and the start follow in the background. */
   function seatInBackground(d: SeatDeps, id: bigint, after?: () => Promise<void>) {
-    const seating = (async () => {
-      await fundBurner(d);
-      await takeSeat(d, id);
-    })();
-    trackSeat(id.toString(), seating)
+    trackSeat(id.toString(), seatWithRetry(d, id))
       .then(async () => after?.())
-      .catch((e: unknown) => toast.error(friendlyError(e)));
+      .catch((e: unknown) => toast.error(`Could not take a seat: ${friendlyError(e)}`));
     router.push(tablePath(id));
   }
 
