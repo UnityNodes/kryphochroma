@@ -18,6 +18,10 @@ export interface SeatDeps {
   readonly drip: (address: Hex) => Promise<boolean>;
 }
 
+export async function serviceDrip(address: Hex): Promise<boolean> {
+  return (await fetch("/api/drip", { method: "POST", body: JSON.stringify({ address }) })).ok;
+}
+
 const burnerWallet = (burner: PrivateKeyAccount) => createWalletClient({ account: burner, chain: sepolia, transport: http(SEPOLIA_RPC_URL) });
 
 async function waitForBalance(publicClient: PublicClient, address: Hex): Promise<boolean> {

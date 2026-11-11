@@ -7,6 +7,6 @@ const ChainTable = dynamic(() => import("@/components/chain/ChainTable").then((m
   loading: () => <div className="kc-app" aria-busy="true" />,
 });
 
-export function ClientChainTable({ id }: { readonly id: string }) {
-  return <ChainTable id={id} />;
+export function ClientChainTable({ id, watch }: { readonly id: string; readonly watch?: boolean }) {
+  return <ChainTable id={id} watch={watch} />;
 }

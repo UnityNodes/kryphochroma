@@ -3,11 +3,11 @@
 import { Check, Loader2 } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { useState } from "react";
-import { type Hex, createPublicClient, http } from "viem";
+import { createPublicClient, http } from "viem";
 import { sepolia } from "viem/chains";
 import { loadBurner } from "@/chain/burner";
 import { SEPOLIA_RPC_URL } from "@/chain/config";
-import { type SeatDeps, fundBurner, openTable, startTable, takeSeat } from "@/chain/seat";
+import { type SeatDeps, fundBurner, openTable, serviceDrip as drip, startTable, takeSeat } from "@/chain/seat";
 import { WalletBar } from "@/components/wallet/WalletBar";
 import { useFunder } from "@/components/wallet/useFunder";
 import { cn } from "@/lib/utils";
@@ -15,10 +15,6 @@ import { cn } from "@/lib/utils";
 const GUEST_STEPS = ["Session key created in this tab", "Test ETH for gas", "Table opened on Sepolia", "You took a seat", "Bots seated", "Shuffle started"] as const;
 const WALLET_STEPS = ["Session key created in this tab", "Wallet sent the session key gas", "Table opened on Sepolia", "Wallet took a seat for the session key", "Bots seated", "Shuffle started"] as const;
 const TURN_TIMEOUT_S = 120;
-
-async function drip(address: Hex): Promise<boolean> {
-  return (await fetch("/api/drip", { method: "POST", body: JSON.stringify({ address }) })).ok;
-}
 
 async function fill(id: bigint): Promise<void> {
   const res = await fetch("/api/fill", { method: "POST", body: JSON.stringify({ id: id.toString() }) });
@@ -114,7 +110,7 @@ export function NewTable() {
           </label>
           <ol className="grid gap-2 text-sm">
             {steps.map((step, i) => (
-              <li key={step} className={cn("flex items-center gap-2", i > done + 1 && "opacity-50")}>
+              <li key={step} className={cn("flex items-center gap-2", i > done + 1 && "text-muted")}>
                 {i <= done ? <Check className="size-4 text-teal" aria-hidden /> : i === done + 1 && running ? <Loader2 className="size-4 animate-spin" aria-hidden /> : <span className="inline-block size-4" />}
                 {step}
               </li>

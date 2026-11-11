@@ -7,7 +7,7 @@ const MINI_ROTATE_DEG = 6;
 const MINI_SHIFT = 0.13;
 
 export interface SeatProps {
-  readonly position: "left" | "top" | "right";
+  readonly position: "left" | "top" | "right" | "bottom";
   readonly name: string;
   readonly color: string;
   readonly handSize: number;

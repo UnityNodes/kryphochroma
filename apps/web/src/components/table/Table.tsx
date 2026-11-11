@@ -2,18 +2,21 @@
 
 import { CARD_COLORS, sharedDefs } from "@kryphochroma/cards";
 import { type Color, canDraw, canSayMono, botCatchTarget, isPlayable, isWild, legalMoves } from "@kryphochroma/rules";
-import { Eye, Layers, Shapes, Shuffle, Swords, Trophy, WifiOff } from "lucide-react";
+import { Eye, Layers, Shapes, Shuffle, Swords, Trophy, Volume2, VolumeX, WifiOff } from "lucide-react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { toast } from "sonner";
 import { Dialog, DialogContent, DialogDescription, DialogTitle } from "@/components/ui/dialog";
 import { anchorKey } from "@/game/flight";
 import type { TableController } from "@/game/controller";
 import { SEAT_COLORS } from "@/game/offline";
+import { SOUND_FOR_ICON } from "@/game/sound";
+import { useSound } from "@/game/useSound";
 import { useOfflineGame } from "@/game/useOfflineGame";
 import { cn } from "@/lib/utils";
 import { Center } from "./Center";
 import { Feed } from "./Feed";
 import { Hand } from "./Hand";
+import { HowToPlay } from "./HowToPlay";
 import { Seat } from "./Seat";
 
 const POSITIONS: Record<number, readonly ("left" | "top" | "right")[]> = { 2: ["top"], 3: ["left", "right"], 4: ["left", "top", "right"] };
@@ -58,6 +61,13 @@ export function TableView({ controller: game, colorBlind, onToggleShapes }: Tabl
   const mine = pub.turn === HUMAN && !busy && pub.stage === "Playing";
   const moves = useMemo(() => legalMoves(pub, HUMAN, hand), [pub, hand]);
   const [pickingSlot, setPickingSlot] = useState<number | null>(null);
+  const sound = useSound();
+  const { play: playSound } = sound;
+  const lastLine = game.feed[0];
+  useEffect(() => {
+    const name = lastLine ? SOUND_FOR_ICON[lastLine.icon] : undefined;
+    if (name) playSound(name);
+  }, [lastLine, playSound]);
 
   const anchorCache = useRef(new Map<string, (el: HTMLElement | null) => void>());
   const anchor = useCallback(
@@ -107,7 +117,7 @@ export function TableView({ controller: game, colorBlind, onToggleShapes }: Tabl
   const onDraw = () => run({ type: drawLabel === "Pass" ? "pass" : "draw" });
   const monoHot = canSayMono(pub, HUMAN) && hand.some((c) => c !== null && isPlayable(pub, c));
   const catchable = botCatchTarget(pub, HUMAN);
-  const status = statusText(pub.stage, pub.turn, HUMAN, names, busy, drawn, pub.drawFour !== null, pub.pendingDraw);
+  const status = statusText(pub.stage, pub.turn, game.watching ? -1 : HUMAN, names, busy, drawn, pub.drawFour !== null, pub.pendingDraw);
   const seats = pub.config.seats;
   const opponents = POSITIONS[seats] ?? [];
   const result = pub.lastResult;
@@ -154,10 +164,14 @@ export function TableView({ controller: game, colorBlind, onToggleShapes }: Tabl
             <Trophy aria-hidden />
             Round {pub.round + 1}
           </span>
-          <button type="button" className={cn("kc-chip", colorBlind && "kc-chip-on")} aria-pressed={colorBlind} onClick={onToggleShapes}>
+          <button type="button" className={cn("kc-chip", colorBlind && "kc-chip-on")} aria-pressed={colorBlind} aria-label="Colour-blind shapes" onClick={onToggleShapes}>
             <Shapes aria-hidden />
             <span className="kc-hide-s">Shapes</span>
           </button>
+          <button type="button" className={cn("kc-chip", !sound.muted && "kc-chip-on")} aria-pressed={!sound.muted} aria-label={sound.muted ? "Sound off" : "Sound on"} onClick={sound.toggle}>
+            {sound.muted ? <VolumeX aria-hidden /> : <Volume2 aria-hidden />}
+          </button>
+          <HowToPlay autoOpen={game.mode === "practice"} />
         </div>
       </header>
       <main className="kc-table">
@@ -180,6 +194,17 @@ export function TableView({ controller: game, colorBlind, onToggleShapes }: Tabl
             />
           );
         })}
+        {game.watching && pub.seats[HUMAN] && (
+          <Seat
+            position="bottom"
+            name={names[HUMAN] ?? `Seat ${HUMAN}`}
+            color={SEAT_COLORS[HUMAN] ?? "var(--y)"}
+            handSize={pub.seats[HUMAN].handSize}
+            active={pub.turn === HUMAN}
+            saidMono={pub.seats[HUMAN].saidMono && pub.seats[HUMAN].handSize === 1}
+            fanRef={anchor(anchorKey.fan(HUMAN))}
+          />
+        )}
         <Center
           discard={pub.discard}
           color={pub.color}

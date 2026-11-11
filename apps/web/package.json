@@ -10,7 +10,8 @@
     "build": "next build",
     "start": "next start -p 3310",
     "typecheck": "pnpm --filter @kryphochroma/rules --filter @kryphochroma/cards --filter @kryphochroma/abi build && tsc --noEmit",
-    "test": "pnpm --filter @kryphochroma/rules --filter @kryphochroma/cards build && vitest run"
+    "test": "pnpm --filter @kryphochroma/rules --filter @kryphochroma/cards build && vitest run",
+    "e2e": "playwright test"
   },
   "dependencies": {
     "@kryphochroma/abi": "workspace:*",
@@ -34,6 +35,8 @@
     "wagmi": "3.7.9"
   },
   "devDependencies": {
+    "@axe-core/playwright": "4.14.0",
+    "@playwright/test": "1.64.1",
     "@tailwindcss/postcss": "^4.3.5",
     "@testing-library/react": "^16.3.3",
     "@types/react": "^19.2.0",

@@ -55,7 +55,7 @@ export function Hand({ hand, mine, playable, colorBlind, onPlay, slotRef, boxRef
   const spread = Math.min(MAX_SPREAD_DEG, TOTAL_SPREAD_DEG / Math.max(n, 1));
 
   return (
-    <div className="kc-hand" ref={setBox} role="group" aria-label={`Your hand, ${n} cards`}>
+    <div className="kc-hand" ref={setBox} role="group" aria-label={`Your hand, ${n} cards`} onKeyDown={moveFocus}>
       {entries.map(({ card, slot }, i) => {
         const k = i - (n - 1) / 2;
         const sealed = card < 0;
@@ -77,4 +77,15 @@ export function Hand({ hand, mine, playable, colorBlind, onPlay, slotRef, boxRef
       })}
     </div>
   );
+}
+
+function moveFocus(event: React.KeyboardEvent<HTMLDivElement>): void {
+  if (event.key !== "ArrowLeft" && event.key !== "ArrowRight") return;
+  const cards = [...event.currentTarget.querySelectorAll<HTMLButtonElement>("button.kc-card")];
+  const current = cards.indexOf(document.activeElement as HTMLButtonElement);
+  const delta = event.key === "ArrowRight" ? 1 : -1;
+  const next = cards[current < 0 ? 0 : (current + delta + cards.length) % cards.length];
+  if (!next) return;
+  event.preventDefault();
+  next.focus();
 }

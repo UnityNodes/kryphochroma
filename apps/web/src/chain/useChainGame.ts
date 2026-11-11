@@ -54,7 +54,7 @@ export interface ChainGame extends TableController {
   readonly error: string | null;
 }
 
-export function useChainGame(id: bigint, colorBlind: boolean): ChainGame {
+export function useChainGame(id: bigint, colorBlind: boolean, watchOnly = false): ChainGame {
   const burner = useMemo(() => loadBurner(window.sessionStorage), []);
   const clients = useMemo(() => {
     const transport = http(SEPOLIA_RPC_URL);
@@ -70,7 +70,7 @@ export function useChainGame(id: bigint, colorBlind: boolean): ChainGame {
   const seated = (snapshot?.me ?? -1) >= 0;
   const me = Math.max(snapshot?.me ?? 0, 0);
   const names = useMemo(() => (snapshot?.seats ?? []).map((s, i) => (seated && i === me ? "You" : `Seat ${i + 1} · ${s.player.slice(2, 6)}`)), [snapshot, me, seated]);
-  const queue = useTransitionQueue(placeholder(snapshot?.table.joined ?? 2), me, names, colorBlind);
+  const queue = useTransitionQueue(placeholder(snapshot?.table.joined ?? 2), seated ? me : -1, names, colorBlind);
   const { enqueue, reset } = queue;
 
   const plain = useRef(new Map<Hex, number>());
@@ -110,7 +110,7 @@ export function useChainGame(id: bigint, colorBlind: boolean): ChainGame {
     const table = (await read("getTable", [id])) as ChainSnapshot["table"];
     const seats = (await Promise.all(Array.from({ length: Number(table.joined) }, (_, i) => read("getSeat", [id, i])))) as ChainSnapshot["seats"];
     const mine = burner.address.toLowerCase();
-    const seat = seats.findIndex((s) => s.session.toLowerCase() === mine || (s.player.toLowerCase() === mine && !s.abandoned));
+    const seat = watchOnly ? -1 : seats.findIndex((s) => s.session.toLowerCase() === mine || (s.player.toLowerCase() === mine && !s.abandoned));
     meRef.current = Math.max(seat, 0);
     setSnapshot({ table, seats, me: seat });
     if (Number(table.stage) < 3) {
@@ -147,7 +147,7 @@ export function useChainGame(id: bigint, colorBlind: boolean): ChainGame {
     chain.current = { state, nonces };
     actions.current = actions.current.filter((a) => a.nonce >= (nonces[a.seat] ?? 0));
     reconcile(toGameEvents(keeperLogs(logs), id));
-  }, [clients, burner, id, reconcile]);
+  }, [clients, burner, id, reconcile, watchOnly]);
 
   useEffect(() => {
     let stopped = false;

@@ -19,6 +19,9 @@ export default function Home() {
               Practice offline
             </Link>
           </div>
+          <Link href="/secret" className="justify-self-center text-sm text-sun underline underline-offset-4">
+            How it stays secret
+          </Link>
           <ul className="grid gap-3 text-left text-sm text-muted sm:grid-cols-3">
             <li className="flex gap-2">
               <EyeOff className="size-5 shrink-0 text-sun" aria-hidden />
