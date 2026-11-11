@@ -29,22 +29,8 @@ for (const [id, list] of byTable) {
   if (wanted && id !== wanted) continue;
   const counts = new Map<string, number>();
   for (const e of list) counts.set(e.name, (counts.get(e.name) ?? 0) + 1);
-  const firstOf = (name: string) => list.find((e) => e.name === name);
   const lastOf = (name: string) => [...list].reverse().find((e) => e.name === name);
-  process.stdout.write(
-    `${JSON.stringify({
-      id,
-      counts: Object.fromEntries(counts),
-      created: firstOf("TableCreated")?.tx,
-      firstShuffle: firstOf("ShuffleProgress")?.tx,
-      lastShuffle: lastOf("ShuffleProgress")?.tx,
-      dealt: firstOf("Dealt")?.tx,
-      firstRelay: firstOf("ActionRelayed")?.tx,
-      challenge: firstOf("ChallengeResolved")?.tx,
-      reshuffled: firstOf("Reshuffled")?.tx,
-      abandoned: firstOf("SeatAbandoned")?.tx,
-      settled: firstOf("RoundSettled")?.tx,
-      blocks: [list[0]?.block, list.at(-1)?.block],
-    }, (_, v) => (typeof v === "bigint" ? v.toString() : v))}\n`,
-  );
+  const firsts: Record<string, Hex> = {};
+  for (const e of list) firsts[e.name] ??= e.tx;
+  process.stdout.write(`${JSON.stringify({ id, counts: Object.fromEntries(counts), first: firsts, lastShuffle: lastOf("ShuffleProgress")?.tx, blocks: [list[0]?.block, list.at(-1)?.block] }, (_, v) => (typeof v === "bigint" ? v.toString() : v))}\n`);
 }
