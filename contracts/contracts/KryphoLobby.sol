@@ -26,6 +26,23 @@ library KryphoLobby {
         }
     }
 
+    /** A table the server shuffled ahead of time has an unseated creator, so its first seat hosts; any seat may start a full table so a host who left can not lock the rest in. */
+    function canStart(mapping(uint256 => IKryphoTable.Seat[4]) storage seats, uint256 id, uint8 joined, uint8 size, address who, address creator) public view returns (bool) {
+        if (who == creator) return true;
+        bool creatorSeated = false;
+        bool seated = false;
+        bool first = false;
+        for (uint8 i = 0; i < joined; i++) {
+            IKryphoTable.Seat storage s = seats[id][i];
+            if (s.player == creator || s.session == creator) creatorSeated = true;
+            if (s.player == who || s.session == who) {
+                seated = true;
+                first = i == 0;
+            }
+        }
+        return seated && (joined == size || (first && !creatorSeated));
+    }
+
     function seatOf(mapping(uint256 => IKryphoTable.Seat[4]) storage seats, uint256 id, uint8 joined, address who) public view returns (uint8) {
         for (uint8 i = 0; i < joined; i++) {
             if (seats[id][i].player == who || seats[id][i].session == who) return i;

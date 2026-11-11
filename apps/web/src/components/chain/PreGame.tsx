@@ -41,7 +41,10 @@ export function PreGame({ id, snapshot, address, watching, onFill, onStart, onJo
   const free = (table.config.seats ?? seats.length) - seats.length;
   const canJoin = !watching && snapshot.me < 0 && free > 0;
   const stage = Number(table.stage);
-  const isCreator = table.creator.toLowerCase() === address.toLowerCase();
+  const creator = table.creator.toLowerCase();
+  const creatorSeat = seats.findIndex((s) => s.player.toLowerCase() === creator || s.session.toLowerCase() === creator);
+  const hostSeat = creatorSeat >= 0 ? creatorSeat : 0;
+  const isCreator = creator === address.toLowerCase() || (snapshot.me >= 0 && snapshot.me === hostSeat);
   const seated = !watching && snapshot.me >= 0;
   const canStart = seated && (isCreator || free === 0);
   const progress = Math.round((Number(table.setupStep) / SETUP_STEPS) * 100);
@@ -72,7 +75,7 @@ export function PreGame({ id, snapshot, address, watching, onFill, onStart, onJo
                       <span>
                         Seat {i + 1}: <b className="text-cream">{label}</b>
                         {mine && " (you)"}
-                        {i === 0 && " · host"}
+                        {i === hostSeat && " · host"}
                       </span>
                     </li>
                   );

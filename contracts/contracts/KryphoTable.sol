@@ -181,10 +181,11 @@ contract KryphoTable is IKryphoTable, ZamaEthereumConfig {
         Table storage t = _requireStage(id, Stage.Lobby);
         (bool wasHost, address next) = KryphoLobby.leave(_seats, id, t.joined, msg.sender, t.creator);
         t.joined--;
+        if (!wasHost) return;
         if (t.joined == 0) {
             t.stage = Stage.MatchOver;
             emit TableCancelled(id);
-        } else if (wasHost) {
+        } else {
             t.creator = next;
         }
     }
@@ -192,10 +193,7 @@ contract KryphoTable is IKryphoTable, ZamaEthereumConfig {
     /** A full table may be started by anyone seated at it, so a host who closed the tab can not lock three other players in the lobby. */
     function start(uint256 id) external {
         Table storage t = _requireStage(id, Stage.Lobby);
-        if (msg.sender != t.creator) {
-            if (t.joined < t.config.seats) revert NotCreator();
-            KryphoLobby.seatOf(_seats, id, t.joined, msg.sender);
-        }
+        if (!KryphoLobby.canStart(_seats, id, t.joined, t.config.seats, msg.sender, t.creator)) revert NotCreator();
         if (t.joined < 2) revert BadConfig();
         uint16 done = t.setupStep;
         _resetRound(id, t);

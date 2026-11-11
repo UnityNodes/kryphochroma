@@ -143,6 +143,20 @@ describe("funding the session key", () => {
     expect(drip).not.toHaveBeenCalled();
   });
 
+  it("shares one top-up between a page load and a click that come at the same time", async () => {
+    let drips = 0;
+    let balance = 0n;
+    const publicClient = { getBalance: async () => balance } as unknown as PublicClient;
+    const drip = async () => {
+      drips++;
+      balance = MIN_BURNER_BALANCE;
+      return true;
+    };
+    const deps = { publicClient, burner, funder: { kind: "guest" as const }, drip };
+    await Promise.all([fundBurner(deps), fundBurner(deps)]);
+    expect(drips).toBe(1);
+  });
+
   it("reports a busy faucet for guests", async () => {
     await expect(fundBurner({ publicClient: client(0n), burner, funder: { kind: "guest" }, drip: async () => false })).rejects.toThrow("faucet is busy");
   });

@@ -22,8 +22,8 @@ type Flow = "quick" | "friends" | "bots";
 
 const FLOW_STEPS: Record<Flow, readonly string[]> = {
   quick: ["Session key created in this tab", "Gas for the session key", "You took a seat at a shuffled table", "Bots seated"],
-  friends: ["Session key created in this tab", "Gas for the session key", "Table opened on Sepolia", "You took a seat", "Invite link ready"],
-  bots: ["Session key created in this tab", "Gas for the session key", "Table opened on Sepolia", "You took a seat", "Bots seated", "Shuffle started"],
+  friends: ["Session key created in this tab", "Gas for the session key", "A shuffled table is ready", "You took a seat", "Invite link ready"],
+  bots: ["Session key created in this tab", "Gas for the session key", "A shuffled table is ready", "You took a seat", "Bots seated", "Game starting"],
 };
 const TURN_TIMEOUT_S = 120;
 const OPEN_REFRESH_MS = 8000;
@@ -109,16 +109,27 @@ export function NewTable() {
       router.push(tablePath(pool.id));
     });
 
+  async function seatAtTable(d: SeatDeps): Promise<{ id: bigint; ready: boolean }> {
+    if (!stack) {
+      const ready = (await (await fetch("/api/friends", { method: "POST", body: JSON.stringify({ seats }) })).json().catch(() => ({}))) as { id?: string };
+      if (ready.id) {
+        await takeSeat(d, BigInt(ready.id));
+        return { id: BigInt(ready.id), ready: true };
+      }
+    }
+    const guest = d.funder.kind === "guest";
+    const id = await openTable(d, { seats, turnTimeout: TURN_TIMEOUT_S, stackDrawTwo: stack }, guest);
+    if (!guest) await takeSeat(d, id);
+    return { id, ready: false };
+  }
+
   const friends = () =>
     run("friends", async () => {
       const d = deps();
       setDone(0);
       await fundBurner(d);
       setDone(1);
-      const guest = d.funder.kind === "guest";
-      const id = await openTable(d, { seats, turnTimeout: TURN_TIMEOUT_S, stackDrawTwo: stack }, guest);
-      setDone(2);
-      if (!guest) await takeSeat(d, id);
+      const { id } = await seatAtTable(d);
       setDone(4);
       router.push(tablePath(id));
     });
@@ -129,17 +140,20 @@ export function NewTable() {
       setDone(0);
       await fundBurner(d);
       setDone(1);
-      const guest = d.funder.kind === "guest";
-      const id = await openTable(d, { seats, turnTimeout: TURN_TIMEOUT_S, stackDrawTwo: stack }, guest);
-      setDone(2);
-      if (!guest) await takeSeat(d, id);
+      const { id, ready } = await seatAtTable(d);
       setDone(3);
       await requestBots(d.burner, id);
       setDone(4);
-      await startTable(d, id);
+      if (!ready) await startTable(d, id);
       setDone(5);
       router.push(tablePath(id));
     });
+
+  useEffect(() => {
+    if (!funderState.ready || funderState.funder.kind !== "guest") return;
+    const d = { publicClient: createPublicClient({ chain: sepolia, transport: sepoliaTransport(), pollingInterval: RECEIPT_POLL_MS }), burner: loadBurner(window.sessionStorage), funder: funderState.funder, drip };
+    void fundBurner(d).catch(() => undefined);
+  }, [funderState]);
 
   const disabled = running || !funderState.ready;
 

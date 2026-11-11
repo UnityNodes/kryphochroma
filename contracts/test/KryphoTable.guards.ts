@@ -58,7 +58,7 @@ describe("KryphoTable guards", function () {
     await expect(table.connect(s[1]!).join(id, s[5]!.address)).to.be.revertedWithCustomError(table, "BadSession");
     await (await table.connect(s[1]!).join(id, s[1]!.address)).wait();
     await expect(table.connect(s[2]!).join(id, s[2]!.address)).to.be.revertedWithCustomError(table, "TableFull");
-    await expect(table.connect(s[2]!).start(id)).to.be.revertedWithCustomError(table, "NotSeated");
+    await expect(table.connect(s[2]!).start(id)).to.be.revertedWithCustomError(table, "NotCreator");
     await expect(table.dealSeat(id, 0)).to.be.revertedWithCustomError(table, "WrongStage");
     await expect(table.dealSeat(999, 0)).to.be.revertedWithCustomError(table, "WrongStage");
   });
@@ -185,14 +185,31 @@ describe("KryphoTable guards", function () {
     await expect(table.connect(s[1]!).join(id, s[1]!.address)).to.be.revertedWithCustomError(table, "WrongStage");
   });
 
+  it("lets the first seat host a table the server opened, and keeps it open when everyone leaves", async function () {
+    const table = await deployTable(ethers, ethers.ZeroAddress);
+    await (await table.connect(s[3]!).createTable({ ...config, seats: 3 })).wait();
+    const id = await table.tableCount();
+    await (await table.connect(s[0]!).join(id, s[0]!.address)).wait();
+    await (await table.connect(s[1]!).join(id, s[1]!.address)).wait();
+    await expect(table.connect(s[1]!).start(id)).to.be.revertedWithCustomError(table, "NotCreator");
+    await (await table.connect(s[0]!).leave(id)).wait();
+    await (await table.connect(s[1]!).leave(id)).wait();
+    const t = await table.getTable(id);
+    expect([Number(t.stage), Number(t.joined), t.creator]).to.deep.equal([0, 0, s[3]!.address]);
+    await (await table.connect(s[2]!).join(id, s[2]!.address)).wait();
+    await (await table.connect(s[0]!).join(id, s[0]!.address)).wait();
+    await (await table.connect(s[2]!).start(id)).wait();
+    expect(Number((await table.getTable(id)).stage)).to.equal(1);
+  });
+
   it("lets anyone seated start a full table when the host is gone", async function () {
     const table = await deployTable(ethers, ethers.ZeroAddress);
-    await (await table.connect(s[3]!).createTable(config)).wait();
+    await (await table.connect(s[3]!).openTable({ ...config, seats: 3 }, s[3]!.address)).wait();
     const id = await table.tableCount();
     await (await table.connect(s[0]!).join(id, s[0]!.address)).wait();
     await expect(table.connect(s[0]!).start(id)).to.be.revertedWithCustomError(table, "NotCreator");
     await (await table.connect(s[1]!).join(id, s[1]!.address)).wait();
-    await expect(table.connect(s[2]!).start(id)).to.be.revertedWithCustomError(table, "NotSeated");
+    await expect(table.connect(s[2]!).start(id)).to.be.revertedWithCustomError(table, "NotCreator");
     await (await table.connect(s[1]!).start(id)).wait();
     expect(Number((await table.getTable(id)).stage)).to.equal(1);
   });

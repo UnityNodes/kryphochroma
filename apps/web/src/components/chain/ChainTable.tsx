@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
 import { createPublicClient } from "viem";
@@ -54,10 +54,19 @@ export function ChainTable({ id, watch }: { readonly id: string; readonly watch?
   const leave = () =>
     withFunder("Could not leave", async (deps) => {
       await fundBurner(deps);
-      await leaveTable(deps, BigInt(id));
-      toast.success("You left the table");
+      const { settled } = await leaveTable(deps, BigInt(id));
       router.push("/new");
+      settled.then(
+        () => toast.success("You left the table"),
+        (e: unknown) => toast.error(`Could not leave: ${friendlyError(e)}`),
+      );
     });
+
+  const seatedNow = (game.snapshot?.me ?? -1) >= 0;
+  useEffect(() => {
+    if (watch || seatedNow || !funderState.ready || funderState.funder.kind !== "guest") return;
+    void fundBurner(seatDeps(funderState.funder)).catch(() => undefined);
+  }, [watch, seatedNow, funderState]);
 
   const start = () =>
     withFunder("Could not start", async (deps) => {

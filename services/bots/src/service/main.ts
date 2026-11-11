@@ -11,7 +11,7 @@ import { createBot } from "../player/run.js";
 import { type SignedAction } from "@kryphochroma/abi";
 import { createRelay, encodeMessage } from "../relay/hub.js";
 import { type DripLedger, decideDrip, releaseDrip } from "./drip.js";
-import { pickBots, planPool } from "./pool.js";
+import { type PoolTable, SPARE_BY_SEATS, pickBots, pickReady, planPool } from "./pool.js";
 import { type ProfileStore, fromDisk, lookup, parseAddresses, putProfile, toDisk } from "./profiles.js";
 
 const ACTIVE_STAGES = new Set([3, 4]);
@@ -108,7 +108,7 @@ interface LobbyView {
 const POOL_SEATS = 4;
 const POOL_TURN_TIMEOUT = 120;
 const RESERVE_MS = 120_000;
-const MAX_POOL_TABLES = 3;
+const MAX_POOL_TABLES = 8;
 const FILL_SEAT_TRIES = 5;
 const FILL_SEAT_WAIT_MS = 3000;
 const STREAM_REFRESH_MS = 2000;
@@ -147,6 +147,7 @@ async function poolTables(): Promise<{ id: bigint; view: LobbyView }[]> {
   return found;
 }
 
+const botAddresses = new Set(bots.map((b) => b.address.toLowerCase()));
 const OPEN_CACHE_MS = 6000;
 const OPEN_FRESH_BLOCKS = 300n;
 let openCache: { at: number; tables: { id: string; joined: number; seats: number; creator: string; setupStep: number }[] } = { at: 0, tables: [] };
@@ -168,8 +169,11 @@ async function openTables(): Promise<typeof openCache.tables> {
     if (!fresh.has(id.toString())) continue;
     const view = await readLobby(id);
     const free = Number(view.config.seats) - Number(view.joined);
-    if (Number(view.stage) !== 0 || free < 1 || Number(view.joined) === 0 || view.creator.toLowerCase() === keeper.address.toLowerCase()) continue;
-    tables.push({ id: id.toString(), joined: Number(view.joined), seats: Number(view.config.seats), creator: view.creator, setupStep: Number(view.setupStep) });
+    if (Number(view.stage) !== 0 || free < 1 || Number(view.joined) === 0) continue;
+    const players = await seatedPlayers(id, Number(view.joined));
+    if (players.some((p) => botAddresses.has(p.toLowerCase()))) continue;
+    const host = view.creator.toLowerCase() === keeper.address.toLowerCase() ? (players[0] ?? view.creator) : view.creator;
+    tables.push({ id: id.toString(), joined: Number(view.joined), seats: Number(view.config.seats), creator: host, setupStep: Number(view.setupStep) });
   }
   openCache = { at: Date.now(), tables: tables.reverse() };
   return openCache.tables;
@@ -185,44 +189,61 @@ async function startPoolTable(id: bigint): Promise<void> {
   });
 }
 
-async function createPoolTable(): Promise<void> {
+async function createPoolTable(seats: number): Promise<void> {
   const created = await withKeeperWallet(async () => {
     const hash = await keeperWallet.writeContract({
       address: table,
       abi: kryphoTableAbi,
       functionName: "createTable",
-      args: [{ seats: POOL_SEATS, turnTimeout: POOL_TURN_TIMEOUT, targetScore: 500, singleRound: true, stackDrawTwo: false }],
+      args: [{ seats, turnTimeout: POOL_TURN_TIMEOUT, targetScore: 500, singleRound: true, stackDrawTwo: false }],
     });
     const receipt = await publicClient.waitForTransactionReceipt({ hash });
     log({ event: "pool-table", hash });
     return parseEventLogs({ abi: kryphoTableAbi, logs: receipt.logs, eventName: "TableCreated" })[0]?.args.id;
   });
-  if (created === undefined) return;
-  await topUpBots();
-  log({ event: "pool-seated", id: created, bots: await seatBots(created, POOL_SEATS - 1) });
+  if (created !== undefined) log({ event: "pool-ready", id: created, seats });
 }
 
 async function ensurePool(): Promise<void> {
   if (poolCreating) return;
   poolCreating = true;
   try {
-    const tables = (await poolTables()).map((p) => ({ id: p.id, seats: Number(p.view.config.seats), joined: Number(p.view.joined), reserved: isReserved(p.id) }));
-    const plan = planPool(tables, MAX_POOL_TABLES);
+    const plan = planPool(await poolView(), MAX_POOL_TABLES);
     for (const id of plan.start) await startPoolTable(id).catch((e: Error) => log({ event: "pool-start-failed", id, message: e.message.slice(0, 200) }));
-    for (const { id, count } of plan.seat) log({ event: "pool-seated", id, bots: await seatBots(id, count) });
-    if (plan.create) await createPoolTable();
+    for (const seats of plan.create) await createPoolTable(seats);
   } finally {
     poolCreating = false;
   }
 }
 
-async function quick(): Promise<{ id?: string; warming?: number }> {
-  const ready = (await poolTables()).filter((p) => !isReserved(p.id) && Number(p.view.config.seats) > Number(p.view.joined));
-  const shuffled = ready.find((p) => Number(p.view.setupStep) >= 60 && Number(p.view.config.seats) - Number(p.view.joined) === 1);
-  if (!shuffled) return { warming: Math.max(0, ...ready.map((p) => Number(p.view.setupStep))) };
-  reserved.set(shuffled.id.toString(), Date.now() + RESERVE_MS);
+async function poolView(): Promise<PoolTable[]> {
+  return (await poolTables()).map((p) => ({ id: p.id, seats: Number(p.view.config.seats), joined: Number(p.view.joined), reserved: isReserved(p.id), setupStep: Number(p.view.setupStep) }));
+}
+
+async function reserveReady(seats: number): Promise<{ id?: string; warming?: number }> {
+  const tables = await poolView();
+  const ready = pickReady(tables, seats);
   void ensurePool().catch(() => undefined);
-  return { id: shuffled.id.toString() };
+  if (!ready) return { warming: Math.max(0, ...tables.filter((p) => p.seats === seats).map((p) => p.setupStep)) };
+  reserved.set(ready.id.toString(), Date.now() + RESERVE_MS);
+  return { id: ready.id.toString() };
+}
+
+async function quick(): Promise<{ id?: string; warming?: number }> {
+  const result = await reserveReady(POOL_SEATS);
+  if (result.id) {
+    const id = BigInt(result.id);
+    void topUpBots()
+      .then(() => seatBots(id, POOL_SEATS - 1))
+      .then((count) => log({ event: "pool-seated", id, bots: count }))
+      .catch((e: Error) => log({ event: "pool-seat-failed", id, message: e.message.slice(0, 160) }));
+  }
+  return result;
+}
+
+async function friends(seats: number): Promise<{ id?: string; warming?: number }> {
+  if (!Number.isInteger(seats) || !(seats in SPARE_BY_SEATS)) return { warming: 0 };
+  return reserveReady(seats);
 }
 
 async function seatBots(id: bigint, free: number): Promise<number> {
@@ -383,6 +404,7 @@ const server = createServer(async (req, res) => {
     }
     if (url.pathname === "/drip") return reply(res, 200, await drip(String(body.address ?? "")));
     if (url.pathname === "/quick") return reply(res, 200, await quick());
+    if (url.pathname === "/friends") return reply(res, 200, await friends(Number(body.seats)));
     if (url.pathname === "/act") {
       const action = parseAction(body);
       const result = await relay.accept(action);

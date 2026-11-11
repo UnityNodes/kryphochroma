@@ -85,7 +85,19 @@ export async function needsGas(deps: SeatDeps): Promise<boolean> {
   return (await deps.publicClient.getBalance({ address: deps.burner.address })) < MIN_BURNER_BALANCE;
 }
 
-export async function fundBurner(deps: SeatDeps): Promise<void> {
+const funding = new Map<string, Promise<void>>();
+
+/** The page tops up a guest key as soon as it opens, so a click that comes in the meantime waits for that same top-up instead of asking the faucet twice. */
+export function fundBurner(deps: SeatDeps): Promise<void> {
+  const key = deps.burner.address.toLowerCase();
+  const running = funding.get(key);
+  if (running) return running;
+  const task = fundOnce(deps).finally(() => funding.delete(key));
+  funding.set(key, task);
+  return task;
+}
+
+async function fundOnce(deps: SeatDeps): Promise<void> {
   if (!(await needsGas(deps))) return;
   if (deps.funder.kind === "wallet") {
     const hash = await deps.funder.wallet.sendTransaction({ account: deps.funder.wallet.account ?? deps.funder.address, chain: sepolia, to: deps.burner.address, value: WALLET_CRUMB });
@@ -138,9 +150,9 @@ export async function openTable(
   return created.args.id;
 }
 
-export async function leaveTable(deps: SeatDeps, id: bigint): Promise<void> {
+export async function leaveTable(deps: SeatDeps, id: bigint): Promise<{ readonly settled: Promise<unknown> }> {
   const hash = await sendWhenFunded(() => burnerSend(deps.publicClient, deps.burner, encodeFunctionData({ abi: kryphoTableAbi, functionName: "leave", args: [id] })));
-  await confirm(deps.publicClient, hash, "Leaving the table");
+  return { settled: confirm(deps.publicClient, hash, "Leaving the table") };
 }
 
 export async function startTable(deps: SeatDeps, id: bigint): Promise<void> {
