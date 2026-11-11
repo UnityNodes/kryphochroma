@@ -104,11 +104,18 @@ export async function runKeeper(config: KeeperConfig, env: NodeJS.ProcessEnv, un
 
   /** Dealing and the starter reveal are independent, so the KMS round trip runs while the deal transaction is mined. */
   async function dealAndReveal(id: bigint, reveal: boolean): Promise<void> {
-    const starter = reveal ? sdk.decryption.decryptPublicValues([...((await read("starterHandles", [id])) as Hex[])]) : null;
+    const handles = reveal ? ((await read("starterHandles", [id])) as Hex[]) : null;
+    const starter = handles
+      ? sdk.decryption.decryptPublicValues([...handles]).then(
+          (result) => ({ result }),
+          (error: unknown) => ({ error }),
+        )
+      : null;
     await send("deal", [id], DEAL_GAS);
     if (!starter) return;
-    const result = await starter;
-    await send("setStarter", [id, result.abiEncodedClearValues, result.decryptionProof]);
+    const outcome = await starter;
+    if ("error" in outcome) throw outcome.error;
+    await send("setStarter", [id, outcome.result.abiEncodedClearValues, outcome.result.decryptionProof]);
   }
 
   async function act(id: bigint, action: KeeperAction): Promise<void> {
