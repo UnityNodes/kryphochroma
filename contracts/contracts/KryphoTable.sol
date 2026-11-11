@@ -15,8 +15,11 @@ contract KryphoTable is IKryphoTable, ZamaEthereumConfig {
     uint8 internal constant NONE = type(uint8).max;
     uint8 internal constant MAX_TIMEOUTS = 3;
     uint8 internal constant REFILL_AT = 48;
-    uint256 internal constant STARTER_BATCH = 3;
+    uint256 internal constant STARTER_BATCH = 1;
     uint32 internal constant MIN_TURN_TIMEOUT = 30;
+    uint32 internal constant MAX_TURN_TIMEOUT = 1 days;
+    uint8 internal constant MIN_REFILL = 16;
+    uint256 internal constant SESSION_STIPEND = 10_000;
     uint16 internal constant MAX_TARGET_SCORE = 10_000;
     uint16 internal constant CHEAT_PENALTY = 100;
     uint64 internal constant CATCH_DELAY_BLOCKS = 2;
@@ -120,12 +123,13 @@ contract KryphoTable is IKryphoTable, ZamaEthereumConfig {
         Table storage t = _tables[id];
         for (uint256 i = 0; i < actions.length; i++) {
             Action calldata a = actions[i];
-            if (a.seat >= t.joined || a.nonce != _nonces[id][a.seat]) revert BadAction();
+            if (a.seat >= t.joined || a.nonce != _nonces[id][a.seat]) continue;
             if (_signer(id, a) != _seats[id][a.seat].session) revert BadSignature();
             _nonces[id][a.seat] = a.nonce + 1;
             try this.relayOne(id, a) {
                 emit ActionRelayed(id, a.seat, a.nonce);
             } catch (bytes memory reason) {
+                if (reason.length == 0) revert BadAction();
                 emit ActionRejected(id, a.seat, a.nonce, bytes4(reason));
             }
         }
@@ -151,7 +155,7 @@ contract KryphoTable is IKryphoTable, ZamaEthereumConfig {
     }
 
     function createTable(Config calldata config) external returns (uint256 id) {
-        if (config.seats < 2 || config.seats > 4 || config.turnTimeout < MIN_TURN_TIMEOUT || config.targetScore == 0 || config.targetScore > MAX_TARGET_SCORE) {
+        if (config.seats < 2 || config.seats > 4 || config.turnTimeout < MIN_TURN_TIMEOUT || config.turnTimeout > MAX_TURN_TIMEOUT || config.targetScore == 0 || config.targetScore > MAX_TARGET_SCORE) {
             revert BadConfig();
         }
         id = ++tableCount;
@@ -163,18 +167,19 @@ contract KryphoTable is IKryphoTable, ZamaEthereumConfig {
 
     function join(uint256 id, address session) external payable {
         Table storage t = _requireStage(id, Stage.Lobby);
-        if (session == address(0)) revert BadSession();
+        if (session == address(0) || session == TAKEOVER) revert BadSession();
         if (t.joined >= t.config.seats) revert TableFull();
         Seat[4] storage seats = _seats[id];
         for (uint8 i = 0; i < t.joined; i++) {
             if (seats[i].player == msg.sender) revert AlreadySeated();
+            if (seats[i].session == session) revert BadSession();
         }
         uint8 seat = t.joined++;
         seats[seat].player = msg.sender;
         seats[seat].session = session;
         emit Joined(id, seat, msg.sender, session);
         if (msg.value > 0) {
-            (bool ok, ) = session.call{value: msg.value}("");
+            (bool ok, ) = session.call{value: msg.value, gas: SESSION_STIPEND}("");
             if (!ok) revert TransferFailed();
         }
     }
@@ -222,7 +227,7 @@ contract KryphoTable is IKryphoTable, ZamaEthereumConfig {
             bool front = t.deckPtr >= KryphoDeck.DECK_SIZE - t.deckEnd;
             uint8 room = front ? t.deckPtr : KryphoDeck.DECK_SIZE - t.deckEnd;
             size = uint8(spare < room ? spare : room);
-            if (size == 0 || t.deckEnd - t.deckPtr > REFILL_AT) revert ShuffleNotDone();
+            if (size == 0 || t.deckEnd - t.deckPtr > REFILL_AT || (size < MIN_REFILL && t.deckPtr < t.deckEnd)) revert ShuffleNotDone();
             while (size & (size - 1) != 0) size &= size - 1;
             t.refillSize = size;
             t.refillAt = front ? 0 : t.deckEnd;
@@ -495,12 +500,14 @@ contract KryphoTable is IKryphoTable, ZamaEthereumConfig {
         if (t.revealPrepared != t.joined) revert RevealNotReady();
         FHE.checkSignatures(_revealHandles[id], cleartexts, proof);
         (int8 winner, uint16 points, uint8 cheaters) = _score(id, t, cleartexts);
-        if (winner >= 0) _seats[id][uint8(winner)].score += points;
         for (uint8 seat = 0; seat < t.joined; seat++) {
             if (cheaters & (uint8(1) << seat) == 0) continue;
             Seat storage c = _seats[id][seat];
-            c.score = c.score > CHEAT_PENALTY ? c.score - CHEAT_PENALTY : 0;
+            uint16 taken = c.score < CHEAT_PENALTY ? c.score : CHEAT_PENALTY;
+            c.score -= taken;
+            if (winner >= 0) points += taken;
         }
+        if (winner >= 0) _seats[id][uint8(winner)].score += points;
         emit RoundSettled(id, winner, points, cheaters);
         bool over = t.config.singleRound || (winner >= 0 && _seats[id][uint8(winner)].score >= t.config.targetScore);
         t.stage = over ? Stage.MatchOver : Stage.RoundOver;
@@ -529,10 +536,6 @@ contract KryphoTable is IKryphoTable, ZamaEthereumConfig {
         return _hadColor[id];
     }
 
-    function deckCardAt(uint256 id, uint8 index) external view returns (euint8) {
-        return _deck[id][index];
-    }
-
     function discardOf(uint256 id) external view returns (uint8[] memory cards) {
         uint8[] storage all = _discard[id];
         uint256 base = _tables[id].discardBase;
@@ -552,8 +555,7 @@ contract KryphoTable is IKryphoTable, ZamaEthereumConfig {
     function _isActor(uint256 id, uint8 seat) internal view returns (bool) {
         uint8 relayed = _relaySeat();
         if (relayed != NONE) return relayed == seat;
-        Seat storage s = _seats[id][seat];
-        return msg.sender == s.session || msg.sender == s.player;
+        return msg.sender == _seats[id][seat].session;
     }
 
     function _relaySeat() internal view returns (uint8 seat) {
@@ -753,7 +755,6 @@ contract KryphoTable is IKryphoTable, ZamaEthereumConfig {
         if (winner < 0) return (winner, 0, cheaters);
         for (uint8 seat = 0; seat < t.joined; seat++) {
             if (int8(seat) != winner) total += handPoints[seat];
-            if (cheaters & (uint8(1) << seat) != 0) total += CHEAT_PENALTY;
         }
     }
 

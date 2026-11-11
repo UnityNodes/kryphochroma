@@ -201,9 +201,21 @@ describe("reveal and scoring", () => {
     const played = applyPlay(s, 0, 0, R(9)).state;
     expect(played.honest[0]).toBe(false);
     const { state } = applyReveal(played);
-    expect(state.pub.lastResult).toEqual({ winner: 2, points: 1 + 2 + 3 + 20 + 50 + 6 + 7 + 100, cheaters: [0] });
-    expect(state.pub.seats[2]?.score).toBe(189);
+    expect(state.pub.lastResult).toEqual({ winner: 2, points: 1 + 2 + 3 + 20 + 50 + 6 + 7, cheaters: [0] });
+    expect(state.pub.seats[2]?.score).toBe(89);
     expect(state.pub.seats[0]?.score).toBe(0);
+  });
+
+  it("pays the winner only the penalty actually taken from a liar", () => {
+    const s = withHandSize(game([[B(9), WILD, B(3), B(4), B(5), B(6), B(7)], [Y(1), Y(2), Y(3), Y(10), WILD, Y(6), Y(7)], [G(1), G(1), G(2), G(2), G(3), G(3), G(4)]], R(5)), 0, 1);
+    const played = applyPlay(s, 0, 0, R(9)).state;
+    const scored = (score: number) => ({ ...played, pub: { ...played.pub, seats: played.pub.seats.map((x, i) => (i === 0 ? { ...x, score } : x)) } });
+    const rich = applyReveal(scored(150)).state;
+    expect(rich.pub.seats[0]?.score).toBe(50);
+    expect(rich.pub.seats[2]?.score).toBe(89 + 100);
+    const poor = applyReveal(scored(40)).state;
+    expect(poor.pub.seats[0]?.score).toBe(0);
+    expect(poor.pub.lastResult?.points).toBe(89 + 40);
   });
 
   it("applies a pending draw two or four from the winning card", () => {

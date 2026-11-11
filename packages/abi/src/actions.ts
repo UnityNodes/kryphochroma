@@ -126,3 +126,6 @@ export function stepAction(state: GameState, action: ActionFields): { state: Gam
   }
 }
 
+export function fillMessage(table: bigint): string {
+  return `Kryphochroma: seat bots at table ${table.toString()}`;
+}

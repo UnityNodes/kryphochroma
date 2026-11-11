@@ -1,4 +1,4 @@
-import { DECK_SIZE, FILL_CHUNK, NO_SEAT, REFILL_AT, SETUP_STEPS, SHUFFLE_STEPS, STAGE } from "@kryphochroma/abi";
+import { DECK_SIZE, FILL_CHUNK, MIN_REFILL, NO_SEAT, REFILL_AT, SETUP_STEPS, SHUFFLE_STEPS, STAGE } from "@kryphochroma/abi";
 
 export interface TableView {
   readonly stage: number;
@@ -39,6 +39,7 @@ function refillAction(table: TableView): KeeperAction {
   const startable = Number(table.spare ?? 0) > 0 && room > 0 && deckEnd - deckPtr <= REFILL_AT;
   if (!startable) return { kind: "idle" };
   const fresh = 2 ** Math.floor(Math.log2(Math.min(Number(table.spare), room)));
+  if (fresh < MIN_REFILL && deckEnd > deckPtr) return { kind: "idle" };
   return { kind: "reshuffleStep", remaining: Math.ceil(fresh / FILL_CHUNK) + SHUFFLE_STEPS };
 }
 
@@ -80,7 +81,7 @@ const BACKGROUND_KINDS = new Set<KeeperAction["kind"]>(["setupStep", "reshuffleS
 
 function backgroundRank(entry: PlannedAction): number {
   if (entry.action.kind === "reshuffleStep") return 0;
-  return stageName(entry.stage) === "Shuffling" ? 1 : 2;
+  return stageName(entry.stage) === "Lobby" ? 1 : 2;
 }
 
 export function scheduleKeeper(planned: readonly PlannedAction[]): { readonly urgent: readonly PlannedAction[]; readonly background: PlannedAction | null } {

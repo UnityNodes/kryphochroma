@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.27;
 
+import {euint8} from "@fhevm/solidity/lib/FHE.sol";
 import {KryphoTable} from "../KryphoTable.sol";
 
 contract TableHarness is KryphoTable {
@@ -13,5 +14,9 @@ contract TableHarness is KryphoTable {
         for (uint256 i = 0; i < below.length; i++) pile.push(below[i]);
         pile.push(top);
         _tables[id].deckPtr = deckPtr;
+    }
+
+    function deckCardAt(uint256 id, uint8 index) external view returns (euint8) {
+        return _deck[id][index];
     }
 }

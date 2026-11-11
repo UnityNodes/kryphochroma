@@ -18,7 +18,7 @@ export function scoreRound(
   const winner = pickWinner(hands, honest, candidate);
   if (winner === null) return { winner, points: 0, cheaters };
   const total = hands.reduce<number>((sum, hand, seat) => (seat === winner ? sum : sum + handPoints(hand)), 0);
-  return { winner, points: total + CHEAT_PENALTY * cheaters.length, cheaters };
+  return { winner, points: total, cheaters };
 }
 
 function pickWinner(hands: readonly RevealedHand[], honest: readonly boolean[], candidate: number): number | null {

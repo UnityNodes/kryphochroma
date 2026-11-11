@@ -31,6 +31,8 @@ describe("keeper plan", () => {
     expect(nextKeeperAction({ ...playing, deckPtr: 84 }, 0n)).toEqual({ kind: "reshuffleStep", remaining: 57 });
     expect(nextKeeperAction({ ...playing, deckPtr: 84, spare: 70 }, 0n)).toEqual({ kind: "reshuffleStep", remaining: 59 });
     expect(nextKeeperAction({ ...playing, deckPtr: 84, spare: 0 }, 0n)).toEqual({ kind: "idle" });
+    expect(nextKeeperAction({ ...playing, deckPtr: 84, spare: 9 }, 0n)).toEqual({ kind: "idle" });
+    expect(nextKeeperAction({ ...playing, deckPtr: 108, spare: 9 }, 0n)).toEqual({ kind: "reshuffleStep", remaining: 57 });
     expect(nextKeeperAction({ ...playing, refillSize: 30, refillStep: 50 }, 0n)).toEqual({ kind: "reshuffleStep", remaining: 8 });
     expect(nextKeeperAction({ ...playing, refillSize: 30, refillStep: 58 }, 0n)).toEqual({ kind: "idle" });
     expect(nextKeeperAction({ ...playing, deckPtr: 108 }, 2000n)).toEqual({ kind: "forceTimeout" });
@@ -61,8 +63,8 @@ describe("keeper plan", () => {
     const { urgent, background } = scheduleKeeper(planned);
     expect(urgent.map((p) => p.id)).toEqual([4n, 2n]);
     expect(background?.id).toBe(7n);
-    expect(scheduleKeeper(planned.filter((p) => p.id !== 7n)).background?.id).toBe(6n);
-    expect(scheduleKeeper([planned[0]!, planned[2]!]).background?.id).toBe(5n);
+    expect(scheduleKeeper(planned.filter((p) => p.id !== 7n)).background?.id).toBe(5n);
+    expect(scheduleKeeper([planned[3]!, planned[2]!]).background?.id).toBe(6n);
     expect(scheduleKeeper([planned[2]!])).toEqual({ urgent: [], background: null });
   });
 });

@@ -64,7 +64,7 @@ export async function signAction(
 }
 
 async function deployTable() {
-  const table = await ethers.deployContract("KryphoTable", [ethers.ZeroAddress]);
+  const table = await ethers.deployContract("TableHarness", [ethers.ZeroAddress]);
   return table;
 }
 

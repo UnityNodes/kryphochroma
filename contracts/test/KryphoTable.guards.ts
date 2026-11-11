@@ -46,6 +46,7 @@ describe("KryphoTable guards", function () {
     await expect(table.createTable({ ...config, turnTimeout: 5 })).to.be.revertedWithCustomError(table, "BadConfig");
     await expect(table.createTable({ ...config, targetScore: 0 })).to.be.revertedWithCustomError(table, "BadConfig");
     await expect(table.createTable({ ...config, targetScore: 10_001 })).to.be.revertedWithCustomError(table, "BadConfig");
+    await expect(table.createTable({ ...config, turnTimeout: 86_401 })).to.be.revertedWithCustomError(table, "BadConfig");
     await (await table.createTable(config)).wait();
     const id = await table.tableCount();
     await expect(table.join(id, ethers.ZeroAddress)).to.be.revertedWithCustomError(table, "BadSession");
@@ -53,6 +54,7 @@ describe("KryphoTable guards", function () {
     await (await table.join(id, s[5]!.address, { value: ethers.parseEther("0.01") })).wait();
     expect(await ethers.provider.getBalance(s[5]!.address)).to.be.greaterThan(0n);
     await expect(table.join(id, s[6]!.address)).to.be.revertedWithCustomError(table, "AlreadySeated");
+    await expect(table.connect(s[1]!).join(id, s[5]!.address)).to.be.revertedWithCustomError(table, "BadSession");
     await (await table.connect(s[1]!).join(id, s[1]!.address)).wait();
     await expect(table.connect(s[2]!).join(id, s[2]!.address)).to.be.revertedWithCustomError(table, "TableFull");
     await expect(table.connect(s[1]!).start(id)).to.be.revertedWithCustomError(table, "NotCreator");
@@ -182,7 +184,9 @@ describe("KryphoTable guards", function () {
     const forged = await signAction(table, other, id, turn, 1, {}, 0);
     await expect(table.relay(id, [forged])).to.be.revertedWithCustomError(table, "BadSignature");
     const wrongNonce = await signAction(table, actor, id, turn, 1, {}, 5);
-    await expect(table.relay(id, [wrongNonce])).to.be.revertedWithCustomError(table, "BadAction");
+    const skipped = await (await table.relay(id, [wrongNonce])).wait();
+    expect(skipped!.logs).to.have.length(0);
+    expect((await table.noncesOf(id))[turn]).to.equal(0n);
     const badPass = await signAction(table, actor, id, turn, 2, {}, 0);
     const draw = await signAction(table, actor, id, turn, 1, {}, 1);
     const receipt = await (await table.relay(id, [badPass, draw])).wait();
@@ -191,8 +195,15 @@ describe("KryphoTable guards", function () {
     expect(names).to.include("ActionRelayed");
     expect(names).to.include("Drew");
     expect((await table.noncesOf(id))[turn]).to.equal(2n);
-    await expect(table.relay(id, [draw])).to.be.revertedWithCustomError(table, "BadAction");
+    expect((await (await table.relay(id, [draw])).wait())!.logs).to.have.length(0);
     await expect(table.relayOne(id, draw)).to.be.revertedWithCustomError(table, "NotYourTurn");
+    await (await table.relay(id, [await signAction(table, actor, id, turn, 2, {}, 2)])).wait();
+    const starved = await signAction(table, other, id, 1 - turn, 1, {}, 0);
+    const needed = await table.relay.estimateGas(id, [starved]);
+    await expect(table.relay(id, [starved], { gasLimit: (needed * 7n) / 10n })).to.be.revert(ethers);
+    expect((await table.noncesOf(id))[1 - turn]).to.equal(0n);
+    await (await table.relay(id, [starved])).wait();
+    expect((await table.noncesOf(id))[1 - turn]).to.equal(1n);
   });
 
   it("pre-shuffles in the lobby and deals right after start", async function () {
@@ -249,6 +260,9 @@ describe("KryphoTable guards", function () {
     await (await table.connect(takeover).draw(id)).wait();
     await (await table.connect(takeover).pass(id)).wait();
     expect((await table.getSeat(id, first)).timeouts).to.equal(0n);
+    await networkHelpers.time.increase(91);
+    await (await table.forceTimeout(id)).wait();
+    await expect(table.connect(s[first]!).draw(id)).to.be.revertedWithCustomError(table, "NotYourTurn");
   });
 
   it("refills the deck from the discard in the background and swaps it in when the deck runs out", async function () {
@@ -257,6 +271,8 @@ describe("KryphoTable guards", function () {
       const { checkSignaturesArgs } = await starter(table, id);
       await (await table.setStarter(id, checkSignaturesArgs.abiEncodedCleartexts, checkSignaturesArgs.decryptionProof)).wait();
     }
+    await expect(table.reshuffleStep(id)).to.be.revertedWithCustomError(table, "ShuffleNotDone");
+    await (await table.stageDeck(id, 100, [0x01, 0x02, 0x03, 0x04, 0x05, 0x06, 0x07, 0x08])).wait();
     await expect(table.reshuffleStep(id)).to.be.revertedWithCustomError(table, "ShuffleNotDone");
     const below = [0x01, 0x02, 0x13, 0x24, 0x35, 0x0a, 0x1b, 0x2c, 0x4d, 0x4e, 0x07, 0x18, 0x29, 0x31, 0x05, 0x16, 0x27, 0x38, 0x09, 0x33];
     const top = Number((await table.getTable(id)).topCard);

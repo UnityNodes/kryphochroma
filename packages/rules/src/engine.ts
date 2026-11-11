@@ -388,12 +388,16 @@ export function applyReveal(state: GameState, reveal?: Reveal): Transition {
   if (candidate === null || data.honest.length !== seats || data.hands.length !== seats) {
     throw new RuleError("BadReveal");
   }
-  const result = scoreRound(data.hands, data.honest, candidate);
-  if (result.winner !== null) seatOf(d, result.winner).score += result.points;
-  for (const cheater of result.cheaters) {
+  const scored = scoreRound(data.hands, data.honest, candidate);
+  let forfeited = 0;
+  for (const cheater of scored.cheaters) {
     const s = seatOf(d, cheater);
-    s.score = Math.max(0, s.score - CHEAT_PENALTY);
+    const taken = Math.min(s.score, CHEAT_PENALTY);
+    s.score -= taken;
+    forfeited += taken;
   }
+  const result = scored.winner === null ? scored : { ...scored, points: scored.points + forfeited };
+  if (result.winner !== null) seatOf(d, result.winner).score += result.points;
   d.pub.lastResult = { ...result, cheaters: [...result.cheaters] };
   d.pub.candidate = null;
   d.events.push({ type: "RoundSettled", ...result });
