@@ -1,5 +1,6 @@
 import type { Metadata, Viewport } from "next";
 import { ThemeProvider } from "next-themes";
+import { Providers } from "@/components/Providers";
 import { Toaster } from "@/components/ui/sonner";
 import "./globals.css";
 
@@ -15,7 +16,7 @@ export default function RootLayout({ children }: { readonly children: React.Reac
     <html lang="en" suppressHydrationWarning>
       <body>
         <ThemeProvider attribute="class" defaultTheme="dark" forcedTheme="dark" enableSystem={false}>
-          {children}
+          <Providers>{children}</Providers>
           <Toaster position="top-center" />
         </ThemeProvider>
       </body>

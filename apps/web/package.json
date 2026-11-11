@@ -16,6 +16,7 @@
     "@kryphochroma/abi": "workspace:*",
     "@kryphochroma/cards": "workspace:*",
     "@kryphochroma/rules": "workspace:*",
+    "@tanstack/react-query": "5.107.1",
     "@zama-fhe/sdk": "3.7.2",
     "class-variance-authority": "^0.7.1",
     "clsx": "^2.1.1",
@@ -29,7 +30,8 @@
     "react-dom": "19.3.1",
     "sonner": "^2.0.8",
     "tailwind-merge": "^3.7.0",
-    "viem": "^2.57.17"
+    "viem": "^2.57.17",
+    "wagmi": "3.7.9"
   },
   "devDependencies": {
     "@tailwindcss/postcss": "^4.3.5",

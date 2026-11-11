@@ -1,115 +1,92 @@
 "use client";
 
-import { kryphoTableAbi } from "@kryphochroma/abi";
 import { Check, Loader2 } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { useState } from "react";
-import { createPublicClient, createWalletClient, http, parseEventLogs } from "viem";
+import { type Hex, createPublicClient, http } from "viem";
 import { sepolia } from "viem/chains";
 import { loadBurner } from "@/chain/burner";
-import { confirm } from "@/chain/confirm";
-import { BURNER_GAS_LIMIT, BURNER_GAS_PRICE, SEPOLIA_RPC_URL, TABLE_ADDRESS } from "@/chain/config";
+import { SEPOLIA_RPC_URL } from "@/chain/config";
+import { type SeatDeps, fundBurner, openTable, startTable, takeSeat } from "@/chain/seat";
+import { WalletBar } from "@/components/wallet/WalletBar";
+import { useFunder } from "@/components/wallet/useFunder";
 import { cn } from "@/lib/utils";
 
-const STEPS = ["Session key created in this tab", "Test ETH for gas", "Table opened on Sepolia", "You took a seat", "Bots seated", "Shuffle started"] as const;
-const BALANCE_WAIT_MS = 2000;
-const BALANCE_TRIES = 30;
-const MIN_BALANCE = 500_000_000_000_000n;
+const GUEST_STEPS = ["Session key created in this tab", "Test ETH for gas", "Table opened on Sepolia", "You took a seat", "Bots seated", "Shuffle started"] as const;
+const WALLET_STEPS = ["Session key created in this tab", "Wallet sent the session key gas", "Table opened on Sepolia", "Wallet took a seat for the session key", "Bots seated", "Shuffle started"] as const;
 const TURN_TIMEOUT_S = 120;
+
+async function drip(address: Hex): Promise<boolean> {
+  return (await fetch("/api/drip", { method: "POST", body: JSON.stringify({ address }) })).ok;
+}
+
+async function fill(id: bigint): Promise<void> {
+  const res = await fetch("/api/fill", { method: "POST", body: JSON.stringify({ id: id.toString() }) });
+  if (!res.ok) throw new Error("Could not seat the bots");
+}
 
 export function NewTable() {
   const router = useRouter();
+  const funderState = useFunder();
   const [seats, setSeats] = useState(4);
   const [stack, setStack] = useState(false);
   const [done, setDone] = useState(-1);
   const [error, setError] = useState<string | null>(null);
-  const running = done >= 0 && done < STEPS.length - 1 && !error;
-
   const [warming, setWarming] = useState<number | null>(null);
+  const running = done >= 0 && done < GUEST_STEPS.length - 1 && !error;
+  const wallet = funderState.ready && funderState.funder.kind === "wallet";
+  const steps = wallet ? WALLET_STEPS : GUEST_STEPS;
 
-  async function prepare() {
-    const account = loadBurner(window.sessionStorage);
-    const transport = http(SEPOLIA_RPC_URL);
-    const publicClient = createPublicClient({ chain: sepolia, transport });
-    const wallet = createWalletClient({ account, chain: sepolia, transport });
-    setDone(0);
-    if ((await publicClient.getBalance({ address: account.address })) < MIN_BALANCE) {
-      const res = await fetch("/api/drip", { method: "POST", body: JSON.stringify({ address: account.address }) });
-      if (!res.ok) throw new Error("The faucet is busy, try again in a minute");
-      for (let i = 0; i < BALANCE_TRIES && (await publicClient.getBalance({ address: account.address })) < MIN_BALANCE; i++) {
-        await new Promise((r) => setTimeout(r, BALANCE_WAIT_MS));
-      }
-    }
-    setDone(1);
-    return { account, publicClient, wallet };
+  function deps(): SeatDeps {
+    if (!funderState.ready) throw new Error(funderState.reason === "wrong-chain" ? "Switch your wallet to Sepolia first" : "Wallet is still connecting");
+    const publicClient = createPublicClient({ chain: sepolia, transport: http(SEPOLIA_RPC_URL) });
+    return { publicClient, burner: loadBurner(window.sessionStorage), funder: funderState.funder, drip };
   }
 
-  async function quick() {
+  async function run(task: () => Promise<void>) {
     setError(null);
     try {
+      await task();
+    } catch (e) {
+      setError((e as Error).message.split("\n")[0]?.slice(0, 160) ?? "Something went wrong");
+    }
+  }
+
+  const quick = () =>
+    run(async () => {
       const pool = (await (await fetch("/api/quick", { method: "POST" })).json()) as { id?: string; warming?: number };
       if (!pool.id) {
         setWarming(pool.warming ?? 0);
         return;
       }
-      const { account, publicClient, wallet } = await prepare();
+      const d = deps();
+      const id = BigInt(pool.id);
+      setDone(0);
+      if (d.funder.kind === "guest") await fundBurner(d);
       setDone(2);
-      const joinHash = await wallet.writeContract({ address: TABLE_ADDRESS, abi: kryphoTableAbi, functionName: "join", args: [BigInt(pool.id), account.address], gasPrice: BURNER_GAS_PRICE, gas: BURNER_GAS_LIMIT });
-      const joined = await confirm(publicClient, joinHash, "Taking a seat");
-      const seated = parseEventLogs({ abi: kryphoTableAbi, logs: joined.logs, eventName: "Joined" }).some((l) => (l.args as { player: string }).player.toLowerCase() === account.address.toLowerCase());
-      if (!seated) throw new Error("Could not take a seat, please try again");
+      await takeSeat(d, id);
       setDone(3);
-      const fill = await fetch("/api/fill", { method: "POST", body: JSON.stringify({ id: pool.id }) });
-      if (!fill.ok) throw new Error("Could not seat the bots");
+      await fill(id);
       setDone(5);
       router.push(`/t/${pool.id}`);
-    } catch (e) {
-      setError((e as Error).message.slice(0, 160));
-    }
-  }
+    });
 
-  async function go() {
-    setError(null);
-    try {
-      const account = loadBurner(window.sessionStorage);
-      const transport = http(SEPOLIA_RPC_URL);
-      const publicClient = createPublicClient({ chain: sepolia, transport });
-      const wallet = createWalletClient({ account, chain: sepolia, transport });
+  const own = () =>
+    run(async () => {
+      const d = deps();
       setDone(0);
-      if ((await publicClient.getBalance({ address: account.address })) < MIN_BALANCE) {
-        const res = await fetch("/api/drip", { method: "POST", body: JSON.stringify({ address: account.address }) });
-        if (!res.ok) throw new Error("The faucet is busy, try again in a minute");
-        for (let i = 0; i < BALANCE_TRIES && (await publicClient.getBalance({ address: account.address })) < MIN_BALANCE; i++) {
-          await new Promise((r) => setTimeout(r, BALANCE_WAIT_MS));
-        }
-      }
+      await fundBurner(d);
       setDone(1);
-      const createHash = await wallet.writeContract({
-        address: TABLE_ADDRESS,
-        abi: kryphoTableAbi,
-        functionName: "createTable",
-        args: [{ seats, turnTimeout: TURN_TIMEOUT_S, targetScore: 500, singleRound: true, stackDrawTwo: stack }],
-        gasPrice: BURNER_GAS_PRICE, gas: BURNER_GAS_LIMIT,
-      });
-      const receipt = await confirm(publicClient, createHash, "Opening the table");
-      const created = parseEventLogs({ abi: kryphoTableAbi, logs: receipt.logs, eventName: "TableCreated" })[0];
-      const id = created ? (created.args as { id: bigint }).id : null;
-      if (id === null) throw new Error("Table was not created");
+      const id = await openTable(d, { seats, turnTimeout: TURN_TIMEOUT_S, stackDrawTwo: stack });
       setDone(2);
-      const joinHash = await wallet.writeContract({ address: TABLE_ADDRESS, abi: kryphoTableAbi, functionName: "join", args: [id, account.address], gasPrice: BURNER_GAS_PRICE, gas: BURNER_GAS_LIMIT });
-      await confirm(publicClient, joinHash, "Taking a seat");
+      await takeSeat(d, id);
       setDone(3);
-      const fill = await fetch("/api/fill", { method: "POST", body: JSON.stringify({ id: id.toString() }) });
-      if (!fill.ok) throw new Error("Could not seat the bots");
+      await fill(id);
       setDone(4);
-      const startHash = await wallet.writeContract({ address: TABLE_ADDRESS, abi: kryphoTableAbi, functionName: "start", args: [id], gasPrice: BURNER_GAS_PRICE, gas: BURNER_GAS_LIMIT });
-      await confirm(publicClient, startHash, "Starting the shuffle");
+      await startTable(d, id);
       setDone(5);
       router.push(`/t/${id}`);
-    } catch (e) {
-      setError((e as Error).message.slice(0, 160));
-    }
-  }
+    });
 
   return (
     <div className="kc-app">
@@ -118,7 +95,12 @@ export function NewTable() {
         <div className="kc-grain" />
         <div className="kc-box relative z-10 col-[1/-1] row-[1/-1] mx-4 grid gap-4 place-self-center text-left">
           <h2 className="text-center">New table on Sepolia</h2>
-          <p className="text-center">You play with a key that lives only in this tab. We send it a little test ETH, so you do not need a wallet.</p>
+          <p className="text-center">
+            {wallet
+              ? "Your wallet signs one join for a session key that lives only in this tab. The session key plays the moves, it can never move your funds."
+              : "You play with a key that lives only in this tab. We send it a little test ETH, so you do not need a wallet."}
+          </p>
+          <WalletBar disabled={running} />
           <div className="flex items-center justify-center gap-2" role="radiogroup" aria-label="Players">
             {[2, 3, 4].map((n) => (
               <button key={n} type="button" role="radio" aria-checked={seats === n} className={cn("kc-chip", seats === n && "kc-chip-on")} onClick={() => setSeats(n)} disabled={running}>
@@ -131,7 +113,7 @@ export function NewTable() {
             Stack draw two cards
           </label>
           <ol className="grid gap-2 text-sm">
-            {STEPS.map((step, i) => (
+            {steps.map((step, i) => (
               <li key={step} className={cn("flex items-center gap-2", i > done + 1 && "opacity-50")}>
                 {i <= done ? <Check className="size-4 text-teal" aria-hidden /> : i === done + 1 && running ? <Loader2 className="size-4 animate-spin" aria-hidden /> : <span className="inline-block size-4" />}
                 {step}
@@ -147,10 +129,10 @@ export function NewTable() {
             <p className="text-center text-sm">A shuffled table is warming up on chain: step {warming} of 60. Try again in a minute, or open your own table below (its shuffle takes about ten minutes).</p>
           )}
           <div className="flex flex-wrap justify-center gap-3">
-            <button type="button" className="kc-btn kc-mono" onClick={quick} disabled={running}>
+            <button type="button" className="kc-btn kc-mono" onClick={quick} disabled={running || !funderState.ready}>
               Quick game
             </button>
-            <button type="button" className="kc-btn" onClick={go} disabled={running}>
+            <button type="button" className="kc-btn" onClick={own} disabled={running || !funderState.ready}>
               {error ? "Try again" : "Own table"}
             </button>
           </div>
