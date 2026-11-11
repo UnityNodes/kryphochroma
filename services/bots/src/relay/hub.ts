@@ -17,7 +17,8 @@ import { ZamaSDK } from "@zama-fhe/sdk";
 import { sepolia as zamaSepolia } from "@zama-fhe/sdk/chains";
 import { node } from "@zama-fhe/sdk/node";
 import { createConfig } from "@zama-fhe/sdk/viem";
-import { type Hex, type PublicClient, type WalletClient, createWalletClient, http, recoverTypedDataAddress } from "viem";
+import { type Hex, type PublicClient, type WalletClient, createWalletClient, recoverTypedDataAddress } from "viem";
+import { rpcTransport } from "../rpc.js";
 import { type PrivateKeyAccount, privateKeyToAccount } from "viem/accounts";
 import { type GasBudget, canSpend, rollBudget, spend } from "../keeper/safety.js";
 import { sepolia } from "viem/chains";
@@ -81,7 +82,7 @@ export function createRelay(deps: RelayDeps) {
   const keys = deps.takeoverKey && !deps.botKeys.includes(deps.takeoverKey) ? [...deps.botKeys, deps.takeoverKey] : deps.botKeys;
   const bots: Bot[] = keys.map((key) => {
     const account = privateKeyToAccount(key);
-    const walletClient = createWalletClient({ account, chain: sepolia, transport: http(deps.rpcUrl) });
+    const walletClient = createWalletClient({ account, chain: sepolia, transport: rpcTransport(deps.rpcUrl) });
     const sdk = new ZamaSDK(createConfig({ chains: [zamaSepolia], publicClient: deps.publicClient, walletClient, relayers: { [zamaSepolia.id]: node() } }));
     return { account, sdk, plain: new Map(), permitted: false };
   });
@@ -102,8 +103,8 @@ export function createRelay(deps: RelayDeps) {
 
   const projected = (hub: TableHub) => (hub.chain ? project(hub.chain, hub.chainNonces, hub.log) : null);
 
-  async function decryptBotHand(bot: Bot, id: bigint, seat: number, slots: number): Promise<(Card | null)[]> {
-    const handles = (await deps.publicClient.readContract({ address: deps.table, abi: kryphoTableAbi, functionName: "handOf", args: [id, seat] } as never)) as readonly Hex[];
+  async function decryptBotHand(bot: Bot, id: bigint, seat: number, slots: number, blockNumber: bigint): Promise<(Card | null)[]> {
+    const handles = (await deps.publicClient.readContract({ address: deps.table, abi: kryphoTableAbi, functionName: "handOf", args: [id, seat], blockNumber } as never)) as readonly Hex[];
     const missing = handles.filter((h, i) => (slots & (1 << i)) !== 0 && !bot.plain.has(h));
     if (missing.length > 0) {
       if (!bot.permitted) {
@@ -117,12 +118,14 @@ export function createRelay(deps: RelayDeps) {
     return handles.map((h, i) => ((slots & (1 << i)) !== 0 ? (bot.plain.get(h) ?? null) : null));
   }
 
+  /** Every read pins one block: a relay batch mined between two reads would pair an old table with new nonces and every later action would fail with BadNonce. */
   async function refresh(id: bigint): Promise<void> {
     const hub = hubOf(id);
+    const block = await deps.publicClient.getBlockNumber({ cacheTime: 0 });
+    if (block < hub.block) return;
     const read = (functionName: string, args: readonly unknown[]) =>
-      deps.publicClient.readContract({ address: deps.table, abi: kryphoTableAbi, functionName, args } as never) as Promise<unknown>;
+      deps.publicClient.readContract({ address: deps.table, abi: kryphoTableAbi, functionName, args, blockNumber: block } as never) as Promise<unknown>;
     const table = (await read("getTable", [id])) as ChainTable & { joined: number; monoBlock: bigint };
-    hub.block = await deps.publicClient.getBlockNumber();
     const seats = (await Promise.all(Array.from({ length: Number(table.joined) }, (_, i) => read("getSeat", [id, i])))) as (ChainSeat & { session: Hex })[];
     const discard = ((await read("discardOf", [id])) as readonly number[]).map(Number);
     const nonces = ((await read("noncesOf", [id])) as readonly number[]).map(Number);
@@ -130,8 +133,10 @@ export function createRelay(deps: RelayDeps) {
     for (const [seat, s] of seats.entries()) {
       const session = s.session.toLowerCase();
       const bot = session === takeover && !s.abandoned ? undefined : bots.find((b) => b.account.address.toLowerCase() === session);
-      if (bot && Number(table.stage) >= 3) known.set(seat, await decryptBotHand(bot, id, seat, Number(s.slots)));
+      if (bot && Number(table.stage) >= 3) known.set(seat, await decryptBotHand(bot, id, seat, Number(s.slots), block));
     }
+    if (block < hub.block) return;
+    hub.block = block;
     hub.chain = projectChain(table, seats, discard, known);
     hub.chainNonces = nonces;
     hub.sessions = seats.map((s) => s.session.toLowerCase());
@@ -144,7 +149,7 @@ export function createRelay(deps: RelayDeps) {
     driveBots(id, hub);
   }
 
-  async function accept(action: SignedAction): Promise<{ ok: true } | { ok: false; reason: string }> {
+  async function accept(action: SignedAction): Promise<{ ok: true } | { ok: false; reason: string; expected?: number; chainNonce?: number; queued?: string[] }> {
     const hub = hubOf(action.table);
     if (!hub.chain) await refresh(action.table);
     const signer = await recoverTypedDataAddress({ domain, types: ACTION_TYPES, primaryType: "Action", message: { ...action }, signature: action.signature });
@@ -152,7 +157,7 @@ export function createRelay(deps: RelayDeps) {
     const current = projected(hub);
     if (!current) return { ok: false, reason: "WrongStage" };
     const expected = (hub.chainNonces[action.seat] ?? 0) + current.valid.filter((a) => a.seat === action.seat).length;
-    if (action.nonce !== expected) return { ok: false, reason: "BadNonce" };
+    if (action.nonce !== expected) return { ok: false, reason: "BadNonce", expected, chainNonce: hub.chainNonces[action.seat] ?? 0, queued: current.valid.filter((a) => a.seat === action.seat).map((a) => `${a.nonce}:${a.kind}:${a.slot}`) };
     const next = stepAction(current.state, action);
     if (!next) return { ok: false, reason: "IllegalMove" };
     hub.log.push(action);

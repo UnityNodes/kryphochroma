@@ -4,7 +4,8 @@ import { ZamaSDK } from "@zama-fhe/sdk";
 import { sepolia as zamaSepolia } from "@zama-fhe/sdk/chains";
 import { node } from "@zama-fhe/sdk/node";
 import { createConfig } from "@zama-fhe/sdk/viem";
-import { type Hex, type PublicClient, createWalletClient, http } from "viem";
+import { type Hex, type PublicClient, createWalletClient } from "viem";
+import { rpcTransport } from "../rpc.js";
 import { privateKeyToAccount } from "viem/accounts";
 import { sepolia } from "viem/chains";
 import { type ChainSeat, type ChainTable, toPublicState } from "@kryphochroma/abi";
@@ -47,7 +48,7 @@ function functionFor(move: Move, seat: number, handles: readonly Hex[]): { funct
 
 export function createBot(privateKey: Hex, table: Hex, publicClient: PublicClient, rpcUrl: string): BotPlayer {
   const account = privateKeyToAccount(privateKey);
-  const walletClient = createWalletClient({ account, chain: sepolia, transport: http(rpcUrl) });
+  const walletClient = createWalletClient({ account, chain: sepolia, transport: rpcTransport(rpcUrl) });
   const sdk = new ZamaSDK(createConfig({ chains: [zamaSepolia], publicClient, walletClient, relayers: { [zamaSepolia.id]: node() } }));
   const plain = new Map<Hex, number>();
   let permitted = false;

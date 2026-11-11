@@ -3,7 +3,8 @@ import { ZamaSDK } from "@zama-fhe/sdk";
 import { sepolia as zamaSepolia } from "@zama-fhe/sdk/chains";
 import { node } from "@zama-fhe/sdk/node";
 import { createConfig } from "@zama-fhe/sdk/viem";
-import { type Hex, createPublicClient, createWalletClient, http, nonceManager } from "viem";
+import { type Hex, createPublicClient, createWalletClient, nonceManager } from "viem";
+import { rpcTransport } from "../rpc.js";
 import { privateKeyToAccount } from "viem/accounts";
 import { sepolia } from "viem/chains";
 import { type KeeperAction, type PlannedAction, type TableView, nextKeeperAction, scheduleKeeper } from "./plan.js";
@@ -53,7 +54,7 @@ const log = (entry: Record<string, unknown>) =>
   process.stdout.write(`${JSON.stringify({ at: new Date().toISOString(), ...entry }, (_, v) => (typeof v === "bigint" ? v.toString() : v))}\n`);
 
 export async function runKeeper(config: KeeperConfig, env: NodeJS.ProcessEnv, until: () => Promise<boolean> = async () => false): Promise<void> {
-  const transport = http(config.rpcUrl);
+  const transport = rpcTransport(config.rpcUrl);
   const account = privateKeyToAccount(config.privateKey, { nonceManager });
   const publicClient = createPublicClient({ chain: sepolia, transport });
   const walletClient = createWalletClient({ account, chain: sepolia, transport });

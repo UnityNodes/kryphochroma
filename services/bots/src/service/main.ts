@@ -2,7 +2,8 @@ import { createServer, type IncomingMessage, type ServerResponse } from "node:ht
 import { readFileSync } from "node:fs";
 import { fillMessage, kryphoTableAbi } from "@kryphochroma/abi";
 import { parseSignedAction, parseTableId } from "./parse.js";
-import { type Hex, createPublicClient, createWalletClient, http, nonceManager, parseEther, recoverMessageAddress } from "viem";
+import { type Hex, createPublicClient, createWalletClient, nonceManager, parseEther, recoverMessageAddress } from "viem";
+import { rpcTransport } from "../rpc.js";
 import { privateKeyToAccount } from "viem/accounts";
 import { sepolia } from "viem/chains";
 import { loadKeeperConfig, runKeeper } from "../keeper/run.js";
@@ -10,6 +11,7 @@ import { createBot } from "../player/run.js";
 import { type SignedAction } from "@kryphochroma/abi";
 import { createRelay, encodeMessage } from "../relay/hub.js";
 import { type DripLedger, decideDrip, releaseDrip } from "./drip.js";
+import { pickBots, planPool } from "./pool.js";
 
 const ACTIVE_STAGES = new Set([3, 4]);
 const WATCH_WINDOW = 20n;
@@ -43,9 +45,9 @@ function tableAddress(): Hex {
 
 const rpcUrl = env("SEPOLIA_RPC_URL");
 const table = tableAddress();
-const publicClient = createPublicClient({ chain: sepolia, transport: http(rpcUrl) });
+const publicClient = createPublicClient({ chain: sepolia, transport: rpcTransport(rpcUrl) });
 const keeper = privateKeyToAccount(env("KEEPER_PRIVATE_KEY") as Hex, { nonceManager });
-const keeperWallet = createWalletClient({ account: keeper, chain: sepolia, transport: http(rpcUrl) });
+const keeperWallet = createWalletClient({ account: keeper, chain: sepolia, transport: rpcTransport(rpcUrl) });
 const bots = env("BOT_KEYS").split(",").map((key) => createBot(key as Hex, table, publicClient, rpcUrl));
 const dripWei = BigInt(env("DRIP_WEI", parseEther("0.003").toString()));
 const dripPolicy = { perAddressMs: Number(env("DRIP_PER_ADDRESS_MS", "21600000")), dailyCap: Number(env("DRIP_DAILY_CAP", "200")) };
@@ -57,7 +59,7 @@ if (onChainTakeover.toLowerCase() !== privateKeyToAccount(takeoverKey).address.t
 const relayAccount = privateKeyToAccount(env("RELAYER_PRIVATE_KEY", env("DEPLOYER_PRIVATE_KEY")) as Hex, { nonceManager });
 const relay = createRelay({
   publicClient,
-  relayer: createWalletClient({ account: relayAccount, chain: sepolia, transport: http(rpcUrl) }),
+  relayer: createWalletClient({ account: relayAccount, chain: sepolia, transport: rpcTransport(rpcUrl) }),
   table,
   rpcUrl,
   botKeys: env("BOT_KEYS").split(",") as Hex[],
@@ -102,6 +104,8 @@ const POOL_SEATS = 4;
 const POOL_TURN_TIMEOUT = 120;
 const RESERVE_MS = 120_000;
 const MAX_POOL_TABLES = 3;
+const FILL_SEAT_TRIES = 5;
+const FILL_SEAT_WAIT_MS = 3000;
 const STREAM_REFRESH_MS = 2000;
 let knownTables = (await publicClient.readContract({ address: table, abi: kryphoTableAbi, functionName: "tableCount" })) as bigint;
 const lastStreamRefresh = new Map<string, number>();
@@ -109,14 +113,18 @@ const reserved = new Map<string, number>();
 const isReserved = (id: bigint): boolean => (reserved.get(id.toString()) ?? 0) > Date.now();
 let poolCreating = false;
 
-async function seatsTakenByBots(id: bigint, joined: number): Promise<number> {
-  const addresses = new Set(bots.map((b) => b.address.toLowerCase()));
-  let count = 0;
+async function seatedPlayers(id: bigint, joined: number): Promise<string[]> {
+  const players: string[] = [];
   for (let seat = 0; seat < joined; seat++) {
     const s = (await publicClient.readContract({ address: table, abi: kryphoTableAbi, functionName: "getSeat", args: [id, seat] })) as { player: string };
-    if (addresses.has(s.player.toLowerCase())) count++;
+    players.push(s.player);
   }
-  return count;
+  return players;
+}
+
+async function seatsTakenByBots(id: bigint, joined: number): Promise<number> {
+  const players = await seatedPlayers(id, joined);
+  return bots.length - pickBots(bots.map((b) => b.address), players, bots.length).length;
 }
 
 async function readLobby(id: bigint): Promise<LobbyView> {
@@ -129,7 +137,7 @@ async function poolTables(): Promise<{ id: bigint; view: LobbyView }[]> {
   for (let id = count > WATCH_WINDOW ? count - WATCH_WINDOW + 1n : 1n; id <= count; id++) {
     const view = await readLobby(id);
     const open = Number(view.config.seats) - Number(view.joined);
-    if (Number(view.stage) === 0 && open >= 1 && view.creator.toLowerCase() === keeper.address.toLowerCase()) found.push({ id, view });
+    if (Number(view.stage) === 0 && open >= 0 && view.creator.toLowerCase() === keeper.address.toLowerCase()) found.push({ id, view });
   }
   return found;
 }
@@ -151,38 +159,48 @@ async function openTables(): Promise<typeof openCache.tables> {
   return openCache.tables;
 }
 
+async function startPoolTable(id: bigint): Promise<void> {
+  await withKeeperWallet(async () => {
+    const view = await readLobby(id);
+    if (Number(view.stage) !== 0 || Number(view.joined) !== Number(view.config.seats)) return;
+    const hash = await keeperWallet.writeContract({ address: table, abi: kryphoTableAbi, functionName: "start", args: [id], gas: 1_000_000n });
+    await publicClient.waitForTransactionReceipt({ hash });
+    log({ event: "pool-start", id, hash });
+  });
+}
+
+async function createPoolTable(): Promise<void> {
+  await withKeeperWallet(async () => {
+    const hash = await keeperWallet.writeContract({
+      address: table,
+      abi: kryphoTableAbi,
+      functionName: "createTable",
+      args: [{ seats: POOL_SEATS, turnTimeout: POOL_TURN_TIMEOUT, targetScore: 500, singleRound: true, stackDrawTwo: false }],
+    });
+    await publicClient.waitForTransactionReceipt({ hash });
+    log({ event: "pool-table", hash });
+  });
+  await topUpBots();
+  const count = (await publicClient.readContract({ address: table, abi: kryphoTableAbi, functionName: "tableCount" })) as bigint;
+  log({ event: "pool-seated", id: count, bots: await seatBots(count, POOL_SEATS - 1) });
+}
+
 async function ensurePool(): Promise<void> {
   if (poolCreating) return;
-  const free = (await poolTables()).filter((p) => !isReserved(p.id));
-  for (const p of free) {
-    if (Number(p.view.joined) === 0) log({ event: "pool-seated", id: p.id, bots: await seatBots(p.id, Number(p.view.config.seats) - 1) });
-  }
-  if (free.length > 0) return;
-  if ((await poolTables()).length >= MAX_POOL_TABLES) return;
   poolCreating = true;
   try {
-    await withKeeperWallet(async () => {
-      const hash = await keeperWallet.writeContract({
-        address: table,
-        abi: kryphoTableAbi,
-        functionName: "createTable",
-        args: [{ seats: POOL_SEATS, turnTimeout: POOL_TURN_TIMEOUT, targetScore: 500, singleRound: true, stackDrawTwo: false }],
-      });
-      const receipt = await publicClient.waitForTransactionReceipt({ hash });
-      log({ event: "pool-table", hash });
-      return receipt;
-    });
-    await topUpBots();
-    const count = (await publicClient.readContract({ address: table, abi: kryphoTableAbi, functionName: "tableCount" })) as bigint;
-    const seated = await seatBots(count, POOL_SEATS - 1);
-    log({ event: "pool-seated", id: count, bots: seated });
+    const tables = (await poolTables()).map((p) => ({ id: p.id, seats: Number(p.view.config.seats), joined: Number(p.view.joined), reserved: isReserved(p.id) }));
+    const plan = planPool(tables, MAX_POOL_TABLES);
+    for (const id of plan.start) await startPoolTable(id).catch((e: Error) => log({ event: "pool-start-failed", id, message: e.message.slice(0, 200) }));
+    for (const { id, count } of plan.seat) log({ event: "pool-seated", id, bots: await seatBots(id, count) });
+    if (plan.create) await createPoolTable();
   } finally {
     poolCreating = false;
   }
 }
 
 async function quick(): Promise<{ id?: string; warming?: number }> {
-  const ready = (await poolTables()).filter((p) => !isReserved(p.id));
+  const ready = (await poolTables()).filter((p) => !isReserved(p.id) && Number(p.view.config.seats) > Number(p.view.joined));
   const shuffled = ready.find((p) => Number(p.view.setupStep) >= 60 && Number(p.view.config.seats) - Number(p.view.joined) === 1);
   if (!shuffled) return { warming: Math.max(0, ...ready.map((p) => Number(p.view.setupStep))) };
   reserved.set(shuffled.id.toString(), Date.now() + RESERVE_MS);
@@ -191,7 +209,9 @@ async function quick(): Promise<{ id?: string; warming?: number }> {
 }
 
 async function seatBots(id: bigint, free: number): Promise<number> {
-  const results = await Promise.all(bots.slice(0, Math.max(0, free)).map((bot) => bot.join(id).catch(() => false)));
+  const players = await seatedPlayers(id, Number((await readLobby(id)).joined));
+  const picked = new Set(pickBots(bots.map((b) => b.address), players, free));
+  const results = await Promise.all(bots.filter((b) => picked.has(b.address)).map((bot) => bot.join(id).catch(() => false)));
   return results.filter(Boolean).length;
 }
 
@@ -204,22 +224,25 @@ async function seatedSigner(id: bigint, signature: Hex, joined: number): Promise
   return false;
 }
 
+/** Public RPC nodes behind one URL lag each other by a block or two, so a join the player just confirmed may not be visible on the node we hit yet. */
+async function seatedSignerSoon(id: bigint, signature: Hex): Promise<boolean> {
+  for (let attempt = 0; attempt < FILL_SEAT_TRIES; attempt++) {
+    if (await seatedSigner(id, signature, Number((await readLobby(id)).joined))) return true;
+    await new Promise((r) => setTimeout(r, FILL_SEAT_WAIT_MS));
+  }
+  return false;
+}
+
 async function fill(id: bigint, signature: Hex): Promise<{ joined: number } | { error: string }> {
+  if (!(await seatedSignerSoon(id, signature))) return { error: "only a seated player can call the bots" };
   const view = await readLobby(id);
-  if (!(await seatedSigner(id, signature, Number(view.joined)))) return { error: "only a seated player can call the bots" };
   await topUpBots();
   const seatedBots = await seatsTakenByBots(id, Number(view.joined));
   const free = Number(view.stage) === 0 ? Math.min(Number(view.config.seats) - Number(view.joined), bots.length - seatedBots) : 0;
   const joined = free > 0 ? await seatBots(id, free) : 0;
   log({ event: "fill", id, joined });
   const after = await readLobby(id);
-  if (Number(after.stage) === 0 && Number(after.joined) === Number(after.config.seats) && after.creator.toLowerCase() === keeper.address.toLowerCase()) {
-    await withKeeperWallet(async () => {
-      const hash = await keeperWallet.writeContract({ address: table, abi: kryphoTableAbi, functionName: "start", args: [id], gas: 1_000_000n });
-      await publicClient.waitForTransactionReceipt({ hash });
-      log({ event: "pool-start", id, hash });
-    });
-  }
+  if (Number(after.stage) === 0 && Number(after.joined) === Number(after.config.seats) && after.creator.toLowerCase() === keeper.address.toLowerCase()) await startPoolTable(id);
   return { joined };
 }
 
@@ -300,12 +323,15 @@ const server = createServer(async (req, res) => {
       const signature = String(body.signature ?? "");
       if (!/^0x[0-9a-fA-F]{130}$/.test(signature)) return reply(res, 400, { error: "bad signature" });
       const result = await fill(tableId(body.id), signature as Hex);
+      if ("error" in result) log({ event: "fill-refused", id: String(body.id), reason: result.error });
       return reply(res, "error" in result ? 403 : 200, result);
     }
     if (url.pathname === "/drip") return reply(res, 200, await drip(String(body.address ?? "")));
     if (url.pathname === "/quick") return reply(res, 200, await quick());
     if (url.pathname === "/act") {
-      const result = await relay.accept(parseAction(body));
+      const action = parseAction(body);
+      const result = await relay.accept(action);
+      if (!result.ok) log({ event: "act-rejected", id: action.table, seat: action.seat, kind: action.kind, slot: action.slot, card: action.card, color: action.color, nonce: action.nonce, ...result });
       return reply(res, result.ok ? 200 : 409, result);
     }
     return reply(res, 404, { error: "not found" });
