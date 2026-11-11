@@ -1,6 +1,6 @@
 # Kryphochroma
 
-A five colour shedding card game where hiding is the game. Bluff with a veiled card, spy on one sealed card with a spyglass, chase a secret colour that doubles your round. Hands, the deck, veiled cards and secret colours live on Sepolia as Zama FHE ciphertexts: the contract shuffles, deals and checks every move without ever seeing a card.
+A five colour shedding card game where hiding is the game. Bluff with a veiled card, spy on one sealed card with a spyglass, ping a rival hand with a sonar, chase a secret colour that doubles your round. Hands, the deck, veiled cards and secret colours live on Sepolia as Zama FHE ciphertexts: the contract shuffles, deals and checks every move without ever seeing a card.
 
 ![A four seat table: sealed rival hands, the discard pile, your decrypted hand and the veil dialog](assets/table.gif)
 
@@ -9,17 +9,19 @@ A five colour shedding card game where hiding is the game. Bluff with a veiled c
 - **Quick game**: no wallet needed. Your tab gets a session key and a little Sepolia ETH, and you sit down with three bots at a table that was already shuffled on chain.
 - **With friends**: open a table for 2 to 4 players, send the invite link, start when everyone is in. Open tables are listed so anyone can join. A wallet is optional; it signs one `join` for the session key.
 - **Practice offline**: the same rules engine against local bots, no chain.
+- **Kryphochroma FM**: three radio stations composed live in your browser, no tracks. The beat speeds up when someone is down to one card.
 
 Built for the Zama Developer Program, Mainnet Season 5, Confidential Gaming.
 
 ## The game
 
-138 cards in five colours (red, sun, teal, blue, violet). Match the top card by colour or number, empty your hand first, score what is left in the other hands. Skip, Reverse, Draw Two and wilds work as you would expect. Three mechanics only exist because every card is encrypted:
+138 cards in five colours (red, sun, teal, blue, violet). Match the top card by colour or number, empty your hand first, score what is left in the other hands. Skip, Reverse, Draw Two and wilds work as you would expect. Four mechanics only exist because every card is encrypted:
 
 | Mechanic | What you do | What happens on chain |
 |---|---|---|
 | **Veil** | Once per round, lay any card face down and name a number card that fits the pile. The next player may doubt you: a lie draws 4, a wrong doubt draws 2. | The real card stays an encrypted handle. The contract stores `FHE.eq(real, named)`; only a doubt makes that one bit public, settled with a KMS proof. |
 | **Spyglass** | A coloured action card. Play it and look at one sealed card of a rival. | `FHE.allow(hand[target][slot], your session key)`. Everyone sees which slot you looked at, nobody else sees the card. |
+| **Sonar** | Once per round, instead of your move, ask how many cards of one colour a rival holds. | The contract counts inside the encrypted hand: `FHE.add` of `FHE.select(FHE.eq(colour[slot], asked), 1, 0)`, then `FHE.allow(count, your session key)`. The table sees the ping, only you see the number. |
 | **Secret colour** | You get a hidden colour at the deal. Go out on a card of that colour and the round counts double. | `FHE.rem(FHE.randEuint8(), 5)`, allowed only to you, revealed with the hands at the end of the round. |
 
 ## What would break if this were public
@@ -30,6 +32,7 @@ Built for the Zama Developer Program, Mainnet Season 5, Confidential Gaming.
 | Deck order | `euint8[138]` | nobody, not the contract and not us | never; a drawn card only to its drawer | you know every draw in advance |
 | Veiled card | `euint8` + `ebool` | nobody | one bit, only if doubted | a veil is a lie anyone can check |
 | Spyglass target | `FHE.allow` to one key | the spyglass player | never to the rest | the peek is shown to the whole table |
+| Sonar answer | `euint8` | the player who pinged | never | a rival knows exactly what you learned |
 | Secret colour | `euint8` | owner only | round end | rivals block your colour |
 | "Had the colour" at a Wild +4 | `ebool` | nobody | one bit, only if challenged | proving an honest +4 means showing your hand |
 | Honesty of every move | `ebool` per player | nobody | once, at round end | a lie shows at once instead of at the end |
@@ -101,6 +104,7 @@ HCU limits on Sepolia: 20M per transaction, 5M depth.
 | One move check (`eq` + `and`) | 80k | 0.23M |
 | Veil bit / Wild +4 bit (`eq` / `isIn`) | 80k / 148k | 0.3M / 0.36M |
 | Spyglass (`FHE.allow`) | 0 | ~0.1M extra |
+| Sonar (`eq` + `select` + `add` per card, `allow`) | 3 ops per card in the hand | relayed batch of 4 moves with a sonar: 1.02M ([`0x9f4efc…9191`](https://sepolia.etherscan.io/tx/0x9f4efc0f6cd744e43d4028ec17b615b8fb32c479f8fdf26ce219f460c41b9191)) |
 | `makePubliclyDecryptable` / `checkSignatures` | 0 | 0.16M / 0.38M |
 | Relayed batch of 1 / 3 / 4 moves | | 0.06M / 0.82M / 0.93M |
 
@@ -126,10 +130,10 @@ Trust assumptions we accept for a testnet game:
 
 | Suite | What it covers |
 |---|---|
-| `packages/rules` (71) | every rule including veil, spyglass and secret colour; scoring; bots; 1,000 simulated games |
-| `contracts` (26) | parity with the rules engine move by move on the FHEVM mock, including relayed batches with veils and spyglasses; forged and replayed proofs; privacy of hands, peeks and secret colours; relay signatures and out of gas griefing; takeover; background refill |
-| `services/bots` (22) | keeper planning and scheduling, faucet policy, action parsing, chain view |
-| `apps/web` (14 unit, 12 e2e) | seat flows, sounds, offline game; a judge scenario in Playwright with axe accessibility checks on phone and desktop |
+| `packages/rules` (76) | every rule including veil, spyglass, sonar and secret colour; scoring; bots; 1,000 simulated games |
+| `contracts` (27) | parity with the rules engine move by move on the FHEVM mock, including relayed batches with veils, spyglasses and sonar pings; forged and replayed proofs; privacy of hands, peeks, sonar answers and secret colours; relay signatures and out of gas griefing; takeover; background refill |
+| `services/bots` (33) | keeper planning and scheduling, quick game pool, hub reads pinned to one block, faucet policy, action parsing, chain view |
+| `apps/web` (23 unit, 12 e2e) | seat flows, sounds, the radio, offline game; a judge scenario in Playwright with axe accessibility checks on phone and desktop |
 
 Before going public the contracts had two independent security passes and the services one; every high finding is fixed and has a test that fails without the fix.
 

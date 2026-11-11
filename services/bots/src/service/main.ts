@@ -2,7 +2,7 @@ import { createServer, type IncomingMessage, type ServerResponse } from "node:ht
 import { readFileSync } from "node:fs";
 import { fillMessage, kryphoTableAbi } from "@kryphochroma/abi";
 import { parseSignedAction, parseTableId } from "./parse.js";
-import { type Hex, createPublicClient, createWalletClient, nonceManager, parseEther, recoverMessageAddress } from "viem";
+import { type Hex, createPublicClient, createWalletClient, nonceManager, parseEther, parseEventLogs, recoverMessageAddress } from "viem";
 import { rpcTransport } from "../rpc.js";
 import { privateKeyToAccount } from "viem/accounts";
 import { sepolia } from "viem/chains";
@@ -174,19 +174,20 @@ async function startPoolTable(id: bigint): Promise<void> {
 }
 
 async function createPoolTable(): Promise<void> {
-  await withKeeperWallet(async () => {
+  const created = await withKeeperWallet(async () => {
     const hash = await keeperWallet.writeContract({
       address: table,
       abi: kryphoTableAbi,
       functionName: "createTable",
       args: [{ seats: POOL_SEATS, turnTimeout: POOL_TURN_TIMEOUT, targetScore: 500, singleRound: true, stackDrawTwo: false }],
     });
-    await publicClient.waitForTransactionReceipt({ hash });
+    const receipt = await publicClient.waitForTransactionReceipt({ hash });
     log({ event: "pool-table", hash });
+    return parseEventLogs({ abi: kryphoTableAbi, logs: receipt.logs, eventName: "TableCreated" })[0]?.args.id;
   });
+  if (created === undefined) return;
   await topUpBots();
-  const count = (await publicClient.readContract({ address: table, abi: kryphoTableAbi, functionName: "tableCount" })) as bigint;
-  log({ event: "pool-seated", id: count, bots: await seatBots(count, POOL_SEATS - 1) });
+  log({ event: "pool-seated", id: created, bots: await seatBots(created, POOL_SEATS - 1) });
 }
 
 async function ensurePool(): Promise<void> {

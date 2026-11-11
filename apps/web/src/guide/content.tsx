@@ -5,6 +5,7 @@ export interface Deployment {
   readonly table: string;
   readonly deck: string;
   readonly score: string;
+  readonly radio: string;
   readonly takeover: string;
   readonly block: number;
 }
@@ -155,7 +156,7 @@ export const DOCS: readonly DocPage[] = [
       <>
         <H2 id="what">What it is</H2>
         <P>
-          Kryphochroma (from the Greek for hidden colour) is a shedding card game for 2 to 4 players. Match the top card by colour or number, empty your hand first, and use three mechanics that only work because every card is encrypted: a veiled bluff, a spyglass that reads one rival card, and a secret colour that doubles your round.
+          Kryphochroma (from the Greek for hidden colour) is a shedding card game for 2 to 4 players. Match the top card by colour or number, empty your hand first, and use four mechanics that only work because every card is encrypted: a veiled bluff, a spyglass that reads one rival card, a sonar that counts a colour inside a rival hand, and a secret colour that doubles your round.
         </P>
         <P>Hands, the deck, veiled cards and secret colours live on Sepolia as Zama FHE ciphertexts. The contract shuffles, deals and checks every move without seeing a card. Each player decrypts only their own cards with a session key in the browser tab.</P>
         <H2 id="why-fhe">Why it needs FHE</H2>
@@ -258,10 +259,11 @@ export const DOCS: readonly DocPage[] = [
     slug: "mechanics",
     group: "Game",
     title: "Veil, Spyglass, Secret colour",
-    summary: "The three mechanics that only exist because cards stay encrypted.",
+    summary: "The four mechanics that only exist because cards stay encrypted.",
     headings: [
       { id: "veil", text: "Veil" },
       { id: "spyglass", text: "Spyglass" },
+      { id: "sonar", text: "Sonar" },
       { id: "secret", text: "Secret colour" },
     ],
     body: () => (
@@ -274,6 +276,11 @@ export const DOCS: readonly DocPage[] = [
         <P>
           A coloured action card. When you play it you pick one opponent and one slot of their hand. The contract calls <C>FHE.allow(hand[target][slot], your session key)</C>: from then on your key can decrypt that one card. Everyone sees which slot you looked at; nobody else sees the card.
         </P>
+        <H2 id="sonar">Sonar</H2>
+        <P>
+          Once per round, instead of your move, you ping one rival for one colour. The contract already keeps the colour of every card as its own encrypted handle, so it counts without decrypting anything: for each occupied slot it adds <C>FHE.select(FHE.eq(colour[slot], asked), 1, 0)</C>, then calls <C>FHE.allow(count, your session key)</C>. The table sees who pinged whom and for which colour. Only you learn the number.
+        </P>
+        <Callout title="Why it needs FHE">A server could answer the same question, but then you trust the server not to lie and not to read the hands. Here the answer is computed by the contract from the very ciphertexts that will be revealed at the end of the round, so it can be neither faked nor leaked.</Callout>
         <H2 id="secret">Secret colour</H2>
         <P>
           At the deal every seat gets <C>FHE.rem(FHE.randEuint8(), 5)</C>, allowed only to its owner. Go out on a card of that colour (wilds do not count) and your round score doubles. All secret colours are revealed with the hands at the end of the round. The value 0 is very slightly more likely (52 in 256 versus 51) because 256 is not a multiple of 5.
@@ -380,6 +387,7 @@ browser <── user decrypt of own cards ── Zama relayer and KMS`}</Code>
             ["KryphoTable", <Address key="t" value={d.table} />],
             ["KryphoDeck (library)", <Address key="d" value={d.deck} />],
             ["KryphoScore (library)", <Address key="s" value={d.score} />],
+            ["KryphoRadio (library)", <Address key="r" value={d.radio} />],
             ["Takeover key", <Address key="k" value={d.takeover} />],
           ]}
         />

@@ -6,7 +6,7 @@ interface Record {
   readonly KryphoTable?: string;
   readonly takeover?: string;
   readonly block?: number;
-  readonly libraries?: { readonly KryphoDeck?: string; readonly KryphoScore?: string };
+  readonly libraries?: { readonly KryphoDeck?: string; readonly KryphoScore?: string; readonly KryphoRadio?: string };
 }
 
 export function readDeployment(): Deployment {
@@ -20,6 +20,7 @@ export function readDeployment(): Deployment {
     table: record.KryphoTable ?? process.env.NEXT_PUBLIC_TABLE_ADDRESS ?? "",
     deck: record.libraries?.KryphoDeck ?? "",
     score: record.libraries?.KryphoScore ?? "",
+    radio: record.libraries?.KryphoRadio ?? "",
     takeover: record.takeover ?? "",
     block: record.block ?? 0,
   };
