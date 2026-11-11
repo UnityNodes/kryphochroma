@@ -5,18 +5,25 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 
 const burnerWrites: Record<string, unknown>[] = [];
 const lagging = { left: 0 };
+const flaky = { left: 0 };
 vi.mock("viem", async (original) => {
   const viem = await original<typeof import("viem")>();
+  const { kryphoTableAbi } = await import("@kryphochroma/abi");
   return {
     ...viem,
     createWalletClient: () => ({
-      writeContract: async (request: Record<string, unknown>) => {
+      sendRawTransaction: async ({ serializedTransaction }: { serializedTransaction: Hex }) => {
         if (lagging.left > 0) {
           lagging.left--;
           throw new viem.InsufficientFundsError();
         }
-        burnerWrites.push(request);
-        return "0xburner" as Hex;
+        const tx = viem.parseTransaction(serializedTransaction);
+        burnerWrites.push({ ...tx, args: viem.decodeFunctionData({ abi: kryphoTableAbi, data: tx.data ?? "0x" }).args });
+        if (flaky.left > 0) {
+          flaky.left--;
+          throw new viem.RpcRequestError({ body: {}, error: { code: -32000, message: "already known" }, url: "https://node" });
+        }
+        return viem.keccak256(serializedTransaction);
       },
     }),
   };
@@ -38,6 +45,8 @@ function joinedLog(session: Hex) {
 function client(balance: bigint, session: Hex = burner.address): PublicClient {
   return {
     getBalance: async () => balance,
+    getTransactionCount: async () => 0,
+    getTransaction: async ({ hash }: { hash: Hex }) => ({ hash }),
     waitForTransactionReceipt: async ({ hash }: { hash: Hex }) => ({ transactionHash: hash, status: "success", logs: [joinedLog(session)] }),
   } as unknown as PublicClient;
 }
@@ -60,6 +69,7 @@ function wallet() {
 function slowClient(seatedSession: Hex | null): PublicClient {
   return {
     getBalance: async () => MIN_BURNER_BALANCE,
+    getTransactionCount: async () => 0,
     waitForTransactionReceipt: async () => {
       throw new Error("Timed out while waiting for transaction");
     },
@@ -87,6 +97,13 @@ describe("taking a seat", () => {
     await done;
     vi.useRealTimers();
     expect(lagging.left).toBe(0);
+    expect(burnerWrites).toHaveLength(1);
+  });
+
+  it("keeps a join that reached the chain even when the node answers with an error", async () => {
+    flaky.left = 1;
+    await takeSeat({ publicClient: client(MIN_BURNER_BALANCE), burner, funder: { kind: "guest" }, drip: async () => true }, 7n);
+    expect(flaky.left).toBe(0);
     expect(burnerWrites).toHaveLength(1);
   });
 

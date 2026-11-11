@@ -1,4 +1,4 @@
-import { BaseError, InsufficientFundsError, RpcRequestError, UserRejectedRequestError } from "viem";
+import { BaseError, InsufficientFundsError, InvalidParamsRpcError, RpcRequestError, UserRejectedRequestError } from "viem";
 import { describe, expect, it } from "vitest";
 import { friendlyError, isFundsLag } from "@/chain/errors";
 
@@ -6,6 +6,7 @@ describe("friendly errors", () => {
   it("explains the common chain failures in plain words", () => {
     expect(friendlyError(new InsufficientFundsError())).toMatch(/test ETH/);
     expect(friendlyError(new RpcRequestError({ body: {}, error: { code: -32603, message: "boom" }, url: "https://x" }))).toMatch(/Sepolia node/);
+    expect(friendlyError(new InvalidParamsRpcError(new Error("Missing or invalid parameters")))).toMatch(/Sepolia node/);
     expect(friendlyError(new UserRejectedRequestError(new Error("no")))).toMatch(/cancelled/);
     expect(friendlyError(new Error("The faucet is busy, try again in a minute"))).toBe("The faucet is busy, try again in a minute");
     expect(friendlyError(new BaseError("Execution reverted with reason: TableFull()."))).toMatch(/full/);

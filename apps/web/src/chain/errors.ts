@@ -1,4 +1,4 @@
-import { BaseError, InsufficientFundsError, RpcRequestError, UserRejectedRequestError } from "viem";
+import { BaseError, HttpRequestError, InsufficientFundsError, RpcError, RpcRequestError, UserRejectedRequestError } from "viem";
 
 const GENERIC = "Something went wrong, please try again";
 const MAX_LENGTH = 160;
@@ -27,7 +27,7 @@ export function friendlyError(error: unknown): string {
   if (isFundsLag(error)) return "Your session key is still waiting for its test ETH, try again in a few seconds";
   const text = error instanceof BaseError ? `${error.shortMessage} ${error.details ?? ""}` : error.message;
   for (const [pattern, message] of KNOWN) if (pattern.test(text)) return message;
-  if (walk(error, (e) => e instanceof RpcRequestError)) return "The Sepolia node did not answer, please try again";
+  if (walk(error, (e) => e instanceof RpcRequestError || e instanceof HttpRequestError || e instanceof RpcError)) return "The Sepolia node did not answer, please try again";
   const first = (error instanceof BaseError ? error.shortMessage : error.message).split("\n")[0]?.trim();
   return first ? first.slice(0, MAX_LENGTH) : GENERIC;
 }

@@ -1,5 +1,5 @@
 import { fillMessage, kryphoTableAbi } from "@kryphochroma/abi";
-import { type Hex, type PrivateKeyAccount, type PublicClient, type WalletClient, createWalletClient, parseEventLogs } from "viem";
+import { type Hex, type PrivateKeyAccount, type PublicClient, type WalletClient, createWalletClient, encodeFunctionData, keccak256, parseEventLogs } from "viem";
 import { sepolia } from "viem/chains";
 import { BURNER_GAS_LIMIT, BURNER_GAS_PRICE, TABLE_ADDRESS } from "./config";
 import { sepoliaTransport } from "./rpc";
@@ -48,6 +48,30 @@ async function sendWhenFunded<T>(send: () => Promise<T>): Promise<T> {
 }
 
 const burnerWallet = (burner: PrivateKeyAccount) => createWalletClient({ account: burner, chain: sepolia, transport: sepoliaTransport() });
+const LANDED_TRIES = 4;
+const LANDED_WAIT_MS = 2000;
+
+async function landed(publicClient: PublicClient, hash: Hex): Promise<boolean> {
+  for (let i = 0; i < LANDED_TRIES; i++) {
+    const tx = await publicClient.getTransaction({ hash }).catch(() => null);
+    if (tx) return true;
+    await new Promise((r) => setTimeout(r, LANDED_WAIT_MS));
+  }
+  return false;
+}
+
+/** The fallback transport may resend a raw transaction to a second node after the first one already took it, so the hash is computed locally and an error only counts if the chain never saw that hash. */
+async function burnerSend(publicClient: PublicClient, burner: PrivateKeyAccount, data: Hex): Promise<Hex> {
+  const nonce = await publicClient.getTransactionCount({ address: burner.address, blockTag: "pending" });
+  const serializedTransaction = await burner.signTransaction({ chainId: sepolia.id, to: TABLE_ADDRESS, data, nonce, gas: BURNER_GAS_LIMIT, gasPrice: BURNER_GAS_PRICE, type: "legacy" });
+  const hash = keccak256(serializedTransaction);
+  try {
+    await burnerWallet(burner).sendRawTransaction({ serializedTransaction });
+  } catch (error) {
+    if (isFundsLag(error) || !(await landed(publicClient, hash))) throw error;
+  }
+  return hash;
+}
 
 async function waitForBalance(publicClient: PublicClient, address: Hex): Promise<boolean> {
   for (let i = 0; i < BALANCE_TRIES; i++) {
@@ -78,7 +102,7 @@ export async function takeSeat(deps: SeatDeps, id: bigint): Promise<void> {
   const hash =
     funder.kind === "wallet"
       ? await funder.wallet.writeContract({ address: TABLE_ADDRESS, abi: kryphoTableAbi, functionName: "join", args, account: funder.wallet.account ?? funder.address, chain: sepolia, value: (await needsGas(deps)) ? WALLET_CRUMB : 0n })
-      : await sendWhenFunded(() => burnerWallet(burner).writeContract({ address: TABLE_ADDRESS, abi: kryphoTableAbi, functionName: "join", args, gasPrice: BURNER_GAS_PRICE, gas: BURNER_GAS_LIMIT }));
+      : await sendWhenFunded(() => burnerSend(publicClient, burner, encodeFunctionData({ abi: kryphoTableAbi, functionName: "join", args })));
   const receipt = await confirm(publicClient, hash, "Taking a seat").catch(async (error: Error) => {
     if (await sitsAt(publicClient, id, burner.address)) return null;
     throw error;
@@ -99,14 +123,12 @@ async function sitsAt(publicClient: PublicClient, id: bigint, session: Hex): Pro
 }
 
 export async function openTable(deps: SeatDeps, config: { readonly seats: number; readonly turnTimeout: number; readonly stackDrawTwo: boolean }): Promise<bigint> {
-  const hash = await sendWhenFunded(() => burnerWallet(deps.burner).writeContract({
-    address: TABLE_ADDRESS,
+  const data = encodeFunctionData({
     abi: kryphoTableAbi,
     functionName: "createTable",
     args: [{ seats: config.seats, turnTimeout: config.turnTimeout, targetScore: 500, singleRound: true, stackDrawTwo: config.stackDrawTwo }],
-    gasPrice: BURNER_GAS_PRICE,
-    gas: BURNER_GAS_LIMIT,
-  }));
+  });
+  const hash = await sendWhenFunded(() => burnerSend(deps.publicClient, deps.burner, data));
   const receipt = await confirm(deps.publicClient, hash, "Opening the table");
   const created = parseEventLogs({ abi: kryphoTableAbi, logs: receipt.logs, eventName: "TableCreated" })[0];
   if (!created) throw new Error("Table was not created");
@@ -114,6 +136,6 @@ export async function openTable(deps: SeatDeps, config: { readonly seats: number
 }
 
 export async function startTable(deps: SeatDeps, id: bigint): Promise<void> {
-  const hash = await sendWhenFunded(() => burnerWallet(deps.burner).writeContract({ address: TABLE_ADDRESS, abi: kryphoTableAbi, functionName: "start", args: [id], gasPrice: BURNER_GAS_PRICE, gas: BURNER_GAS_LIMIT }));
+  const hash = await sendWhenFunded(() => burnerSend(deps.publicClient, deps.burner, encodeFunctionData({ abi: kryphoTableAbi, functionName: "start", args: [id] })));
   await confirm(deps.publicClient, hash, "Starting the shuffle");
 }

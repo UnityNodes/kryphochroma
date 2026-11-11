@@ -59,7 +59,7 @@ export function ChainTable({ id, watch }: { readonly id: string; readonly watch?
     return (
       <div className="kc-app grid place-items-center" aria-busy="true">
         <p className="kc-status" role="status">
-          {game.error ? `Reconnecting to Sepolia: ${game.error}` : "Reading the table from Sepolia…"}
+          {game.error ? `Reconnecting to Sepolia. ${game.error}` : "Reading the table from Sepolia…"}
         </p>
       </div>
     );

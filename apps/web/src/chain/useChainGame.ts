@@ -25,10 +25,12 @@ import type { TableController } from "@/game/controller";
 import { useTransitionQueue } from "@/game/useTransitionQueue";
 import { loadBurner } from "./burner";
 import { TABLE_ADDRESS } from "./config";
+import { friendlyError } from "./errors";
 import { sepoliaTransport } from "./rpc";
 import { toGameEvents } from "./events";
 
 const POLL_MS = 2000;
+const POLL_FAILURES_SHOWN = 3;
 const RELAYED_TOPICS = new Set([toEventSelector("ActionRelayed(uint256,uint8,uint32)"), toEventSelector("ActionRejected(uint256,uint8,uint32,bytes4)")]);
 
 export interface ChainSnapshot {
@@ -185,12 +187,15 @@ export function useChainGame(id: bigint, colorBlind: boolean, watchOnly = false)
   useEffect(() => {
     let stopped = false;
     let timer: ReturnType<typeof setTimeout> | undefined;
+    let failures = 0;
     const loop = async () => {
       try {
         await poll();
+        failures = 0;
         setError(null);
       } catch (e) {
-        setError((e as Error).message.slice(0, 160));
+        failures += 1;
+        if (failures >= POLL_FAILURES_SHOWN) setError(friendlyError(e));
       }
       if (!stopped) timer = setTimeout(loop, POLL_MS);
     };
