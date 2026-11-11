@@ -68,4 +68,13 @@ describe("keeper plan", () => {
     expect(scheduleKeeper([planned[5]!, planned[0]!]).background.map((p) => p.id)).toEqual([5n, 7n]);
     expect(scheduleKeeper([planned[2]!])).toEqual({ urgent: [], background: [] });
   });
+
+  it("finishes the most shuffled lobby before touching the next one", () => {
+    const lobbies: PlannedAction[] = [
+      { id: 1n, stage: 0, action: { kind: "setupStep", remaining: 30 } },
+      { id: 2n, stage: 0, action: { kind: "setupStep", remaining: 12 } },
+      { id: 3n, stage: 1, action: { kind: "setupStep", remaining: 50 } },
+    ];
+    expect(scheduleKeeper(lobbies).background.map((p) => p.id)).toEqual([3n, 2n]);
+  });
 });

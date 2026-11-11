@@ -85,10 +85,17 @@ function backgroundRank(entry: PlannedAction): number {
   return 2;
 }
 
+const remainingOf = (p: PlannedAction): number => ("remaining" in p.action ? p.action.remaining : 0);
+
+/** Block gas only fits a few shuffle steps, so lobbies are finished one at a time, most advanced first, instead of all crawling forward together. */
 export function scheduleKeeper(planned: readonly PlannedAction[]): { readonly urgent: readonly PlannedAction[]; readonly background: readonly PlannedAction[] } {
   const active = planned.filter((p) => p.action.kind !== "idle");
   const urgent = active.filter((p) => !BACKGROUND_KINDS.has(p.action.kind));
-  const background = [...active.filter((p) => BACKGROUND_KINDS.has(p.action.kind))].sort((a, b) => backgroundRank(a) - backgroundRank(b) || Number(a.id - b.id));
+  const sorted = [...active.filter((p) => BACKGROUND_KINDS.has(p.action.kind))].sort(
+    (a, b) => backgroundRank(a) - backgroundRank(b) || remainingOf(a) - remainingOf(b) || Number(a.id - b.id),
+  );
+  const firstLobby = sorted.find((p) => stageName(p.stage) === "Lobby");
+  const background = sorted.filter((p) => stageName(p.stage) !== "Lobby" || p === firstLobby);
   return { urgent, background };
 }
 
