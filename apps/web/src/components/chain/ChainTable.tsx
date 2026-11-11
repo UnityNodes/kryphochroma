@@ -5,6 +5,7 @@ import { toast } from "sonner";
 import { createPublicClient } from "viem";
 import { sepolia } from "viem/chains";
 import { loadBurner } from "@/chain/burner";
+import { friendlyError } from "@/chain/errors";
 import { sepoliaTransport } from "@/chain/rpc";
 import { type Funder, type SeatDeps, fundBurner, requestBots, serviceDrip as drip, startTable, takeSeat } from "@/chain/seat";
 import { useChainGame } from "@/chain/useChainGame";
@@ -31,7 +32,7 @@ export function ChainTable({ id, watch }: { readonly id: string; readonly watch?
     try {
       await task(seatDeps(funderState.funder));
     } catch (e) {
-      toast.error(`${label}: ${(e as Error).message.split("\n")[0]?.slice(0, 120)}`);
+      toast.error(`${label}: ${friendlyError(e)}`);
     }
     setWorking(false);
   };
@@ -44,7 +45,7 @@ export function ChainTable({ id, watch }: { readonly id: string; readonly watch?
 
   const fill = async () => {
     setWorking(true);
-    await requestBots(loadBurner(window.sessionStorage), BigInt(id)).catch((e: unknown) => toast.error((e as Error).message));
+    await requestBots(loadBurner(window.sessionStorage), BigInt(id)).catch((e: unknown) => toast.error(friendlyError(e)));
     setWorking(false);
   };
 

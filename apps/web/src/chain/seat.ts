@@ -4,6 +4,7 @@ import { sepolia } from "viem/chains";
 import { BURNER_GAS_LIMIT, BURNER_GAS_PRICE, TABLE_ADDRESS } from "./config";
 import { sepoliaTransport } from "./rpc";
 import { confirm } from "./confirm";
+import { isFundsLag } from "./errors";
 
 export const MIN_BURNER_BALANCE = 500_000_000_000_000n;
 export const WALLET_CRUMB = 2_000_000_000_000_000n;
@@ -29,6 +30,21 @@ export async function requestBots(burner: PrivateKeyAccount, id: bigint): Promis
   const signature = await burner.signMessage({ message: fillMessage(id) });
   const res = await fetch("/api/fill", { method: "POST", body: JSON.stringify({ id: id.toString(), signature }) });
   if (!res.ok) throw new Error("Could not seat the bots");
+}
+
+const FUNDS_TRIES = 6;
+const FUNDS_WAIT_MS = 2500;
+
+/** Public RPC nodes lag each other, so the node that takes the first transaction may not see the faucet top-up yet. */
+async function sendWhenFunded<T>(send: () => Promise<T>): Promise<T> {
+  for (let attempt = 1; ; attempt++) {
+    try {
+      return await send();
+    } catch (error) {
+      if (!isFundsLag(error) || attempt >= FUNDS_TRIES) throw error;
+      await new Promise((r) => setTimeout(r, FUNDS_WAIT_MS));
+    }
+  }
 }
 
 const burnerWallet = (burner: PrivateKeyAccount) => createWalletClient({ account: burner, chain: sepolia, transport: sepoliaTransport() });
@@ -62,7 +78,7 @@ export async function takeSeat(deps: SeatDeps, id: bigint): Promise<void> {
   const hash =
     funder.kind === "wallet"
       ? await funder.wallet.writeContract({ address: TABLE_ADDRESS, abi: kryphoTableAbi, functionName: "join", args, account: funder.wallet.account ?? funder.address, chain: sepolia, value: (await needsGas(deps)) ? WALLET_CRUMB : 0n })
-      : await burnerWallet(burner).writeContract({ address: TABLE_ADDRESS, abi: kryphoTableAbi, functionName: "join", args, gasPrice: BURNER_GAS_PRICE, gas: BURNER_GAS_LIMIT });
+      : await sendWhenFunded(() => burnerWallet(burner).writeContract({ address: TABLE_ADDRESS, abi: kryphoTableAbi, functionName: "join", args, gasPrice: BURNER_GAS_PRICE, gas: BURNER_GAS_LIMIT }));
   const receipt = await confirm(publicClient, hash, "Taking a seat").catch(async (error: Error) => {
     if (await sitsAt(publicClient, id, burner.address)) return null;
     throw error;
@@ -83,14 +99,14 @@ async function sitsAt(publicClient: PublicClient, id: bigint, session: Hex): Pro
 }
 
 export async function openTable(deps: SeatDeps, config: { readonly seats: number; readonly turnTimeout: number; readonly stackDrawTwo: boolean }): Promise<bigint> {
-  const hash = await burnerWallet(deps.burner).writeContract({
+  const hash = await sendWhenFunded(() => burnerWallet(deps.burner).writeContract({
     address: TABLE_ADDRESS,
     abi: kryphoTableAbi,
     functionName: "createTable",
     args: [{ seats: config.seats, turnTimeout: config.turnTimeout, targetScore: 500, singleRound: true, stackDrawTwo: config.stackDrawTwo }],
     gasPrice: BURNER_GAS_PRICE,
     gas: BURNER_GAS_LIMIT,
-  });
+  }));
   const receipt = await confirm(deps.publicClient, hash, "Opening the table");
   const created = parseEventLogs({ abi: kryphoTableAbi, logs: receipt.logs, eventName: "TableCreated" })[0];
   if (!created) throw new Error("Table was not created");
@@ -98,6 +114,6 @@ export async function openTable(deps: SeatDeps, config: { readonly seats: number
 }
 
 export async function startTable(deps: SeatDeps, id: bigint): Promise<void> {
-  const hash = await burnerWallet(deps.burner).writeContract({ address: TABLE_ADDRESS, abi: kryphoTableAbi, functionName: "start", args: [id], gasPrice: BURNER_GAS_PRICE, gas: BURNER_GAS_LIMIT });
+  const hash = await sendWhenFunded(() => burnerWallet(deps.burner).writeContract({ address: TABLE_ADDRESS, abi: kryphoTableAbi, functionName: "start", args: [id], gasPrice: BURNER_GAS_PRICE, gas: BURNER_GAS_LIMIT }));
   await confirm(deps.publicClient, hash, "Starting the shuffle");
 }

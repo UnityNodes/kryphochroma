@@ -4,15 +4,23 @@ import { privateKeyToAccount } from "viem/accounts";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 const burnerWrites: Record<string, unknown>[] = [];
-vi.mock("viem", async (original) => ({
-  ...(await original<typeof import("viem")>()),
-  createWalletClient: () => ({
-    writeContract: async (request: Record<string, unknown>) => {
-      burnerWrites.push(request);
-      return "0xburner" as Hex;
-    },
-  }),
-}));
+const lagging = { left: 0 };
+vi.mock("viem", async (original) => {
+  const viem = await original<typeof import("viem")>();
+  return {
+    ...viem,
+    createWalletClient: () => ({
+      writeContract: async (request: Record<string, unknown>) => {
+        if (lagging.left > 0) {
+          lagging.left--;
+          throw new viem.InsufficientFundsError();
+        }
+        burnerWrites.push(request);
+        return "0xburner" as Hex;
+      },
+    }),
+  };
+});
 
 const { fundBurner, takeSeat, WALLET_CRUMB, MIN_BURNER_BALANCE } = await import("@/chain/seat");
 
@@ -69,6 +77,17 @@ describe("taking a seat", () => {
 
   it("still fails when the receipt is slow and the session is not seated", async () => {
     await expect(takeSeat({ publicClient: slowClient(null), burner, funder: { kind: "guest" }, drip: async () => true }, 7n)).rejects.toThrow(/Timed out/);
+  });
+
+  it("retries a join while the node has not seen the faucet top-up yet", async () => {
+    vi.useFakeTimers();
+    lagging.left = 2;
+    const done = takeSeat({ publicClient: client(MIN_BURNER_BALANCE), burner, funder: { kind: "guest" }, drip: async () => true }, 7n);
+    await vi.runAllTimersAsync();
+    await done;
+    vi.useRealTimers();
+    expect(lagging.left).toBe(0);
+    expect(burnerWrites).toHaveLength(1);
   });
 
   it("joins as a guest with the session key itself", async () => {

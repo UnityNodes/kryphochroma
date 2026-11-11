@@ -8,6 +8,7 @@ import { useEffect, useState } from "react";
 import { createPublicClient } from "viem";
 import { sepolia } from "viem/chains";
 import { loadBurner } from "@/chain/burner";
+import { friendlyError } from "@/chain/errors";
 import { sepoliaTransport } from "@/chain/rpc";
 import { type SeatDeps, fundBurner, openTable, requestBots, serviceDrip as drip, startTable, takeSeat } from "@/chain/seat";
 import { WalletBar } from "@/components/wallet/WalletBar";
@@ -81,7 +82,7 @@ export function NewTable() {
     try {
       await task();
     } catch (e) {
-      setError((e as Error).message.split("\n")[0]?.slice(0, 160) ?? "Something went wrong");
+      setError(friendlyError(e));
     }
   }
 

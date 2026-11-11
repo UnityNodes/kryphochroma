@@ -147,13 +147,24 @@ async function poolTables(): Promise<{ id: bigint; view: LobbyView }[]> {
 }
 
 const OPEN_CACHE_MS = 6000;
+const OPEN_FRESH_BLOCKS = 300n;
 let openCache: { at: number; tables: { id: string; joined: number; seats: number; creator: string; setupStep: number }[] } = { at: 0, tables: [] };
+
+/** A lobby nobody created or joined within the last hour is a tab that was closed, so it is not offered to strangers. */
+async function recentLobbies(): Promise<Set<string>> {
+  const head = await publicClient.getBlockNumber({ cacheTime: 0 });
+  const logs = await publicClient.getLogs({ address: table, fromBlock: head > OPEN_FRESH_BLOCKS ? head - OPEN_FRESH_BLOCKS : 0n, toBlock: head });
+  const events = parseEventLogs({ abi: kryphoTableAbi, logs }).filter((e) => e.eventName === "TableCreated" || e.eventName === "Joined");
+  return new Set(events.map((e) => String((e.args as { id: bigint }).id)));
+}
 
 async function openTables(): Promise<typeof openCache.tables> {
   if (Date.now() - openCache.at < OPEN_CACHE_MS) return openCache.tables;
   const count = (await publicClient.readContract({ address: table, abi: kryphoTableAbi, functionName: "tableCount" })) as bigint;
+  const fresh = await recentLobbies();
   const tables: typeof openCache.tables = [];
   for (let id = count > WATCH_WINDOW ? count - WATCH_WINDOW + 1n : 1n; id <= count; id++) {
+    if (!fresh.has(id.toString())) continue;
     const view = await readLobby(id);
     const free = Number(view.config.seats) - Number(view.joined);
     if (Number(view.stage) !== 0 || free < 1 || Number(view.joined) === 0 || view.creator.toLowerCase() === keeper.address.toLowerCase()) continue;
