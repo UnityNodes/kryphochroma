@@ -9,10 +9,12 @@ import {
   applyMove,
   applyReveal,
   applyTimeout,
+  DECK_SIZE,
   botCatchTarget,
   chooseMove,
   initialState,
 } from "@kryphochroma/rules";
+import { deployHarness } from "./deploy.js";
 
 type Connection = Awaited<ReturnType<typeof network.connect>>;
 type Signer = Awaited<ReturnType<Connection["ethers"]["getSigners"]>>[number];
@@ -34,7 +36,8 @@ interface GameSetup {
   readonly relayBatch?: number;
 }
 
-const KIND: Record<Move["type"], number> = { play: 0, draw: 1, pass: 2, take: 3, mono: 4, accept: 5, challenge: 6 };
+const KIND: Record<Move["type"], number> = { play: 0, draw: 1, pass: 2, take: 3, mono: 4, accept: 5, challenge: 6, veil: 8, doubt: 9 };
+const SETUP_STEPS = 70;
 const ACTION_TYPES = {
   Action: [
     { name: "table", type: "uint256" },
@@ -64,8 +67,13 @@ export async function signAction(
 }
 
 async function deployTable() {
-  const table = await ethers.deployContract("TableHarness", [ethers.ZeroAddress]);
-  return table;
+  return deployHarness(ethers, ethers.ZeroAddress);
+}
+
+function colorField(move: Move): number {
+  if (move.type !== "play") return 0;
+  if (move.peek) return move.peek.seat * 32 + move.peek.slot;
+  return move.color ?? 0;
 }
 
 async function openTable(table: Awaited<ReturnType<typeof deployTable>>, players: Signer[], stack: boolean) {
@@ -75,10 +83,10 @@ async function openTable(table: Awaited<ReturnType<typeof deployTable>>, players
   const id = await table.tableCount();
   for (const p of players) await (await table.connect(p).join(id, p.address)).wait();
   await (await table.connect(creator).start(id)).wait();
-  for (let step = 0; step < 60; step++) await (await table.setupStep(id, { gasLimit: 16_700_000 })).wait();
+  for (let step = 0; step < SETUP_STEPS; step++) await (await table.setupStep(id, { gasLimit: 16_700_000 })).wait();
   for (let seat = 0; seat < players.length; seat++) await (await table.dealSeat(id, seat)).wait();
   const deck: number[] = [];
-  for (let i = 0; i < 108; i++) deck.push(await fhevm.cleartextDb.readUint8({ euint8: hex(await table.deckCardAt(id, i)) }));
+  for (let i = 0; i < DECK_SIZE; i++) deck.push(await fhevm.cleartextDb.readUint8({ euint8: hex(await table.deckCardAt(id, i)) }));
   while (Number((await table.getTable(id)).stage) === 2) {
     const handles = (await table.starterHandles(id)).map(hex);
     const { checkSignaturesArgs } = await fhevm.client.decryptPublicValuesWithSignatures({ encryptedValues: handles });
@@ -96,7 +104,8 @@ async function compare(table: Awaited<ReturnType<typeof deployTable>>, id: bigin
     dir: Number(t.dir),
     topCard: Number(t.topCard),
     color: Number(t.color),
-    deckCount: 108 - Number(t.deckPtr),
+    deckCount: DECK_SIZE - Number(t.deckPtr),
+    veil: [Number(t.veilBy), Number(t.veilJudge)],
     drawnSlot: Number(t.drawnSlot),
     pendingDraw: Number(t.pendingDraw),
     monoWindow: Number(t.monoWindow),
@@ -111,6 +120,7 @@ async function compare(table: Awaited<ReturnType<typeof deployTable>>, id: bigin
     topCard: pub.topCard,
     color: pub.color,
     deckCount: pub.deckCount,
+    veil: [pub.veil?.by ?? NONE, pub.veil?.judge ?? NONE],
     drawnSlot: pub.drawnSlot ?? NONE,
     pendingDraw: pub.pendingDraw,
     monoWindow: pub.monoWindow ?? NONE,
@@ -122,9 +132,9 @@ async function compare(table: Awaited<ReturnType<typeof deployTable>>, id: bigin
     const s = await table.getSeat(id, seat);
     const e = pub.seats[seat];
     if (!e) throw new Error("seat missing");
-    onChain.seats.push({ handSize: Number(s.handSize), slots: Number(s.slots), saidMono: s.saidMono, timeouts: Number(s.timeouts), abandoned: s.abandoned, score: Number(s.score) });
+    onChain.seats.push({ handSize: Number(s.handSize), slots: Number(s.slots), saidMono: s.saidMono, timeouts: Number(s.timeouts), abandoned: s.abandoned, score: Number(s.score), veilUsed: s.veilUsed });
     const mask = e.slots.reduce((m, used, i) => (used ? m | (1 << i) : m), 0);
-    expected.seats.push({ handSize: e.handSize, slots: mask, saidMono: e.saidMono, timeouts: e.timeouts, abandoned: e.abandoned, score: e.score });
+    expected.seats.push({ handSize: e.handSize, slots: mask, saidMono: e.saidMono, timeouts: e.timeouts, abandoned: e.abandoned, score: e.score, veilUsed: e.veilUsed });
   }
   expect(onChain, label).to.deep.equal(expected);
 }
@@ -133,7 +143,11 @@ async function send(table: Awaited<ReturnType<typeof deployTable>>, id: bigint, 
   const c = table.connect(signer);
   switch (move.type) {
     case "play":
-      return (await c.play(id, move.slot, move.card, move.color ?? 0, (await table.handOf(id, seat))[move.slot]!)).wait();
+      return (await c.play(id, move.slot, move.card, colorField(move), (await table.handOf(id, seat))[move.slot]!)).wait();
+    case "veil":
+      return (await c.veil(id, move.slot, move.claim, (await table.handOf(id, seat))[move.slot]!)).wait();
+    case "doubt":
+      return (await c.doubtVeil(id)).wait();
     case "draw":
       return (await c.draw(id)).wait();
     case "pass":
@@ -172,7 +186,7 @@ async function playGame(setup: GameSetup, players: Signer[]): Promise<{ steps: n
     const stage = state.pub.stage;
     if (stage === "AwaitChallenge") {
       const { clearValue, checkSignaturesArgs } = await fhevm.helpers.decryptPublicBoolWithSignatures({ ebool: hex(await table.hadColorOf(id)) });
-      expect(clearValue).to.equal(state.hadColor);
+      expect(clearValue).to.equal(state.pub.veil && !state.pub.drawFour ? state.veilTrue : state.hadColor);
       await (await table.resolveChallenge(id, checkSignaturesArgs.abiEncodedCleartexts, checkSignaturesArgs.decryptionProof)).wait();
       state = applyChallenge(state).state;
     } else if (stage === "Revealing") {
@@ -180,7 +194,9 @@ async function playGame(setup: GameSetup, players: Signer[]): Promise<{ steps: n
       const handles = (await table.revealHandles(id)).map(hex);
       const { checkSignaturesArgs } = await fhevm.client.decryptPublicValuesWithSignatures({ encryptedValues: handles });
       await (await table.finishReveal(id, checkSignaturesArgs.abiEncodedCleartexts, checkSignaturesArgs.decryptionProof)).wait();
-      state = applyReveal(state).state;
+      const secrets: number[] = [];
+      for (let seat = 0; seat < setup.seats; seat++) secrets.push(await fhevm.cleartextDb.readUint8({ euint8: hex(await table.secretOf(id, seat)) }));
+      state = applyReveal(state, { honest: state.honest, hands: state.hands, secrets }).state;
       await compare(table, id, state, `step ${steps} reveal`);
       return { steps, finished: true, state };
     } else {
@@ -210,8 +226,9 @@ async function playGame(setup: GameSetup, players: Signer[]): Promise<{ steps: n
         const next = applyMove(state, turn, move);
         if (next.events.some((e) => e.type === "Reshuffled")) return { steps, finished: false, state };
         if (setup.relayBatch) {
-          const seenHandle = move.type === "play" ? (await table.handOf(id, turn))[move.slot]! : undefined;
-          pending.push(await signAction(table, actor, id, turn, KIND[move.type], { ...("slot" in move ? { slot: move.slot, card: move.card, color: move.color ?? 0 } : {}), ...(seenHandle ? { seenHandle } : {}) }, nonces[turn]!++));
+          const seenHandle = move.type === "play" || move.type === "veil" ? (await table.handOf(id, turn))[move.slot]! : undefined;
+          const fields = move.type === "play" ? { slot: move.slot, card: move.card, color: colorField(move) } : move.type === "veil" ? { slot: move.slot, card: move.claim } : {};
+          pending.push(await signAction(table, actor, id, turn, KIND[move.type], { ...fields, ...(seenHandle ? { seenHandle } : {}) }, nonces[turn]!++));
           state = next.state;
           shadow = state;
           const boundary = next.events.some((e) => e.type === "Drew") || state.pub.stage !== "Playing" || state.pub.monoWindow !== null || pending.length >= setup.relayBatch;

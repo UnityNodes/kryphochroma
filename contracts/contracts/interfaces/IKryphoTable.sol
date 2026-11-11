@@ -52,6 +52,9 @@ interface IKryphoTable {
     error StaleHand();
     error BadAction();
     error BadSignature();
+    error VeilUsed();
+    error NoVeil();
+    error BadPeek();
 
     event TableCreated(uint256 indexed id, address indexed creator, Config config);
     event Joined(uint256 indexed id, uint8 seat, address indexed player, address session);
@@ -66,11 +69,15 @@ interface IKryphoTable {
     event DrawsTaken(uint256 indexed id, uint8 seat, uint8 count);
     event DrawFourChallenged(uint256 indexed id, uint8 seat);
     event ChallengeResolved(uint256 indexed id, bool hadColor);
+    event Veiled(uint256 indexed id, uint8 seat, uint8 slot, uint8 claim);
+    event VeilDoubted(uint256 indexed id, uint8 seat);
+    event VeilResolved(uint256 indexed id, bool truth);
+    event Peeked(uint256 indexed id, uint8 seat, uint8 target, uint8 slot);
     event TimedOut(uint256 indexed id, uint8 seat);
     event SeatAbandoned(uint256 indexed id, uint8 seat);
     event Reshuffled(uint256 indexed id, uint8 count);
     event RevealStarted(uint256 indexed id, uint8 candidate);
-    event RoundSettled(uint256 indexed id, int8 winner, uint16 points, uint8 cheaters);
+    event RoundSettled(uint256 indexed id, int8 winner, uint16 points, uint8 cheaters, bool bonus);
     event MatchOver(uint256 indexed id, int8 winner);
     event TableCancelled(uint256 indexed id);
     event ActionRelayed(uint256 indexed id, uint8 seat, uint32 nonce);

@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.27;
 
-import {euint8} from "@fhevm/solidity/lib/FHE.sol";
+import {FHE, euint8} from "@fhevm/solidity/lib/FHE.sol";
 import {KryphoTable} from "../KryphoTable.sol";
 
 contract TableHarness is KryphoTable {
@@ -18,5 +18,14 @@ contract TableHarness is KryphoTable {
 
     function deckCardAt(uint256 id, uint8 index) external view returns (euint8) {
         return _deck[id][index];
+    }
+
+    function setHandCard(uint256 id, uint8 seat, uint8 slot, uint8 card) external {
+        euint8 value = FHE.asEuint8(card);
+        _hands[id][seat][slot] = value;
+        FHE.allowThis(value);
+        FHE.allow(value, _seats[id][seat].session);
+        _handColors[id][seat][slot] = FHE.shr(value, 4);
+        FHE.allowThis(_handColors[id][seat][slot]);
     }
 }

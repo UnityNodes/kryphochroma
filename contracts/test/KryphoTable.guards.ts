@@ -1,6 +1,7 @@
 import { expect } from "chai";
 import { network } from "hardhat";
 import { signAction } from "./KryphoTable.parity.js";
+import { deployHarness, deployTable } from "./deploy.js";
 
 type Connection = Awaited<ReturnType<typeof network.connect>>;
 type Signer = Awaited<ReturnType<Connection["ethers"]["getSigners"]>>[number];
@@ -12,14 +13,14 @@ const hex = (value: string): `0x${string}` => value as `0x${string}`;
 const config = { seats: 2, turnTimeout: 90, targetScore: 500, singleRound: true, stackDrawTwo: false };
 
 async function ready(players: Signer[], takeover = ethers.ZeroAddress) {
-  const table = await ethers.deployContract("TableHarness", [takeover]);
+  const table = await deployHarness(ethers, takeover);
   const [creator] = players;
   if (!creator) throw new Error("no creator");
   await (await table.connect(creator).createTable({ ...config, seats: players.length })).wait();
   const id = await table.tableCount();
   for (const p of players) await (await table.connect(p).join(id, p.address)).wait();
   await (await table.connect(creator).start(id)).wait();
-  for (let step = 0; step < 60; step++) await (await table.setupStep(id, { gasLimit: 16_700_000 })).wait();
+  for (let step = 0; step < 70; step++) await (await table.setupStep(id, { gasLimit: 16_700_000 })).wait();
   for (let seat = 0; seat < players.length; seat++) await (await table.dealSeat(id, seat)).wait();
   return { table, id };
 }
@@ -39,7 +40,7 @@ describe("KryphoTable guards", function () {
   });
 
   it("validates config and lobby rules", async function () {
-    const table = await ethers.deployContract("KryphoTable", [ethers.ZeroAddress]);
+    const table = await deployTable(ethers, ethers.ZeroAddress);
     expect((await ethers.provider.getCode(await table.getAddress())).length / 2 - 1).to.be.at.most(24_576);
     await expect(table.createTable({ ...config, seats: 1 })).to.be.revertedWithCustomError(table, "BadConfig");
     await expect(table.createTable({ ...config, seats: 5 })).to.be.revertedWithCustomError(table, "BadConfig");
@@ -63,14 +64,14 @@ describe("KryphoTable guards", function () {
   });
 
   it("deals only after the full shuffle and only once per seat", async function () {
-    const table = await ethers.deployContract("KryphoTable", [ethers.ZeroAddress]);
+    const table = await deployTable(ethers, ethers.ZeroAddress);
     await (await table.createTable(config)).wait();
     const id = await table.tableCount();
     await (await table.join(id, s[0]!.address)).wait();
     await (await table.connect(s[1]!).join(id, s[1]!.address)).wait();
     await (await table.start(id)).wait();
     await expect(table.dealSeat(id, 0)).to.be.revertedWithCustomError(table, "WrongStage");
-    for (let step = 0; step < 60; step++) await (await table.setupStep(id, { gasLimit: 16_700_000 })).wait();
+    for (let step = 0; step < 70; step++) await (await table.setupStep(id, { gasLimit: 16_700_000 })).wait();
     await expect(table.setupStep(id)).to.be.revertedWithCustomError(table, "WrongStage");
     await (await table.dealSeat(id, 0)).wait();
     await expect(table.dealSeat(id, 0)).to.be.revertedWithCustomError(table, "BadSlot");
@@ -134,12 +135,12 @@ describe("KryphoTable guards", function () {
     const seen = hand[0]!;
     await expect(table.connect(actor).play(id, 30, 1, 0, seen)).to.be.revertedWithCustomError(table, "BadSlot");
     await expect(table.connect(actor).play(id, 0, 1, 0, hand[1]!)).to.be.revertedWithCustomError(table, "StaleHand");
-    await expect(table.connect(actor).play(id, 0, 0x4f, 0, seen)).to.be.revertedWithCustomError(table, "BadCard");
+    await expect(table.connect(actor).play(id, 0, 0x5f, 0, seen)).to.be.revertedWithCustomError(table, "BadCard");
     const top = Number(t.topCard);
     const offColor = ((top >> 4) + 1) % 4;
     const offRank = ((top & 15) + 1) % 10;
     await expect(table.connect(actor).play(id, 0, offColor * 16 + offRank, 0, seen)).to.be.revertedWithCustomError(table, "IllegalCard");
-    await expect(table.connect(actor).play(id, 0, 0x4d, 7, seen)).to.be.revertedWithCustomError(table, "BadColor");
+    await expect(table.connect(actor).play(id, 0, 0x5d, 5, seen)).to.be.revertedWithCustomError(table, "BadColor");
     await expect(table.forceTimeout(id)).to.be.revertedWithCustomError(table, "TurnNotExpired");
     await (await table.connect(actor).draw(id)).wait();
     await expect(table.connect(actor).draw(id)).to.be.revertedWithCustomError(table, "AlreadyDrew");
@@ -156,7 +157,7 @@ describe("KryphoTable guards", function () {
   });
 
   it("lets only the creator cancel a table in the lobby", async function () {
-    const table = await ethers.deployContract("KryphoTable", [ethers.ZeroAddress]);
+    const table = await deployTable(ethers, ethers.ZeroAddress);
     await (await table.createTable(config)).wait();
     const id = await table.tableCount();
     await expect(table.connect(s[1]!).cancel(id)).to.be.revertedWithCustomError(table, "NotCreator");
@@ -166,7 +167,7 @@ describe("KryphoTable guards", function () {
   });
 
   it("needs every seat prepared before the final reveal", async function () {
-    const table = await ethers.deployContract("KryphoTable", [ethers.ZeroAddress]);
+    const table = await deployTable(ethers, ethers.ZeroAddress);
     await (await table.createTable(config)).wait();
     const id = await table.tableCount();
     await expect(table.prepareReveal(id)).to.be.revertedWithCustomError(table, "WrongStage");
@@ -207,10 +208,10 @@ describe("KryphoTable guards", function () {
   });
 
   it("pre-shuffles in the lobby and deals right after start", async function () {
-    const table = await ethers.deployContract("KryphoTable", [ethers.ZeroAddress]);
+    const table = await deployTable(ethers, ethers.ZeroAddress);
     await (await table.createTable(config)).wait();
     const id = await table.tableCount();
-    for (let step = 0; step < 60; step++) await (await table.setupStep(id, { gasLimit: 16_700_000 })).wait();
+    for (let step = 0; step < 70; step++) await (await table.setupStep(id, { gasLimit: 16_700_000 })).wait();
     await expect(table.setupStep(id)).to.be.revertedWithCustomError(table, "ShuffleNotDone");
     expect(Number((await table.getTable(id)).stage)).to.equal(0);
     await (await table.join(id, s[0]!.address)).wait();
@@ -218,7 +219,7 @@ describe("KryphoTable guards", function () {
     await (await table.start(id)).wait();
     const t = await table.getTable(id);
     expect(Number(t.stage)).to.equal(2);
-    expect(Number(t.setupStep)).to.equal(60);
+    expect(Number(t.setupStep)).to.equal(70);
     await (await table.dealSeat(id, 0)).wait();
     await (await table.dealSeat(id, 1)).wait();
     const { checkSignaturesArgs } = await starter(table, id);
@@ -244,9 +245,9 @@ describe("KryphoTable guards", function () {
     const hand = await table.handOf(id, first);
     const address = await table.getAddress();
     const card = await fhevm.helpers.decryptUint8({ euint8: hex(hand[0]!), contractAddress: address, userAddress: takeover.address });
-    expect(card).to.be.lessThan(0x4f);
+    expect(card).to.be.lessThan(0x5f);
     const forced = await fhevm.helpers.decryptUint8({ euint8: hex(hand[9]!), contractAddress: address, userAddress: takeover.address });
-    expect(forced).to.be.lessThan(0x4f);
+    expect(forced).to.be.lessThan(0x5f);
     let denied = false;
     try {
       await fhevm.helpers.decryptUint8({ euint8: hex(hand[9]!), contractAddress: address, userAddress: s[first]!.address });
@@ -274,13 +275,13 @@ describe("KryphoTable guards", function () {
     await expect(table.reshuffleStep(id)).to.be.revertedWithCustomError(table, "ShuffleNotDone");
     await (await table.stageDeck(id, 100, [0x01, 0x02, 0x03, 0x04, 0x05, 0x06, 0x07, 0x08])).wait();
     await expect(table.reshuffleStep(id)).to.be.revertedWithCustomError(table, "ShuffleNotDone");
-    const below = [0x01, 0x02, 0x13, 0x24, 0x35, 0x0a, 0x1b, 0x2c, 0x4d, 0x4e, 0x07, 0x18, 0x29, 0x31, 0x05, 0x16, 0x27, 0x38, 0x09, 0x33];
+    const below = [0x01, 0x02, 0x13, 0x24, 0x35, 0x0a, 0x1b, 0x2c, 0x5d, 0x5e, 0x07, 0x18, 0x29, 0x31, 0x05, 0x16, 0x27, 0x38, 0x09, 0x33];
     const top = Number((await table.getTable(id)).topCard);
     await (await table.stageDeck(id, 100, below)).wait();
     await (await table.reshuffleStep(id)).wait();
     const size = 16;
     expect((await table.discardOf(id)).map(Number)).to.deep.equal([...below.slice(size), top]);
-    for (let step = 1; step < 57; step++) await (await table.reshuffleStep(id, { gasLimit: 16_700_000 })).wait();
+    for (let step = 1; step < 65; step++) await (await table.reshuffleStep(id, { gasLimit: 16_700_000 })).wait();
     await expect(table.reshuffleStep(id)).to.be.revertedWithCustomError(table, "ShuffleNotDone");
     const refilled: number[] = [];
     for (let i = 0; i < size; i++) refilled.push(await fhevm.cleartextDb.readUint8({ euint8: hex(await table.deckCardAt(id, i)) }));
@@ -288,7 +289,7 @@ describe("KryphoTable guards", function () {
     expect(refilled).to.not.deep.equal(below.slice(0, size));
     let t = await table.getTable(id);
     expect(Number(t.deckPtr)).to.equal(100);
-    await (await table.stageDeck(id, 108, [])).wait();
+    await (await table.stageDeck(id, 138, [])).wait();
     const turn = Number(t.turn);
     await expect(table.connect(s[turn]!).draw(id)).to.emit(table, "Reshuffled").withArgs(id, size);
     t = await table.getTable(id);
@@ -296,5 +297,68 @@ describe("KryphoTable guards", function () {
     const slot = Number(t.drawnSlot);
     const drawn = await fhevm.cleartextDb.readUint8({ euint8: hex((await table.handOf(id, turn))[slot]!) });
     expect(drawn).to.equal(refilled[0]);
+  });
+  it("lets a spyglass read exactly one opponent card and keeps secret colours private", async function () {
+    const { table, id } = await ready([s[0]!, s[1]!]);
+    while (Number((await table.getTable(id)).stage) === 2) {
+      const { checkSignaturesArgs } = await starter(table, id);
+      await (await table.setStarter(id, checkSignaturesArgs.abiEncodedCleartexts, checkSignaturesArgs.decryptionProof)).wait();
+    }
+    const address = await table.getAddress();
+    const canRead = async (handle: string, user: string) => {
+      try {
+        await fhevm.helpers.decryptUint8({ euint8: hex(handle), contractAddress: address, userAddress: user });
+        return true;
+      } catch {
+        return false;
+      }
+    };
+    const secret = await table.secretOf(id, 0);
+    expect(await fhevm.helpers.decryptUint8({ euint8: hex(secret), contractAddress: address, userAddress: s[0]!.address })).to.be.lessThan(5);
+    expect(await canRead(secret, s[1]!.address)).to.equal(false);
+
+    const t = await table.getTable(id);
+    const turn = Number(t.turn);
+    const other = 1 - turn;
+    const spyglass = Number(t.color) * 16 + 13;
+    await (await table.setHandCard(id, turn, 0, spyglass)).wait();
+    const seen = (await table.handOf(id, turn))[0]!;
+    await expect(table.connect(s[turn]!).play(id, 0, spyglass, turn * 32 + 1, seen)).to.be.revertedWithCustomError(table, "BadPeek");
+    await expect(table.connect(s[turn]!).play(id, 0, spyglass, other * 32 + 20, seen)).to.be.revertedWithCustomError(table, "BadPeek");
+    await expect(table.connect(s[turn]!).play(id, 0, spyglass, other * 32 + 3, seen)).to.emit(table, "Peeked").withArgs(id, turn, other, 3);
+    const target = await table.handOf(id, other);
+    expect(await canRead(target[3]!, s[turn]!.address)).to.equal(true);
+    expect(await canRead(target[4]!, s[turn]!.address)).to.equal(false);
+  });
+
+  it("settles a doubted veil with one revealed bit and refuses a forged proof", async function () {
+    const { table, id } = await ready([s[0]!, s[1]!]);
+    while (Number((await table.getTable(id)).stage) === 2) {
+      const { checkSignaturesArgs } = await starter(table, id);
+      await (await table.setStarter(id, checkSignaturesArgs.abiEncodedCleartexts, checkSignaturesArgs.decryptionProof)).wait();
+    }
+    const t = await table.getTable(id);
+    const turn = Number(t.turn);
+    const judge = 1 - turn;
+    const claim = Number(t.color) * 16 + 7;
+    const seen = (await table.handOf(id, turn))[2]!;
+    const truth = (await fhevm.cleartextDb.readUint8({ euint8: hex(seen) })) === claim;
+    await expect(table.connect(s[turn]!).veil(id, 2, 0x0e, seen)).to.be.revertedWithCustomError(table, "BadCard");
+    await expect(table.connect(s[turn]!).veil(id, 2, claim, seen)).to.emit(table, "Veiled").withArgs(id, turn, 2, claim);
+    expect(Number((await table.getTable(id)).topCard)).to.equal(claim);
+    expect((await table.getSeat(id, turn)).veilUsed).to.equal(true);
+    await expect(table.connect(s[turn]!).doubtVeil(id)).to.be.revertedWithCustomError(table, "NotYourTurn");
+    await (await table.connect(s[judge]!).doubtVeil(id)).wait();
+    expect(Number((await table.getTable(id)).stage)).to.equal(4);
+    const { clearValue, checkSignaturesArgs } = await fhevm.helpers.decryptPublicBoolWithSignatures({ ebool: hex(await table.hadColorOf(id)) });
+    expect(clearValue).to.equal(truth);
+    const forged = ethers.AbiCoder.defaultAbiCoder().encode(["bool"], [!clearValue]);
+    await expect(table.resolveChallenge(id, forged, checkSignaturesArgs.decryptionProof)).to.be.revert(ethers);
+    const before = [Number((await table.getSeat(id, turn)).handSize), Number((await table.getSeat(id, judge)).handSize)];
+    await expect(table.resolveChallenge(id, checkSignaturesArgs.abiEncodedCleartexts, checkSignaturesArgs.decryptionProof)).to.emit(table, "VeilResolved").withArgs(id, truth);
+    const after = [Number((await table.getSeat(id, turn)).handSize), Number((await table.getSeat(id, judge)).handSize)];
+    expect(after).to.deep.equal(truth ? [before[0], before[1]! + 2] : [before[0]! + 4, before[1]]);
+    const end = await table.getTable(id);
+    expect([Number(end.stage), Number(end.turn), Number(end.veilBy)]).to.deep.equal([3, judge, 255]);
   });
 });

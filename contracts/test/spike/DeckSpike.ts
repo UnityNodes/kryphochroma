@@ -1,7 +1,10 @@
 import { writeFileSync } from "node:fs";
 import { expect } from "chai";
 import { network } from "hardhat";
-import { fullDeck } from "@kryphochroma/rules";
+import { fullDeck as engineDeck } from "@kryphochroma/rules";
+
+const SPIKE_DECK = 108;
+const fullDeck = () => engineDeck().slice(0, SPIKE_DECK);
 
 type Connection = Awaited<ReturnType<typeof network.connect>>;
 let ethers: Connection["ethers"];
