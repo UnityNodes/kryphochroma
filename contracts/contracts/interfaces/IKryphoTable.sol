@@ -51,6 +51,7 @@ interface IKryphoTable {
     error TableFull();
     error AlreadySeated();
     error NotCreator();
+    error NotSeated();
     error WrongStage(Stage expected, Stage actual);
     error NotYourTurn();
     error BadSlot();
@@ -108,6 +109,7 @@ interface IKryphoTable {
     event RoundSettled(uint256 indexed id, int8 winner, uint16 points, uint8 cheaters, bool bonus);
     event MatchOver(uint256 indexed id, int8 winner);
     event TableCancelled(uint256 indexed id);
+    event Left(uint256 indexed id, uint8 seat, address indexed player);
     event ActionRelayed(uint256 indexed id, uint8 seat, uint32 nonce);
     event ActionRejected(uint256 indexed id, uint8 seat, uint32 nonce, bytes4 reason);
 }

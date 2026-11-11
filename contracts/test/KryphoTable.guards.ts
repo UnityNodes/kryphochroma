@@ -58,7 +58,7 @@ describe("KryphoTable guards", function () {
     await expect(table.connect(s[1]!).join(id, s[5]!.address)).to.be.revertedWithCustomError(table, "BadSession");
     await (await table.connect(s[1]!).join(id, s[1]!.address)).wait();
     await expect(table.connect(s[2]!).join(id, s[2]!.address)).to.be.revertedWithCustomError(table, "TableFull");
-    await expect(table.connect(s[1]!).start(id)).to.be.revertedWithCustomError(table, "NotCreator");
+    await expect(table.connect(s[2]!).start(id)).to.be.revertedWithCustomError(table, "NotSeated");
     await expect(table.dealSeat(id, 0)).to.be.revertedWithCustomError(table, "WrongStage");
     await expect(table.dealSeat(999, 0)).to.be.revertedWithCustomError(table, "WrongStage");
   });
@@ -164,6 +164,37 @@ describe("KryphoTable guards", function () {
     await expect(table.cancel(id)).to.emit(table, "TableCancelled");
     await expect(table.join(id, s[0]!.address)).to.be.revertedWithCustomError(table, "WrongStage");
     await expect(table.cancel(id)).to.be.revertedWithCustomError(table, "WrongStage");
+  });
+
+  it("lets a player leave the lobby, hands the host role on and closes an empty table", async function () {
+    const table = await deployTable(ethers, ethers.ZeroAddress);
+    await (await table.connect(s[0]!).createTable({ ...config, seats: 3 })).wait();
+    const id = await table.tableCount();
+    for (const p of [s[0]!, s[1]!, s[2]!]) await (await table.connect(p).join(id, p.address)).wait();
+    await expect(table.connect(s[3]!).leave(id)).to.be.revertedWithCustomError(table, "NotSeated");
+    await expect(table.connect(s[1]!).leave(id)).to.emit(table, "Left").withArgs(id, 1, s[1]!.address);
+    expect(Number((await table.getTable(id)).joined)).to.equal(2);
+    expect((await table.getSeat(id, 1)).player).to.equal(s[2]!.address);
+    await expect(table.connect(s[0]!).leave(id)).to.emit(table, "Left").withArgs(id, 0, s[0]!.address);
+    expect((await table.getTable(id)).creator).to.equal(s[2]!.address);
+    await (await table.connect(s[1]!).join(id, s[1]!.address)).wait();
+    await expect(table.connect(s[1]!).start(id)).to.be.revertedWithCustomError(table, "NotCreator");
+    await expect(table.connect(s[2]!).leave(id)).to.emit(table, "Left");
+    await expect(table.connect(s[1]!).leave(id)).to.emit(table, "TableCancelled").withArgs(id);
+    expect(Number((await table.getTable(id)).stage)).to.equal(7);
+    await expect(table.connect(s[1]!).join(id, s[1]!.address)).to.be.revertedWithCustomError(table, "WrongStage");
+  });
+
+  it("lets anyone seated start a full table when the host is gone", async function () {
+    const table = await deployTable(ethers, ethers.ZeroAddress);
+    await (await table.connect(s[3]!).createTable(config)).wait();
+    const id = await table.tableCount();
+    await (await table.connect(s[0]!).join(id, s[0]!.address)).wait();
+    await expect(table.connect(s[0]!).start(id)).to.be.revertedWithCustomError(table, "NotCreator");
+    await (await table.connect(s[1]!).join(id, s[1]!.address)).wait();
+    await expect(table.connect(s[2]!).start(id)).to.be.revertedWithCustomError(table, "NotSeated");
+    await (await table.connect(s[1]!).start(id)).wait();
+    expect(Number((await table.getTable(id)).stage)).to.equal(1);
   });
 
   it("needs every seat prepared before the final reveal", async function () {

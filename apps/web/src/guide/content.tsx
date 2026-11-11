@@ -6,6 +6,7 @@ export interface Deployment {
   readonly deck: string;
   readonly score: string;
   readonly radio: string;
+  readonly lobby: string;
   readonly takeover: string;
   readonly block: number;
 }
@@ -388,6 +389,7 @@ browser <── user decrypt of own cards ── Zama relayer and KMS`}</Code>
             ["KryphoDeck (library)", <Address key="d" value={d.deck} />],
             ["KryphoScore (library)", <Address key="s" value={d.score} />],
             ["KryphoRadio (library)", <Address key="r" value={d.radio} />],
+            ["KryphoLobby (library)", <Address key="l" value={d.lobby} />],
             ["Takeover key", <Address key="k" value={d.takeover} />],
           ]}
         />

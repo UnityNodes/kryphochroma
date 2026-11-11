@@ -1,7 +1,7 @@
 "use client";
 
 import { DECK_SIZE, SETUP_STEPS } from "@kryphochroma/abi";
-import { Armchair, Bot, Eye, Link2, Play, Shuffle, Users } from "lucide-react";
+import { Armchair, Bot, Eye, House, Link2, LogOut, Play, Shuffle, Users } from "lucide-react";
 import Link from "next/link";
 import { toast } from "sonner";
 import type { ChainSnapshot } from "@/chain/useChainGame";
@@ -20,6 +20,7 @@ export interface PreGameProps {
   readonly onFill: () => void;
   readonly onStart: () => void;
   readonly onJoin: () => void;
+  readonly onLeave: () => void;
   readonly working: boolean;
 }
 
@@ -33,7 +34,7 @@ async function copyInvite(id: string): Promise<void> {
   }
 }
 
-export function PreGame({ id, snapshot, address, watching, onFill, onStart, onJoin, working }: PreGameProps) {
+export function PreGame({ id, snapshot, address, watching, onFill, onStart, onJoin, onLeave, working }: PreGameProps) {
   const { table, seats } = snapshot;
   const profiles = useProfiles(seats.map((s) => s.session));
   const myProfile = useMyProfile();
@@ -41,6 +42,8 @@ export function PreGame({ id, snapshot, address, watching, onFill, onStart, onJo
   const canJoin = !watching && snapshot.me < 0 && free > 0;
   const stage = Number(table.stage);
   const isCreator = table.creator.toLowerCase() === address.toLowerCase();
+  const seated = !watching && snapshot.me >= 0;
+  const canStart = seated && (isCreator || free === 0);
   const progress = Math.round((Number(table.setupStep) / SETUP_STEPS) * 100);
   return (
     <div className="kc-app">
@@ -90,15 +93,26 @@ export function PreGame({ id, snapshot, address, watching, onFill, onStart, onJo
                     Fill with bots
                   </button>
                 )}
-                {isCreator && !watching && (
+                {canStart && (
                   <button type="button" className="kc-btn" onClick={onStart} disabled={working || seats.length < 2}>
                     <Play aria-hidden />
                     Start
                   </button>
                 )}
               </div>
+              {free === 0 && seated && <p className="text-sm">The table is full. Anyone at it can start, the host is not needed.</p>}
               {free > 0 && <p className="text-sm">Share the invite link: friends sit down as guests or with a wallet. {isCreator ? "Start when everyone is in, or fill the empty seats with bots." : "The host starts the game."}</p>}
               <div className="flex flex-wrap justify-center gap-3 text-sm">
+                {seated && (
+                  <button type="button" className="kc-chip" onClick={onLeave} disabled={working}>
+                    <LogOut aria-hidden />
+                    Leave table
+                  </button>
+                )}
+                <Link href="/new" className="kc-chip">
+                  <House aria-hidden />
+                  Menu
+                </Link>
                 <button type="button" className="kc-chip" onClick={() => void copyInvite(id)}>
                   <Link2 aria-hidden />
                   Copy invite link

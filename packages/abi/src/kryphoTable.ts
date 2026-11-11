@@ -147,6 +147,11 @@ export const kryphoTableAbi = [
   },
   {
     "inputs": [],
+    "name": "NotSeated",
+    "type": "error"
+  },
+  {
+    "inputs": [],
     "name": "NotYourTurn",
     "type": "error"
   },
@@ -429,6 +434,31 @@ export const kryphoTableAbi = [
       }
     ],
     "name": "Joined",
+    "type": "event"
+  },
+  {
+    "anonymous": false,
+    "inputs": [
+      {
+        "indexed": true,
+        "internalType": "uint256",
+        "name": "id",
+        "type": "uint256"
+      },
+      {
+        "indexed": false,
+        "internalType": "uint8",
+        "name": "seat",
+        "type": "uint8"
+      },
+      {
+        "indexed": true,
+        "internalType": "address",
+        "name": "player",
+        "type": "address"
+      }
+    ],
+    "name": "Left",
     "type": "event"
   },
   {
@@ -1466,6 +1496,19 @@ export const kryphoTableAbi = [
     "name": "join",
     "outputs": [],
     "stateMutability": "payable",
+    "type": "function"
+  },
+  {
+    "inputs": [
+      {
+        "internalType": "uint256",
+        "name": "id",
+        "type": "uint256"
+      }
+    ],
+    "name": "leave",
+    "outputs": [],
+    "stateMutability": "nonpayable",
     "type": "function"
   },
   {

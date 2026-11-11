@@ -135,6 +135,11 @@ export async function openTable(deps: SeatDeps, config: { readonly seats: number
   return created.args.id;
 }
 
+export async function leaveTable(deps: SeatDeps, id: bigint): Promise<void> {
+  const hash = await sendWhenFunded(() => burnerSend(deps.publicClient, deps.burner, encodeFunctionData({ abi: kryphoTableAbi, functionName: "leave", args: [id] })));
+  await confirm(deps.publicClient, hash, "Leaving the table");
+}
+
 export async function startTable(deps: SeatDeps, id: bigint): Promise<void> {
   const hash = await sendWhenFunded(() => burnerSend(deps.publicClient, deps.burner, encodeFunctionData({ abi: kryphoTableAbi, functionName: "start", args: [id] })));
   await confirm(deps.publicClient, hash, "Starting the shuffle");

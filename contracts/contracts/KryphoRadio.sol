@@ -17,6 +17,22 @@ library KryphoRadio {
         return ecrecover(keccak256(abi.encodePacked("\x19\x01", domain, structHash)), a.v, a.r, a.s);
     }
 
+    function hadColor(mapping(uint256 => euint8[24][4]) storage colors, uint256 id, uint8 seat, uint32 others, uint8 prevColor) public returns (ebool had) {
+        uint8 count = 0;
+        for (uint8 i = 0; i < HAND_SLOTS; i++) if (others & (uint32(1) << i) != 0) count++;
+        if (count == 0) {
+            had = FHE.asEbool(false);
+        } else {
+            euint8[] memory list = new euint8[](count);
+            uint8 k = 0;
+            for (uint8 i = 0; i < HAND_SLOTS; i++) {
+                if (others & (uint32(1) << i) != 0) list[k++] = colors[id][seat][i];
+            }
+            had = FHE.isIn(FHE.asEuint8(prevColor), list);
+        }
+        FHE.allowThis(had);
+    }
+
     function ping(mapping(uint256 => euint8[24][4]) storage colors, uint256 id, uint8 target, uint32 slots, uint8 color, address listener)
         public
         returns (euint8 count)

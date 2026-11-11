@@ -1,13 +1,14 @@
 "use client";
 
 import { useState } from "react";
+import { useRouter } from "next/navigation";
 import { toast } from "sonner";
 import { createPublicClient } from "viem";
 import { sepolia } from "viem/chains";
 import { loadBurner } from "@/chain/burner";
 import { friendlyError } from "@/chain/errors";
 import { sepoliaTransport } from "@/chain/rpc";
-import { type Funder, type SeatDeps, fundBurner, requestBots, serviceDrip as drip, startTable, takeSeat } from "@/chain/seat";
+import { type Funder, type SeatDeps, fundBurner, requestBots, serviceDrip as drip, leaveTable, startTable, takeSeat } from "@/chain/seat";
 import { useChainGame } from "@/chain/useChainGame";
 import { useFunder } from "@/components/wallet/useFunder";
 import { TableView, useColorBlind } from "@/components/table/Table";
@@ -22,6 +23,7 @@ export function ChainTable({ id, watch }: { readonly id: string; readonly watch?
   const game = useChainGame(BigInt(id), colorBlind, watch);
   const funderState = useFunder();
   const [working, setWorking] = useState(false);
+  const router = useRouter();
 
   const withFunder = async (label: string, task: (deps: SeatDeps) => Promise<void>) => {
     if (!funderState.ready) {
@@ -49,6 +51,14 @@ export function ChainTable({ id, watch }: { readonly id: string; readonly watch?
     setWorking(false);
   };
 
+  const leave = () =>
+    withFunder("Could not leave", async (deps) => {
+      await fundBurner(deps);
+      await leaveTable(deps, BigInt(id));
+      toast.success("You left the table");
+      router.push("/new");
+    });
+
   const start = () =>
     withFunder("Could not start", async (deps) => {
       await fundBurner(deps);
@@ -65,7 +75,7 @@ export function ChainTable({ id, watch }: { readonly id: string; readonly watch?
     );
   }
   if (Number(game.snapshot.table.stage) < 3) {
-    return <PreGame id={id} snapshot={game.snapshot} address={game.address} watching={Boolean(watch)} onFill={fill} onStart={start} onJoin={join} working={working} />;
+    return <PreGame id={id} snapshot={game.snapshot} address={game.address} watching={Boolean(watch)} onFill={fill} onStart={start} onJoin={join} onLeave={leave} working={working} />;
   }
   return <TableView controller={game} colorBlind={colorBlind} onToggleShapes={() => setColorBlind((v) => !v)} />;
 }

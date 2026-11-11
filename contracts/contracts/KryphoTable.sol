@@ -8,6 +8,7 @@ import {KryphoDeck} from "./KryphoDeck.sol";
 import {CardLib} from "./CardLib.sol";
 import {KryphoScore} from "./KryphoScore.sol";
 import {KryphoRadio} from "./KryphoRadio.sol";
+import {KryphoLobby} from "./KryphoLobby.sol";
 
 contract KryphoTable is IKryphoTable, ZamaEthereumConfig {
     using CardLib for uint8;
@@ -156,15 +157,7 @@ contract KryphoTable is IKryphoTable, ZamaEthereumConfig {
         Table storage t = _requireStage(id, Stage.Lobby);
         if (session == address(0) || session == TAKEOVER) revert BadSession();
         if (t.joined >= t.config.seats) revert TableFull();
-        Seat[4] storage seats = _seats[id];
-        for (uint8 i = 0; i < t.joined; i++) {
-            if (seats[i].player == msg.sender) revert AlreadySeated();
-            if (seats[i].session == session) revert BadSession();
-        }
-        uint8 seat = t.joined++;
-        seats[seat].player = msg.sender;
-        seats[seat].session = session;
-        emit Joined(id, seat, msg.sender, session);
+        KryphoLobby.join(_seats, id, t.joined++, msg.sender, session);
         if (msg.value > 0) {
             (bool ok, ) = session.call{value: msg.value, gas: SESSION_STIPEND}("");
             if (!ok) revert TransferFailed();
@@ -178,9 +171,25 @@ contract KryphoTable is IKryphoTable, ZamaEthereumConfig {
         emit TableCancelled(id);
     }
 
+    function leave(uint256 id) external {
+        Table storage t = _requireStage(id, Stage.Lobby);
+        (bool wasHost, address next) = KryphoLobby.leave(_seats, id, t.joined, msg.sender, t.creator);
+        t.joined--;
+        if (t.joined == 0) {
+            t.stage = Stage.MatchOver;
+            emit TableCancelled(id);
+        } else if (wasHost) {
+            t.creator = next;
+        }
+    }
+
+    /** A full table may be started by anyone seated at it, so a host who closed the tab can not lock three other players in the lobby. */
     function start(uint256 id) external {
         Table storage t = _requireStage(id, Stage.Lobby);
-        if (msg.sender != t.creator) revert NotCreator();
+        if (msg.sender != t.creator) {
+            if (t.joined < t.config.seats) revert NotCreator();
+            KryphoLobby.seatOf(_seats, id, t.joined, msg.sender);
+        }
         if (t.joined < 2) revert BadConfig();
         bool shuffled = t.setupStep == SETUP_STEPS;
         _resetRound(id, t);
@@ -724,22 +733,7 @@ contract KryphoTable is IKryphoTable, ZamaEthereumConfig {
     }
 
     function _recordHadColor(uint256 id, uint8 seat, uint8 slot, uint8 prevColor) internal {
-        uint32 others = _seats[id][seat].slots & ~(uint32(1) << slot);
-        uint8 count = 0;
-        for (uint8 i = 0; i < HAND_SLOTS; i++) if (others & (uint32(1) << i) != 0) count++;
-        ebool had;
-        if (count == 0) {
-            had = FHE.asEbool(false);
-        } else {
-            euint8[] memory colors = new euint8[](count);
-            uint8 k = 0;
-            for (uint8 i = 0; i < HAND_SLOTS; i++) {
-                if (others & (uint32(1) << i) != 0) colors[k++] = _handColors[id][seat][i];
-            }
-            had = FHE.isIn(FHE.asEuint8(prevColor), colors);
-        }
-        _hadColor[id] = had;
-        FHE.allowThis(had);
+        _hadColor[id] = KryphoRadio.hadColor(_handColors, id, seat, _seats[id][seat].slots & ~(uint32(1) << slot), prevColor);
         _tables[id].prevColor = prevColor;
     }
 
@@ -796,14 +790,6 @@ contract KryphoTable is IKryphoTable, ZamaEthereumConfig {
         t.candidate = NONE;
         delete _discard[id];
         delete _revealHandles[id];
-        for (uint8 seat = 0; seat < t.joined; seat++) {
-            Seat storage s = _seats[id][seat];
-            s.handSize = 0;
-            s.slots = 0;
-            s.saidMono = false;
-            s.timeouts = 0;
-            s.veilUsed = false;
-            s.sonarUsed = false;
-        }
+        KryphoLobby.resetSeats(_seats, id, t.joined);
     }
 }
