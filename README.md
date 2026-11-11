@@ -74,12 +74,12 @@ flowchart LR
 
 | | |
 |---|---|
-| `KryphoTable` | [`0x1284a04Fe8535b5eb625a76AfDe707D4274E3Ff7`](https://sepolia.etherscan.io/address/0x1284a04Fe8535b5eb625a76AfDe707D4274E3Ff7) |
-| `KryphoDeck` library | [`0x4b2f1dFde9244d3A20D2778Aedf59eF434B96F4d`](https://sepolia.etherscan.io/address/0x4b2f1dFde9244d3A20D2778Aedf59eF434B96F4d) |
-| `KryphoScore` library | [`0xa6A95302f7Ceb700984E4E3BD1FcAcCB682BA5a7`](https://sepolia.etherscan.io/address/0xa6A95302f7Ceb700984E4E3BD1FcAcCB682BA5a7) |
-| `KryphoRadio` library (sonar, signatures) | [`0x3F1680C1A8B8D5a4155858eB0Fce03a405ef61A1`](https://sepolia.etherscan.io/address/0x3F1680C1A8B8D5a4155858eB0Fce03a405ef61A1) |
-| `KryphoLobby` library (join, leave) | [`0x276F3b5a468819ebDDD435091C046cd92269Bc0B`](https://sepolia.etherscan.io/address/0x276F3b5a468819ebDDD435091C046cd92269Bc0B) |
-| Deployment | [`0x395438…d0de`](https://sepolia.etherscan.io/tx/0x395438bd37c3964c9f1284123b8244627965e41b6e930c65286d021d3245d0de), block 12113115 |
+| `KryphoTable` | [`0x744FE781c46262f8C0dA44085d4d494A5d567a1f`](https://sepolia.etherscan.io/address/0x744FE781c46262f8C0dA44085d4d494A5d567a1f) |
+| `KryphoDeck` library | [`0xa0194d801f11C60e74C48212b654a2EE2fD11A56`](https://sepolia.etherscan.io/address/0xa0194d801f11C60e74C48212b654a2EE2fD11A56) |
+| `KryphoScore` library | [`0xa64e878f6f197cC294EDd4545124D8e437b541A1`](https://sepolia.etherscan.io/address/0xa64e878f6f197cC294EDd4545124D8e437b541A1) |
+| `KryphoRadio` library (sonar, signatures) | [`0x6dB44817717C2480a3473C859f5A7B7621Ed550b`](https://sepolia.etherscan.io/address/0x6dB44817717C2480a3473C859f5A7B7621Ed550b) |
+| `KryphoLobby` library (join, leave, host) | [`0xFf37E8f16CB678e81233A3634D9278A467c7aeaB`](https://sepolia.etherscan.io/address/0xFf37E8f16CB678e81233A3634D9278A467c7aeaB) |
+| Deployment | [`0x8e45d0…0429`](https://sepolia.etherscan.io/tx/0x8e45d0f47431a982421546e27818f9bf9bffcfc8b3df1439d026448ec28f0429), block 12113454 |
 
 A full round on chain on the previous deployment with the same rules, table 2: one human, three bots, three veils, one spyglass, Mono, a timeout and the reveal.
 
@@ -115,6 +115,8 @@ HCU limits on Sepolia: 20M per transaction, 5M depth.
 | A signed move reaches every client | under 1 s |
 | Own card decryptable after its transaction | ~3 s |
 | Quick game: click to seated / to decrypted hand | ~40 s / ~80 s |
+| With friends: click to lobby, from a ready shuffled table | ~15 s |
+| Start to the first move, deck shuffled ahead of time | ~45 s |
 | Background shuffle of a fresh table | ~4 min |
 
 ## What still shows, on purpose
@@ -133,9 +135,9 @@ Trust assumptions we accept for a testnet game:
 | Suite | What it covers |
 |---|---|
 | `packages/rules` (76) | every rule including veil, spyglass, sonar and secret colour; scoring; bots; 1,000 simulated games |
-| `contracts` (29) | parity with the rules engine move by move on the FHEVM mock, including relayed batches with veils, spyglasses and sonar pings; forged and replayed proofs; privacy of hands, peeks, sonar answers and secret colours; relay signatures and out of gas griefing; leaving a lobby and host handover; takeover; background refill |
+| `contracts` (32) | parity with the rules engine move by move on the FHEVM mock, including relayed batches with veils, spyglasses and sonar pings; forged and replayed proofs; privacy of hands, peeks, sonar answers and secret colours; relay signatures and out of gas griefing; leaving a lobby and host handover; takeover; background refill |
 | `services/bots` (38) | keeper planning and scheduling, quick game pool, hub reads pinned to one block, faucet policy, action parsing, chain view |
-| `apps/web` (31 unit, 12 e2e) | seat flows, sounds, the radio, offline game; a judge scenario in Playwright with axe accessibility checks on phone and desktop |
+| `apps/web` (32 unit, 12 e2e) | seat flows, sounds, the radio, offline game; a judge scenario in Playwright with axe accessibility checks on phone and desktop |
 
 Before going public the contracts had two independent security passes and the services one; every high finding is fixed and has a test that fails without the fix.
 
