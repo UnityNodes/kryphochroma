@@ -159,3 +159,18 @@ export function SecretChip({ color, compact }: { readonly color: number | null; 
     </span>
   );
 }
+
+export function SecretBadge({ color }: { readonly color: number | null }) {
+  const swatch = color === null || color < 0 ? null : CARD_COLORS[color];
+  const label = swatch ? `Your secret colour is ${swatch.name}` : "Your secret colour is being decrypted";
+  return (
+    <span
+      role="img"
+      aria-label={label}
+      title={label}
+      className="absolute -right-1 -bottom-1 size-4 rounded-full border-2 border-ink"
+      style={{ background: swatch?.base ?? "var(--muted)" }}
+    />
+  );
+}
+

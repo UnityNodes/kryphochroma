@@ -18,7 +18,7 @@ import { Center } from "./Center";
 import { Feed } from "./Feed";
 import { Hand } from "./Hand";
 import { HowToPlay } from "./HowToPlay";
-import { PeekDialog, PeekResult, SecretChip, VeilDialog } from "./Mechanics";
+import { PeekDialog, PeekResult, SecretBadge, SecretChip, VeilDialog } from "./Mechanics";
 import { Seat } from "./Seat";
 
 const POSITIONS: Record<number, readonly ("left" | "top" | "right")[]> = { 2: ["top"], 3: ["left", "right"], 4: ["left", "top", "right"] };
@@ -237,11 +237,6 @@ export function TableView({ controller: game, colorBlind, onToggleShapes }: Tabl
         />
         {game.feed.length > 0 && <Feed lines={game.feed} title="Table feed" />}
         <div className="kc-you" hidden={game.watching}>
-          {game.secretColor !== undefined && (
-            <span className="kc-chip mb-1 sm:hidden">
-              <SecretChip color={game.secretColor} compact />
-            </span>
-          )}
           <Hand
             hand={hand}
             mine={mine}
@@ -253,8 +248,9 @@ export function TableView({ controller: game, colorBlind, onToggleShapes }: Tabl
           />
           <div className="kc-actions">
             <div className={cn("kc-who kc-me", mine && "kc-active")}>
-              <div className="kc-avatar" style={{ "--c": SEAT_COLORS[HUMAN] ?? "var(--y)" } as React.CSSProperties}>
+              <div className="kc-avatar relative" style={{ "--c": SEAT_COLORS[HUMAN] ?? "var(--y)" } as React.CSSProperties}>
                 Y
+                {game.secretColor !== undefined && <SecretBadge color={game.secretColor} />}
               </div>
               <div className="kc-meta">
                 <b>You</b>
