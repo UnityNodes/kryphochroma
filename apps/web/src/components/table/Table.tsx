@@ -11,6 +11,8 @@ import { anchorKey } from "@/game/flight";
 import type { TableController } from "@/game/controller";
 import { SEAT_COLORS } from "@/game/offline";
 import { SOUND_FOR_ICON } from "@/game/sound";
+import { tableTension } from "@/game/radio";
+import { useRadio } from "@/game/useRadio";
 import { useSound } from "@/game/useSound";
 import { useOfflineGame } from "@/game/useOfflineGame";
 import { cn } from "@/lib/utils";
@@ -19,6 +21,7 @@ import { Feed } from "./Feed";
 import { Hand } from "./Hand";
 import { HowToPlay } from "./HowToPlay";
 import { PeekDialog, PeekResult, SecretBadge, SecretChip, VeilDialog } from "./Mechanics";
+import { RadioChip } from "./RadioChip";
 import { Seat } from "./Seat";
 
 const POSITIONS: Record<number, readonly ("left" | "top" | "right")[]> = { 2: ["top"], 3: ["left", "right"], 4: ["left", "top", "right"] };
@@ -133,6 +136,7 @@ export function TableView({ controller: game, colorBlind, onToggleShapes }: Tabl
   const monoHot = canSayMono(pub, HUMAN) && hand.some((c) => c !== null && isPlayable(pub, c));
   const catchable = botCatchTarget(pub, HUMAN);
   const meSeat = pub.seats[HUMAN];
+  const radio = useRadio(tableTension(pub, HUMAN));
   const canVeil = mine && !!meSeat && !meSeat.veilUsed && meSeat.handSize >= 2 && pub.pendingDraw === 0 && pub.drawFour === null && veilClaims(pub).length > 0;
   const canDoubt = mine && pub.veil !== null && pub.veil.judge === HUMAN && pub.drawnSlot === null;
   const status = canDoubt && pub.veil ? `${names[pub.veil.by] ?? "Someone"} veiled a card as ${cardLabel(pub.veil.claim)}: doubt it or play on` : statusText(pub.stage, pub.turn, game.watching ? -1 : HUMAN, names, busy, drawn, pub.drawFour !== null, pub.pendingDraw);
@@ -189,6 +193,7 @@ export function TableView({ controller: game, colorBlind, onToggleShapes }: Tabl
           <button type="button" className={cn("kc-chip", !sound.muted && "kc-chip-on")} aria-pressed={!sound.muted} aria-label={sound.muted ? "Sound off" : "Sound on"} onClick={sound.toggle}>
             {sound.muted ? <VolumeX aria-hidden /> : <Volume2 aria-hidden />}
           </button>
+          <RadioChip radio={radio} />
           <HowToPlay autoOpen={game.mode === "practice"} />
         </div>
       </header>
