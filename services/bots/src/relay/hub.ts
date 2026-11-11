@@ -4,6 +4,7 @@ import {
   type ChainTable,
   type SignedAction,
   actionDomain,
+  decryptEach,
   fieldsFor,
   kryphoTableAbi,
   stepAction,
@@ -109,12 +110,9 @@ export function createRelay(deps: RelayDeps) {
         await bot.sdk.permits.grantPermit([deps.table]);
         bot.permitted = true;
       }
-      try {
-        const values = await bot.sdk.decryption.decryptValues(missing.map((encryptedValue) => ({ encryptedValue, contractAddress: deps.table })));
-        for (const [handle, value] of Object.entries(values)) bot.plain.set(handle as Hex, Number(value));
-      } catch (error) {
-        deps.log({ event: "bot-decrypt-pending", id, seat, message: (error as Error).message.slice(0, 120) });
-      }
+      const { values, pending } = await decryptEach((batch) => bot.sdk.decryption.decryptValues(batch.map((encryptedValue) => ({ encryptedValue, contractAddress: deps.table }))), missing);
+      for (const [handle, value] of values) bot.plain.set(handle, value);
+      if (pending.length > 0) deps.log({ event: "bot-decrypt-pending", id, seat, pending: pending.length });
     }
     return handles.map((h, i) => ((slots & (1 << i)) !== 0 ? (bot.plain.get(h) ?? null) : null));
   }

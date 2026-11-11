@@ -6,6 +6,7 @@ import {
   type ChainTable,
   type SignedAction,
   actionDomain,
+  decryptEach,
   fieldsFor,
   kryphoTableAbi,
   project,
@@ -140,12 +141,9 @@ export function useChainGame(id: bigint, colorBlind: boolean, watchOnly = false)
           await sdk.permits.grantPermit([TABLE_ADDRESS]);
           permitted.current = true;
         }
-        try {
-          const values = await sdk.decryption.decryptValues(missing.map((encryptedValue) => ({ encryptedValue, contractAddress: TABLE_ADDRESS })));
-          for (const [handle, value] of Object.entries(values)) plain.current.set(handle as Hex, Number(value));
-        } catch {
-          setError("Waiting for your new card to be decryptable");
-        }
+        const { values, pending } = await decryptEach((batch) => sdk.decryption.decryptValues(batch.map((encryptedValue) => ({ encryptedValue, contractAddress: TABLE_ADDRESS }))), missing);
+        for (const [handle, value] of values) plain.current.set(handle, value);
+        if (pending.length > 0) setError("Waiting for your new card to be decryptable");
       }
       known.set(seat, own.map((h, i) => ((slots & (1 << i)) !== 0 ? (plain.current.get(h) ?? null) : null)));
       setSecretColor(plain.current.get(secret) ?? null);
