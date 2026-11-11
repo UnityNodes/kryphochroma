@@ -36,11 +36,15 @@ function env(name: string, fallback?: string): string {
 const log = (entry: Record<string, unknown>) =>
   process.stdout.write(`${JSON.stringify({ at: new Date().toISOString(), ...entry }, (_, v) => (typeof v === "bigint" ? v.toString() : v))}\n`);
 
+/** The deployment record is rewritten by every deploy, an env value can be left over from the previous contract. */
 function tableAddress(): Hex {
-  const fromEnv = process.env.TABLE_ADDRESS;
-  if (fromEnv) return fromEnv as Hex;
-  const deployment = JSON.parse(readFileSync(new URL("../../../../deployments/sepolia.json", import.meta.url), "utf8")) as { KryphoTable: Hex };
-  return deployment.KryphoTable;
+  try {
+    const deployment = JSON.parse(readFileSync(new URL("../../../../deployments/sepolia.json", import.meta.url), "utf8")) as { KryphoTable?: Hex };
+    if (deployment.KryphoTable) return deployment.KryphoTable;
+  } catch (error) {
+    log({ event: "deployment-record-missing", message: (error as Error).message.slice(0, 120) });
+  }
+  return env("TABLE_ADDRESS") as Hex;
 }
 
 const rpcUrl = env("SEPOLIA_RPC_URL");
