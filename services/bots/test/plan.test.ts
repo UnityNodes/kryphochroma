@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { nextKeeperAction, type TableView } from "../src/keeper/plan.js";
+import { type PlannedAction, nextKeeperAction, scheduleKeeper, type TableView } from "../src/keeper/plan.js";
 
 const base: TableView = { stage: 3, joined: 3, setupStep: 0, dealtMask: 0, turnDeadline: 100n, candidate: 255, revealPrepared: 0 };
 
@@ -47,5 +47,22 @@ describe("keeper plan", () => {
     expect(nextKeeperAction({ ...base, stage: 0, setupStep: 10, creator: "0xabc" }, 0n, pool)).toEqual({ kind: "setupStep", remaining: 50 });
     expect(nextKeeperAction({ ...base, stage: 0, setupStep: 60, creator: "0xabc" }, 0n, pool)).toEqual({ kind: "idle" });
     expect(nextKeeperAction({ ...base, stage: 0, setupStep: 10, creator: "0xdef" }, 0n, pool)).toEqual({ kind: "idle" });
+  });
+
+  it("runs every urgent step before a single background shuffle batch", () => {
+    const planned: PlannedAction[] = [
+      { id: 5n, stage: 0, action: { kind: "setupStep", remaining: 52 } },
+      { id: 4n, stage: 2, action: { kind: "revealStarter" } },
+      { id: 3n, stage: 3, action: { kind: "idle" } },
+      { id: 6n, stage: 1, action: { kind: "setupStep", remaining: 30 } },
+      { id: 2n, stage: 3, action: { kind: "forceTimeout" } },
+      { id: 7n, stage: 3, action: { kind: "reshuffleStep", remaining: 20 } },
+    ];
+    const { urgent, background } = scheduleKeeper(planned);
+    expect(urgent.map((p) => p.id)).toEqual([4n, 2n]);
+    expect(background?.id).toBe(7n);
+    expect(scheduleKeeper(planned.filter((p) => p.id !== 7n)).background?.id).toBe(6n);
+    expect(scheduleKeeper([planned[0]!, planned[2]!]).background?.id).toBe(5n);
+    expect(scheduleKeeper([planned[2]!])).toEqual({ urgent: [], background: null });
   });
 });

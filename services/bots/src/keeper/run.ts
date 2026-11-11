@@ -6,12 +6,12 @@ import { createConfig } from "@zama-fhe/sdk/viem";
 import { type Hex, createPublicClient, createWalletClient, http, nonceManager } from "viem";
 import { privateKeyToAccount } from "viem/accounts";
 import { sepolia } from "viem/chains";
-import { type KeeperAction, type TableView, nextKeeperAction } from "./plan.js";
+import { type KeeperAction, type PlannedAction, type TableView, nextKeeperAction, scheduleKeeper } from "./plan.js";
 import { type GasBudget, belowAlert, canSpend, rollBudget, spend, stopRequested } from "./safety.js";
 
 const SETUP_GAS = 16_000_000n;
 const DEAL_GAS = 8_000_000n;
-const PIPELINE = 8;
+const PIPELINE = 4;
 const WATCH_WINDOW = 20n;
 
 export interface KeeperConfig {
@@ -145,15 +145,18 @@ export async function runKeeper(config: KeeperConfig, env: NodeJS.ProcessEnv, un
       snapshot = latest.number;
       const count = (await read("tableCount", [])) as bigint;
       const now = latest.timestamp;
+      const planned: PlannedAction[] = [];
       for (let id = count > WATCH_WINDOW ? count - WATCH_WINDOW + 1n : 1n; id <= count; id++) {
         const table = (await read("getTable", [id])) as TableView;
         const view = table.stage === 3 ? { ...table, spare: ((await read("discardOf", [id])) as readonly number[]).length - 1 } : table;
-        const action = nextKeeperAction(view, now, account.address);
-        if (action.kind === "idle") continue;
+        planned.push({ id, stage: Number(table.stage), action: nextKeeperAction(view, now, account.address) });
+      }
+      const { urgent, background } = scheduleKeeper(planned);
+      for (const entry of background ? [...urgent, background] : urgent) {
         try {
-          await act(id, action);
+          await act(entry.id, entry.action);
         } catch (error) {
-          log({ event: "error", id, action: action.kind, message: (error as Error).message.slice(0, 300) });
+          log({ event: "error", id: entry.id, action: entry.action.kind, message: (error as Error).message.slice(0, 300) });
         }
       }
     } catch (error) {

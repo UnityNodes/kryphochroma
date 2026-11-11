@@ -1,0 +1,34 @@
+[Unit]
+Description=Kryphochroma bots, keeper and move relay on Sepolia
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=@USER@
+WorkingDirectory=@REPO@/services/bots
+Environment=NODE_ENV=production
+Environment=NODE_OPTIONS=--dns-result-order=ipv4first
+Environment=KEEPER_STOP_FILE=/run/kryphochroma/keeper.stop
+EnvironmentFile=@REPO@/.env
+ExecStart=@NODE@ dist/service/main.js
+RuntimeDirectory=kryphochroma
+RuntimeDirectoryPreserve=yes
+Restart=always
+RestartSec=5
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=kryphochroma-bots
+NoNewPrivileges=yes
+PrivateTmp=yes
+ProtectSystem=strict
+ProtectHome=read-only
+ProtectKernelTunables=yes
+ProtectKernelModules=yes
+ProtectControlGroups=yes
+RestrictAddressFamilies=AF_INET AF_INET6 AF_UNIX
+RestrictSUIDSGID=yes
+LockPersonality=yes
+
+[Install]
+WantedBy=multi-user.target

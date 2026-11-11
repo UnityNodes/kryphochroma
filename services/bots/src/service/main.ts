@@ -16,6 +16,8 @@ const FLEET_POLL_MS = 1000;
 const BOT_MIN_WEI = parseEther("0.005");
 const BOT_TOPUP_WEI = parseEther("0.02");
 const MAX_BODY_BYTES = 1024;
+const HEALTH_STALE_MS = 90_000;
+const beats = { relay: Date.now(), keeper: Date.now() };
 
 function env(name: string, fallback?: string): string {
   const value = process.env[name] ?? fallback;
@@ -54,6 +56,7 @@ const relay = createRelay({
   rpcUrl,
   botKeys: env("BOT_KEYS").split(",") as Hex[],
   takeoverKey,
+  dailyGas: BigInt(env("RELAY_DAILY_GAS", "2000000000")),
   log,
 });
 
@@ -246,6 +249,12 @@ const server = createServer(async (req, res) => {
       void relay.refresh(id).catch(() => undefined);
       return;
     }
+    if (req.method === "GET" && url.pathname === "/health") {
+      const now = Date.now();
+      const ages = { relayMs: now - beats.relay, keeperMs: now - beats.keeper };
+      const healthy = ages.relayMs < HEALTH_STALE_MS && ages.keeperMs < HEALTH_STALE_MS;
+      return reply(res, healthy ? 200 : 503, { ok: healthy, table, ...ages });
+    }
     if (req.method !== "POST") return reply(res, 405, { error: "method" });
     const body = await readBody(req);
     if (url.pathname === "/fill") {
@@ -279,6 +288,7 @@ async function relayLoop(): Promise<void> {
       }
       if (block !== lastBlock && block % 5n === 0n) await ensurePool();
       lastBlock = block;
+      beats.relay = Date.now();
     } catch (error) {
       log({ event: "relay-loop-error", message: (error as Error).message.slice(0, 200) });
     }
@@ -288,4 +298,7 @@ async function relayLoop(): Promise<void> {
 
 server.listen(Number(env("BOTS_PORT", "3320")), "127.0.0.1", () => log({ event: "listening", table }));
 void relayLoop();
-await runKeeper({ ...loadKeeperConfig({ ...process.env, TABLE_ADDRESS: table }) }, process.env);
+await runKeeper({ ...loadKeeperConfig({ ...process.env, TABLE_ADDRESS: table }) }, process.env, async () => {
+  beats.keeper = Date.now();
+  return false;
+});

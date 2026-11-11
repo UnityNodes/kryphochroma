@@ -69,3 +69,24 @@ export function nextKeeperAction(table: TableView, nowSeconds: bigint, poolOwner
       return { kind: "idle" };
   }
 }
+
+export interface PlannedAction {
+  readonly id: bigint;
+  readonly stage: number;
+  readonly action: KeeperAction;
+}
+
+const BACKGROUND_KINDS = new Set<KeeperAction["kind"]>(["setupStep", "reshuffleStep"]);
+
+function backgroundRank(entry: PlannedAction): number {
+  if (entry.action.kind === "reshuffleStep") return 0;
+  return stageName(entry.stage) === "Shuffling" ? 1 : 2;
+}
+
+export function scheduleKeeper(planned: readonly PlannedAction[]): { readonly urgent: readonly PlannedAction[]; readonly background: PlannedAction | null } {
+  const active = planned.filter((p) => p.action.kind !== "idle");
+  const urgent = active.filter((p) => !BACKGROUND_KINDS.has(p.action.kind));
+  const background = [...active.filter((p) => BACKGROUND_KINDS.has(p.action.kind))].sort((a, b) => backgroundRank(a) - backgroundRank(b) || Number(a.id - b.id));
+  return { urgent, background: background[0] ?? null };
+}
+

@@ -18,6 +18,7 @@ import { node } from "@zama-fhe/sdk/node";
 import { createConfig } from "@zama-fhe/sdk/viem";
 import { type Hex, type PublicClient, type WalletClient, createWalletClient, http, recoverTypedDataAddress } from "viem";
 import { type PrivateKeyAccount, privateKeyToAccount } from "viem/accounts";
+import { type GasBudget, canSpend, rollBudget, spend } from "../keeper/safety.js";
 import { sepolia } from "viem/chains";
 
 const MAX_BATCH = 12;
@@ -45,6 +46,7 @@ export interface RelayDeps {
   readonly rpcUrl: string;
   readonly botKeys: readonly Hex[];
   readonly takeoverKey?: Hex;
+  readonly dailyGas?: bigint;
   readonly log: (entry: Record<string, unknown>) => void;
 }
 
@@ -69,6 +71,7 @@ export const encodeMessage = (message: HubMessage): string => json(message);
 
 export function createRelay(deps: RelayDeps) {
   const hubs = new Map<string, TableHub>();
+  let budget: GasBudget = { dayStart: Date.now(), spent: 0n, limit: deps.dailyGas ?? RELAY_GAS * 1000n };
   const domain = actionDomain(sepolia.id, deps.table);
   const takeover = deps.takeoverKey ? privateKeyToAccount(deps.takeoverKey).address.toLowerCase() : null;
   const keys = deps.takeoverKey && !deps.botKeys.includes(deps.takeoverKey) ? [...deps.botKeys, deps.takeoverKey] : deps.botKeys;
@@ -205,6 +208,11 @@ export function createRelay(deps: RelayDeps) {
     if (hub.inflight || !hub.chain) return;
     const batch = project(hub.chain, hub.chainNonces, hub.log).valid.slice(0, MAX_BATCH);
     if (batch.length === 0) return;
+    budget = rollBudget(budget, Date.now());
+    if (!canSpend(budget, RELAY_GAS)) {
+      deps.log({ event: "relay-budget-exhausted", id, spent: budget.spent });
+      return;
+    }
     hub.inflight = true;
     try {
       const hash = await deps.relayer.writeContract({
@@ -218,6 +226,7 @@ export function createRelay(deps: RelayDeps) {
         account: deps.relayer.account ?? null,
       } as never);
       const receipt = await deps.publicClient.waitForTransactionReceipt({ hash });
+      budget = spend(budget, receipt.gasUsed);
       deps.log({ event: "relay", id, actions: batch.length, hash, status: receipt.status, gas: receipt.gasUsed });
     } catch (error) {
       deps.log({ event: "relay-error", id, message: (error as Error).message.slice(0, 200) });
