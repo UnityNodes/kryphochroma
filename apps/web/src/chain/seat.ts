@@ -1,4 +1,4 @@
-import { kryphoTableAbi } from "@kryphochroma/abi";
+import { fillMessage, kryphoTableAbi } from "@kryphochroma/abi";
 import { type Hex, type PrivateKeyAccount, type PublicClient, type WalletClient, createWalletClient, http, parseEventLogs } from "viem";
 import { sepolia } from "viem/chains";
 import { BURNER_GAS_LIMIT, BURNER_GAS_PRICE, SEPOLIA_RPC_URL, TABLE_ADDRESS } from "./config";
@@ -19,7 +19,15 @@ export interface SeatDeps {
 }
 
 export async function serviceDrip(address: Hex): Promise<boolean> {
-  return (await fetch("/api/drip", { method: "POST", body: JSON.stringify({ address }) })).ok;
+  const res = await fetch("/api/drip", { method: "POST", body: JSON.stringify({ address }) });
+  const body = (await res.json().catch(() => ({}))) as { ok?: boolean; reason?: string };
+  return res.ok && body.ok === true;
+}
+
+export async function requestBots(burner: PrivateKeyAccount, id: bigint): Promise<void> {
+  const signature = await burner.signMessage({ message: fillMessage(id) });
+  const res = await fetch("/api/fill", { method: "POST", body: JSON.stringify({ id: id.toString(), signature }) });
+  if (!res.ok) throw new Error("Could not seat the bots");
 }
 
 const burnerWallet = (burner: PrivateKeyAccount) => createWalletClient({ account: burner, chain: sepolia, transport: http(SEPOLIA_RPC_URL) });

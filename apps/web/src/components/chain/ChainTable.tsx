@@ -6,7 +6,7 @@ import { createPublicClient, http } from "viem";
 import { sepolia } from "viem/chains";
 import { loadBurner } from "@/chain/burner";
 import { SEPOLIA_RPC_URL } from "@/chain/config";
-import { type Funder, type SeatDeps, fundBurner, serviceDrip as drip, startTable, takeSeat } from "@/chain/seat";
+import { type Funder, type SeatDeps, fundBurner, requestBots, serviceDrip as drip, startTable, takeSeat } from "@/chain/seat";
 import { useChainGame } from "@/chain/useChainGame";
 import { useFunder } from "@/components/wallet/useFunder";
 import { TableView, useColorBlind } from "@/components/table/Table";
@@ -44,8 +44,7 @@ export function ChainTable({ id, watch }: { readonly id: string; readonly watch?
 
   const fill = async () => {
     setWorking(true);
-    const res = await fetch("/api/fill", { method: "POST", body: JSON.stringify({ id }) });
-    if (!res.ok) toast.error("Could not seat the bots");
+    await requestBots(loadBurner(window.sessionStorage), BigInt(id)).catch((e: unknown) => toast.error((e as Error).message));
     setWorking(false);
   };
 

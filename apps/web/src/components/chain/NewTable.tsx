@@ -7,7 +7,7 @@ import { createPublicClient, http } from "viem";
 import { sepolia } from "viem/chains";
 import { loadBurner } from "@/chain/burner";
 import { SEPOLIA_RPC_URL } from "@/chain/config";
-import { type SeatDeps, fundBurner, openTable, serviceDrip as drip, startTable, takeSeat } from "@/chain/seat";
+import { type SeatDeps, fundBurner, openTable, requestBots, serviceDrip as drip, startTable, takeSeat } from "@/chain/seat";
 import { WalletBar } from "@/components/wallet/WalletBar";
 import { useFunder } from "@/components/wallet/useFunder";
 import { cn } from "@/lib/utils";
@@ -15,11 +15,6 @@ import { cn } from "@/lib/utils";
 const GUEST_STEPS = ["Session key created in this tab", "Test ETH for gas", "Table opened on Sepolia", "You took a seat", "Bots seated", "Shuffle started"] as const;
 const WALLET_STEPS = ["Session key created in this tab", "Wallet sent the session key gas", "Table opened on Sepolia", "Wallet took a seat for the session key", "Bots seated", "Shuffle started"] as const;
 const TURN_TIMEOUT_S = 120;
-
-async function fill(id: bigint): Promise<void> {
-  const res = await fetch("/api/fill", { method: "POST", body: JSON.stringify({ id: id.toString() }) });
-  if (!res.ok) throw new Error("Could not seat the bots");
-}
 
 export function NewTable() {
   const router = useRouter();
@@ -62,7 +57,7 @@ export function NewTable() {
       setDone(2);
       await takeSeat(d, id);
       setDone(3);
-      await fill(id);
+      await requestBots(d.burner, id);
       setDone(5);
       router.push(`/t/${pool.id}`);
     });
@@ -77,7 +72,7 @@ export function NewTable() {
       setDone(2);
       await takeSeat(d, id);
       setDone(3);
-      await fill(id);
+      await requestBots(d.burner, id);
       setDone(4);
       await startTable(d, id);
       setDone(5);
