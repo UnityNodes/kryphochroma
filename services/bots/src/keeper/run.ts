@@ -13,6 +13,7 @@ const SETUP_GAS = 16_000_000n;
 const DEAL_GAS = 8_000_000n;
 const URGENT_PIPELINE = 4;
 const BACKGROUND_PIPELINE = 8;
+const ALERT_EVERY_MS = 600_000;
 const WATCH_WINDOW = 20n;
 
 export interface KeeperConfig {
@@ -60,6 +61,7 @@ export async function runKeeper(config: KeeperConfig, env: NodeJS.ProcessEnv, un
   const address = config.table;
   let budget: GasBudget = { dayStart: Date.now(), spent: 0n, limit: config.dailyGasLimit };
   let minBlock = 0n;
+  let lastAlert = 0;
   let snapshot = 0n;
 
   const read = async (functionName: string, args: readonly unknown[]) =>
@@ -145,7 +147,10 @@ export async function runKeeper(config: KeeperConfig, env: NodeJS.ProcessEnv, un
     try {
       budget = rollBudget(budget, Date.now());
       const balance = await publicClient.getBalance({ address: account.address });
-      if (belowAlert(balance, config.alertBalance)) log({ event: "low-balance", balance });
+      if (belowAlert(balance, config.alertBalance) && Date.now() - lastAlert > ALERT_EVERY_MS) {
+        lastAlert = Date.now();
+        log({ event: "low-balance", lane: config.lane, balance });
+      }
       const latest = await publicClient.getBlock({ blockTag: "latest" });
       if (latest.number < minBlock) throw new Error("rpc behind own transactions");
       snapshot = latest.number;
