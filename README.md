@@ -74,12 +74,12 @@ flowchart LR
 
 | | |
 |---|---|
-| `KryphoTable` | [`0x744FE781c46262f8C0dA44085d4d494A5d567a1f`](https://sepolia.etherscan.io/address/0x744FE781c46262f8C0dA44085d4d494A5d567a1f) |
-| `KryphoDeck` library | [`0xa0194d801f11C60e74C48212b654a2EE2fD11A56`](https://sepolia.etherscan.io/address/0xa0194d801f11C60e74C48212b654a2EE2fD11A56) |
-| `KryphoScore` library | [`0xa64e878f6f197cC294EDd4545124D8e437b541A1`](https://sepolia.etherscan.io/address/0xa64e878f6f197cC294EDd4545124D8e437b541A1) |
-| `KryphoRadio` library (sonar, signatures) | [`0x6dB44817717C2480a3473C859f5A7B7621Ed550b`](https://sepolia.etherscan.io/address/0x6dB44817717C2480a3473C859f5A7B7621Ed550b) |
-| `KryphoLobby` library (join, leave, host) | [`0xFf37E8f16CB678e81233A3634D9278A467c7aeaB`](https://sepolia.etherscan.io/address/0xFf37E8f16CB678e81233A3634D9278A467c7aeaB) |
-| Deployment | [`0x8e45d0…0429`](https://sepolia.etherscan.io/tx/0x8e45d0f47431a982421546e27818f9bf9bffcfc8b3df1439d026448ec28f0429), block 12113454 |
+| `KryphoTable` | [`0xa387FE75550f548D2452712165027BBd38902e81`](https://sepolia.etherscan.io/address/0xa387FE75550f548D2452712165027BBd38902e81) |
+| `KryphoDeck` library | [`0x9aab3051435C93A7781B57FcF4F9f1418d6CBd75`](https://sepolia.etherscan.io/address/0x9aab3051435C93A7781B57FcF4F9f1418d6CBd75) |
+| `KryphoScore` library | [`0x4E8BDb3Ff3bb34967126f823DF6410b43c949F82`](https://sepolia.etherscan.io/address/0x4E8BDb3Ff3bb34967126f823DF6410b43c949F82) |
+| `KryphoRadio` library (sonar, signatures) | [`0x7178A11B305013E2A06ce4Cf8329a66023d49180`](https://sepolia.etherscan.io/address/0x7178A11B305013E2A06ce4Cf8329a66023d49180) |
+| `KryphoLobby` library (join, leave, host) | [`0xFc439Da9C322fbaB13c487357581986343a93cdf`](https://sepolia.etherscan.io/address/0xFc439Da9C322fbaB13c487357581986343a93cdf) |
+| Deployment | [`0x72cd88…22a4`](https://sepolia.etherscan.io/tx/0x72cd8843a1ea64fd1f8fff3f66502dea5edc6be5e7f53470160c01a0af1622a4), block 12114738 |
 
 A full round on chain on the previous deployment with the same rules, table 2: one human, three bots, three veils, one spyglass, Mono, a timeout and the reveal.
 
@@ -103,6 +103,7 @@ HCU limits on Sepolia: 20M per transaction, 5M depth.
 |---|---:|---:|
 | Shuffle step (half a layer) | ~3.5M to 4.5M | 7M to 11M |
 | Deal 7 cards to a seat, with slot colours and a secret colour | ~0.3M | ~3.6M |
+| Join that fills a 4 seat table and deals every hand | ~1.2M | 15.73M |
 | One move check (`eq` + `and`) | 80k | 0.23M |
 | Veil bit / Wild +4 bit (`eq` / `isIn`) | 80k / 148k | 0.3M / 0.36M |
 | Spyglass (`FHE.allow`) | 0 | ~0.1M extra |
@@ -114,9 +115,10 @@ HCU limits on Sepolia: 20M per transaction, 5M depth.
 |---|---:|
 | A signed move reaches every client | under 1 s |
 | Own card decryptable after its transaction | ~3 s |
-| Quick game: click to seated / to decrypted hand | ~40 s / ~80 s |
-| With friends: click to lobby, from a ready shuffled table | ~15 s |
-| Start to the first move, deck shuffled ahead of time | ~45 s |
+| Quick game: click to table / to play | under 1 s / when the last bot join lands, one or two blocks |
+| With friends: click to lobby, from a ready shuffled table | under 1 s, the seat lands one block later |
+| Last seat taken to play, starter revealed in the lobby | same block (~12 s) |
+| Hand decrypted after play opens | ~4 s to 9 s |
 | Background shuffle of a fresh table | ~4 min |
 
 ## What still shows, on purpose
@@ -135,9 +137,9 @@ Trust assumptions we accept for a testnet game:
 | Suite | What it covers |
 |---|---|
 | `packages/rules` (76) | every rule including veil, spyglass, sonar and secret colour; scoring; bots; 1,000 simulated games |
-| `contracts` (32) | parity with the rules engine move by move on the FHEVM mock, including relayed batches with veils, spyglasses and sonar pings; forged and replayed proofs; privacy of hands, peeks, sonar answers and secret colours; relay signatures and out of gas griefing; leaving a lobby and host handover; takeover; background refill |
-| `services/bots` (38) | keeper planning and scheduling, quick game pool, hub reads pinned to one block, faucet policy, action parsing, chain view |
-| `apps/web` (32 unit, 12 e2e) | seat flows, sounds, the radio, offline game; a judge scenario in Playwright with axe accessibility checks on phone and desktop |
+| `contracts` (32) | parity with the rules engine move by move on the FHEVM mock, including relayed batches with veils, spyglasses and sonar pings; forged and replayed proofs; privacy of hands, peeks, sonar answers and secret colours; relay signatures and out of gas griefing; leaving a lobby and host handover; a starter revealed in the lobby and play opened by the join that fills the table; takeover; background refill |
+| `services/bots` (40) | keeper planning and scheduling, quick game pool, hub reads pinned to one block, faucet policy, action parsing, chain view |
+| `apps/web` (35 unit, 12 e2e) | seat flows, seats taken in the background, sounds, the radio, offline game; a judge scenario in Playwright with axe accessibility checks on phone and desktop |
 
 Before going public the contracts had two independent security passes and the services one; every high finding is fixed and has a test that fails without the fix.
 
