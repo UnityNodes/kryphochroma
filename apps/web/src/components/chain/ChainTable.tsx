@@ -20,6 +20,8 @@ function seatDeps(funder: Funder): SeatDeps {
   return { publicClient: createPublicClient({ chain: sepolia, transport: sepoliaTransport(), pollingInterval: RECEIPT_POLL_MS }), burner: loadBurner(window.sessionStorage), funder, drip };
 }
 
+const CHAIN_ERROR_TOAST = "chain-error";
+
 export function ChainTable({ id, watch }: { readonly id: string; readonly watch?: boolean }) {
   const [colorBlind, setColorBlind] = useColorBlind();
   const game = useChainGame(BigInt(id), colorBlind, watch);
@@ -40,6 +42,12 @@ export function ChainTable({ id, watch }: { readonly id: string; readonly watch?
     }
     setWorking(false);
   };
+
+  const playing = Number(game.snapshot?.table.stage ?? 0) >= 3;
+  useEffect(() => {
+    if (playing && game.error) toast.error(game.error, { id: CHAIN_ERROR_TOAST, duration: Number.POSITIVE_INFINITY });
+    else toast.dismiss(CHAIN_ERROR_TOAST);
+  }, [playing, game.error]);
 
   const joining = useSeatInFlight(id);
   const join = () => {

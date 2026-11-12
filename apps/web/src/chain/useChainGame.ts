@@ -14,7 +14,7 @@ import {
   stepAction,
 } from "@kryphochroma/abi";
 import { type Card, type GameState, type Move, initialState } from "@kryphochroma/rules";
-import { ZamaSDK } from "@zama-fhe/sdk";
+import { type FheChain, ZamaSDK } from "@zama-fhe/sdk";
 import { sepolia as zamaSepolia } from "@zama-fhe/sdk/chains";
 import { createConfig } from "@zama-fhe/sdk/viem";
 import { web } from "@zama-fhe/sdk/web";
@@ -28,7 +28,7 @@ import { TABLE_ADDRESS } from "./config";
 import { useProfiles } from "@/components/profile/useProfiles";
 import { tableCode } from "@/lib/invite";
 import { friendlyError } from "./errors";
-import { RECEIPT_POLL_MS, sepoliaTransport } from "./rpc";
+import { RECEIPT_POLL_MS, RPC_PROXY_PATH, sepoliaTransport } from "./rpc";
 import { toGameEvents } from "./events";
 
 const POLL_MS = 2000;
@@ -60,19 +60,25 @@ export interface ChainGame extends TableController {
   readonly error: string | null;
 }
 
+/** The SDK default network RPC is a public node that some resolvers block, which leaves the hand sealed, so the relayer reads Sepolia through our own proxy. */
+function relayerChain(): FheChain<typeof zamaSepolia.id> {
+  return { ...zamaSepolia, network: new URL(RPC_PROXY_PATH, window.location.origin).toString() };
+}
+
 export function useChainGame(id: bigint, colorBlind: boolean, watchOnly = false): ChainGame {
   const burner = useMemo(() => loadBurner(window.sessionStorage), []);
   const clients = useMemo(() => {
     const transport = sepoliaTransport();
     const publicClient = createPublicClient({ chain: sepolia, transport, pollingInterval: RECEIPT_POLL_MS });
     const walletClient = createWalletClient({ account: burner, chain: sepolia, transport });
-    const sdk = new ZamaSDK(createConfig({ chains: [zamaSepolia], publicClient, walletClient, relayers: { [zamaSepolia.id]: web() } }));
+    const sdk = new ZamaSDK(createConfig({ chains: [relayerChain()], publicClient, walletClient, relayers: { [zamaSepolia.id]: web() } }));
     return { publicClient, sdk };
   }, [burner]);
   const domain = useMemo(() => actionDomain(sepolia.id, TABLE_ADDRESS), []);
 
   const [snapshot, setSnapshot] = useState<ChainSnapshot | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [handError, setHandError] = useState<string | null>(null);
   const seated = (snapshot?.me ?? -1) >= 0;
   const me = Math.max(snapshot?.me ?? 0, 0);
   const sessions = useMemo(() => (snapshot?.seats ?? []).map((s) => s.session), [snapshot]);
@@ -169,10 +175,17 @@ export function useChainGame(id: bigint, colorBlind: boolean, watchOnly = false)
       const extra = [secret, ...(peekHandle ? [peekHandle] : []), ...(fresh ? [fresh] : [])].filter((h) => !/^0x0+$/.test(h) && !plain.current.has(h));
       const missing = [...own.filter((h, i) => (slots & (1 << i)) !== 0 && !plain.current.has(h)), ...extra];
       if (missing.length > 0) {
-        await (permit.current ?? sdk.permits.grantPermit([TABLE_ADDRESS]));
-        const { values, pending } = await decryptEach((batch) => sdk.decryption.decryptValues(batch.map((encryptedValue) => ({ encryptedValue, contractAddress: TABLE_ADDRESS }))), missing);
-        for (const [handle, value] of values) plain.current.set(handle, value);
-        if (pending.length > 0) setError("Waiting for your new card to be decryptable");
+        try {
+          await (permit.current ?? sdk.permits.grantPermit([TABLE_ADDRESS]));
+          const { values, pending } = await decryptEach((batch) => sdk.decryption.decryptValues(batch.map((encryptedValue) => ({ encryptedValue, contractAddress: TABLE_ADDRESS }))), missing);
+          for (const [handle, value] of values) plain.current.set(handle, value);
+          setHandError(pending.length > 0 ? "Waiting for your new card to be decryptable" : null);
+        } catch (e) {
+          permit.current = null;
+          setHandError(`Could not decrypt your cards, retrying: ${friendlyError(e)}`);
+        }
+      } else {
+        setHandError(null);
       }
       known.set(seat, own.map((h, i) => ((slots & (1 << i)) !== 0 ? (plain.current.get(h) ?? null) : null)));
       setSecretColor(plain.current.get(secret) ?? null);
@@ -292,6 +305,6 @@ export function useChainGame(id: bigint, colorBlind: boolean, watchOnly = false)
     clearSonar: () => setSonar(null),
     snapshot,
     address: burner.address,
-    error,
+    error: error ?? handError,
   };
 }
