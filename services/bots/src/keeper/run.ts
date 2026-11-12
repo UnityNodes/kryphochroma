@@ -72,14 +72,17 @@ export async function runKeeper(config: KeeperConfig, env: NodeJS.ProcessEnv, un
   let lastAlert = 0;
   let snapshot = 0n;
 
+  /** A follow-up transaction in the same loop must see the receipts this keeper just waited for, not the block the loop started from. */
+  const latestKnown = () => (minBlock > snapshot ? minBlock : snapshot);
+
   const read = async (functionName: string, args: readonly unknown[]) =>
     publicClient.readContract({ address, abi: kryphoTableAbi, functionName, args, blockNumber: snapshot } as never) as Promise<unknown>;
 
   async function send(functionName: string, args: readonly unknown[], gas?: bigint): Promise<void> {
     const request = { address, abi: kryphoTableAbi, functionName, args, account, chain: sepolia } as never;
-    const estimate = gas ?? ((await publicClient.estimateContractGas(request)) * 3n) / 2n + 100_000n;
+    const estimate = gas ?? ((await publicClient.estimateContractGas({ ...(request as object), blockNumber: latestKnown() } as never)) * 3n) / 2n + 100_000n;
     if (!canSpend(budget, estimate)) throw new Error("daily gas budget exhausted");
-    await publicClient.simulateContract({ ...(request as object), blockNumber: snapshot } as never);
+    await publicClient.simulateContract({ ...(request as object), blockNumber: latestKnown() } as never);
     const hash = await walletClient.writeContract({ ...(request as object), gas: estimate } as never);
     const receipt = await publicClient.waitForTransactionReceipt({ hash });
     minBlock = receipt.blockNumber;
@@ -105,7 +108,7 @@ export async function runKeeper(config: KeeperConfig, env: NodeJS.ProcessEnv, un
       if (receipt.status !== "success") reverted.push(hash);
     }
     log({ event: functionName, id, sent: count, remaining: remaining - count, reverted: reverted.length });
-    if (reverted.length > 0) throw new Error(`${reverted.length} of ${count} ${functionName} reverted on chain, first ${reverted[0]}`);
+    if (reverted.length === count) throw new Error(`every ${functionName} reverted on chain, first ${reverted[0]}`);
   }
 
   /** A handle made public in the last block is often not decryptable yet, so the KMS is asked again for a short while instead of waiting a whole backoff. */
