@@ -119,7 +119,7 @@ HCU limits on Sepolia: 20M per transaction, 5M depth.
 | With friends: click to lobby, from a ready shuffled table | under 1 s, the seat lands one block later |
 | Last seat taken to play, starter revealed in the lobby | same block (~12 s) |
 | Hand decrypted after play opens | ~4 s to 9 s |
-| Last move of a round to scores on chain: the relayed batch that ends the round also opens every hand, `finishReveal` lands one block later | ~12 s |
+| Last move of a round to scores on chain: the relayed batch that ends the round also opens every hand, `finishReveal` follows once the KMS answers | 12 s to 40 s, mostly the public decryption |
 | Background shuffle of a fresh table | ~4 min |
 
 ## What still shows, on purpose
