@@ -300,6 +300,8 @@ export function useChainGame(id: bigint, colorBlind: boolean, watchOnly = false)
         reconcile([]);
       } else if (message.type === "action" && message.action) {
         applyAction(parseAction(message.action));
+      } else if (message.type === "chain") {
+        wake.current();
       }
     };
     return () => source.close();

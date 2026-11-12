@@ -22,6 +22,7 @@ import { node } from "@zama-fhe/sdk/node";
 import { createConfig } from "@zama-fhe/sdk/viem";
 import { type Hex, type PublicClient, type WalletClient, createWalletClient, parseEventLogs, recoverTypedDataAddress } from "viem";
 import { rpcTransport } from "../rpc.js";
+import { nextBatch, pipeKey, pipelinedGas } from "./pipeline.js";
 import { type PrivateKeyAccount, privateKeyToAccount } from "viem/accounts";
 import { type GasBudget, canSpend, rollBudget, spend } from "../keeper/safety.js";
 import { sepolia } from "viem/chains";
@@ -67,7 +68,9 @@ interface TableHub {
   log: SignedAction[];
   signers: Map<string, string>;
   abandoned: boolean[];
-  inflight: boolean;
+  sending: boolean;
+  pipes: number;
+  sent: Set<string>;
   thinking: Set<number>;
   monoSeat: number;
   catchableAt: bigint | null;
@@ -98,7 +101,7 @@ export function createRelay(deps: RelayDeps) {
     const key = id.toString();
     let hub = hubs.get(key);
     if (!hub) {
-      hub = { chain: null, chainNonces: [0, 0, 0, 0], sessions: [], log: [], signers: new Map(), abandoned: [], inflight: false, thinking: new Set(), monoSeat: 255, catchableAt: null, block: 0n, subscribers: new Set() };
+      hub = { chain: null, chainNonces: [0, 0, 0, 0], sessions: [], log: [], signers: new Map(), abandoned: [], sending: false, pipes: 0, sent: new Set(), thinking: new Set(), monoSeat: 255, catchableAt: null, block: 0n, subscribers: new Set() };
       hubs.set(key, hub);
     }
     return hub;
@@ -126,9 +129,10 @@ export function createRelay(deps: RelayDeps) {
   }
 
   /** Every read pins one block: a relay batch mined between two reads would pair an old table with new nonces and every later action would fail with BadNonce. */
-  async function refresh(id: bigint): Promise<void> {
+  async function refresh(id: bigint, atLeast = 0n): Promise<void> {
     const hub = hubOf(id);
-    const block = await deps.publicClient.getBlockNumber({ cacheTime: 0 });
+    const latest = await deps.publicClient.getBlockNumber({ cacheTime: 0 });
+    const block = latest > atLeast ? latest : atLeast;
     if (block < hub.block) return;
     const read = (functionName: string, args: readonly unknown[]) =>
       deps.publicClient.readContract({ address: deps.table, abi: kryphoTableAbi, functionName, args, blockNumber: block } as never) as Promise<unknown>;
@@ -143,6 +147,7 @@ export function createRelay(deps: RelayDeps) {
       if (bot && Number(table.stage) >= 3) known.set(seat, await decryptBotHand(bot, id, seat, Number(s.slots), block));
     }
     if (block < hub.block) return;
+    const advanced = block > hub.block;
     hub.block = block;
     hub.chain = projectChain(table, seats, discard, known);
     hub.chainNonces = nonces;
@@ -153,6 +158,7 @@ export function createRelay(deps: RelayDeps) {
     hub.log = hub.log.filter((a) => a.nonce >= (nonces[a.seat] ?? 0) && hub.signers.get(actionKey(a)) === hub.sessions[a.seat]);
     const kept = new Set(hub.log.map(actionKey));
     for (const key of [...hub.signers.keys()]) if (!kept.has(key)) hub.signers.delete(key);
+    if (advanced) broadcast(hub, { type: "chain", block: block.toString() });
     driveBots(id, hub);
   }
 
@@ -171,6 +177,7 @@ export function createRelay(deps: RelayDeps) {
     hub.signers.set(actionKey(action), signer.toLowerCase());
     broadcast(hub, { type: "action", action, events: next.events });
     driveBots(action.table, hub);
+    if (!botFor(hub, action.seat)) void submit(action.table);
     return { ok: true };
   }
 
@@ -218,10 +225,10 @@ export function createRelay(deps: RelayDeps) {
   }
 
   /** The contract opens the hands inside the batch that ends a round only while gas is left, and an estimate finds the cheapest path that skips them, so that batch always gets the full limit. */
-  function endsRound(id: bigint, batch: readonly SignedAction[]): boolean {
+  function endsRound(id: bigint, upTo: readonly SignedAction[]): boolean {
     const hub = hubOf(id);
     if (!hub.chain) return false;
-    return project(hub.chain, hub.chainNonces, [...batch]).state.pub.stage === "Revealing";
+    return project(hub.chain, hub.chainNonces, [...upTo]).state.pub.stage === "Revealing";
   }
 
   /** A long backlog goes out in one transaction when it fits under the gas cap, so the chain catches up with the table in a block instead of one block per dozen moves. */
@@ -248,9 +255,52 @@ export function createRelay(deps: RelayDeps) {
     }
   }
 
+  async function send(id: bigint, batch: readonly SignedAction[], gas: bigint): Promise<Hex> {
+    return deps.relayer.writeContract({
+      address: deps.table,
+      abi: kryphoTableAbi,
+      functionName: "relay",
+      args: [id, batch.map(toContractAction)],
+      gas,
+      gasPrice: GAS_PRICE,
+      chain: sepolia,
+      account: deps.relayer.account ?? null,
+    } as never);
+  }
+
+  async function prepare(id: bigint, pending: readonly SignedAction[]): Promise<{ readonly batch: readonly SignedAction[]; readonly gas: bigint } | null> {
+    const hub = hubOf(id);
+    const batch = nextBatch(pending, hub.sent, hub.pipes, MAX_BATCH);
+    if (batch.length === 0) return null;
+    if (hub.pipes === 0) return sizedBatch(id, batch);
+    const last = batch[batch.length - 1] as SignedAction;
+    return { batch, gas: pipelinedGas(batch.length, endsRound(id, pending.slice(0, pending.indexOf(last) + 1)), RELAY_GAS) };
+  }
+
+  async function settle(id: bigint, hash: Hex, batch: readonly SignedAction[]): Promise<void> {
+    const hub = hubOf(id);
+    let mined = 0n;
+    try {
+      const receipt = await deps.publicClient.waitForTransactionReceipt({ hash });
+      mined = receipt.blockNumber;
+      budget = spend(budget, receipt.gasUsed);
+      tableBudgets.set(id.toString(), spend(tableBudget(id), receipt.gasUsed));
+      deps.log({ event: "relay", id, actions: batch.length, pipes: hub.pipes, hash, status: receipt.status, gas: receipt.gasUsed });
+      const rejected = parseEventLogs({ abi: kryphoTableAbi, logs: receipt.logs, eventName: "ActionRejected" });
+      if (rejected.length > 0) deps.log({ event: "relay-rejected", id, actions: rejected.map((e) => e.args) });
+      deps.onRelayed?.(id);
+    } catch (error) {
+      deps.log({ event: "relay-error", id, message: (error as Error).message.slice(0, 200) });
+    } finally {
+      await refresh(id, mined).catch(() => undefined);
+      for (const action of batch) hub.sent.delete(pipeKey(action));
+      hub.pipes -= 1;
+    }
+  }
+
   async function submit(id: bigint): Promise<void> {
     const hub = hubOf(id);
-    if (hub.inflight || !hub.chain) return;
+    if (hub.sending || !hub.chain) return;
     const pending = project(hub.chain, hub.chainNonces, hub.log).valid;
     if (pending.length === 0) return;
     budget = rollBudget(budget, Date.now());
@@ -259,31 +309,18 @@ export function createRelay(deps: RelayDeps) {
       deps.log({ event: "relay-budget-exhausted", id, spent: budget.spent, tableSpent: perTable.spent });
       return;
     }
-    hub.inflight = true;
+    hub.sending = true;
     try {
-      const { batch, gas } = await sizedBatch(id, pending);
-      const hash = await deps.relayer.writeContract({
-        address: deps.table,
-        abi: kryphoTableAbi,
-        functionName: "relay",
-        args: [id, batch.map(toContractAction)],
-        gas,
-        gasPrice: GAS_PRICE,
-        chain: sepolia,
-        account: deps.relayer.account ?? null,
-      } as never);
-      const receipt = await deps.publicClient.waitForTransactionReceipt({ hash });
-      budget = spend(budget, receipt.gasUsed);
-      tableBudgets.set(id.toString(), spend(tableBudget(id), receipt.gasUsed));
-      deps.log({ event: "relay", id, actions: batch.length, backlog: pending.length, hash, status: receipt.status, gas: receipt.gasUsed });
-      const rejected = parseEventLogs({ abi: kryphoTableAbi, logs: receipt.logs, eventName: "ActionRejected" });
-      if (rejected.length > 0) deps.log({ event: "relay-rejected", id, actions: rejected.map((e) => e.args) });
-      deps.onRelayed?.(id);
+      const next = await prepare(id, pending);
+      if (!next) return;
+      const hash = await send(id, next.batch, next.gas);
+      for (const action of next.batch) hub.sent.add(pipeKey(action));
+      hub.pipes += 1;
+      void settle(id, hash, next.batch);
     } catch (error) {
       deps.log({ event: "relay-error", id, message: (error as Error).message.slice(0, 200) });
     } finally {
-      hub.inflight = false;
-      await refresh(id).catch(() => undefined);
+      hub.sending = false;
     }
   }
 
