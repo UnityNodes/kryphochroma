@@ -62,8 +62,9 @@ export function RoundEndProgress({ sync, winner }: { readonly sync: ChainSync; r
   );
 }
 
-export function sealedCardNote(sync: ChainSync | null | undefined, sealed: number): string | null {
+export function sealedCardNote(sync: ChainSync | null | undefined, sealed: number, handSize: number): string | null {
   if (!sync || sealed === 0) return null;
+  if (sealed === handSize) return "Your hand: Zama KMS is decrypting it for your key only";
   const cards = sealed === 1 ? "Your new card" : `${sealed} new cards`;
   return sync.pendingMoves > 0 ? `${cards}: writing your draw to Sepolia (${sync.pendingMoves} moves queued)` : `${cards}: Zama KMS is decrypting ${sealed === 1 ? "it" : "them"} for your key only`;
 }

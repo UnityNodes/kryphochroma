@@ -27,14 +27,18 @@ describe("round end progress", () => {
 
 describe("sealed card note", () => {
   it("says nothing when every card is open", () => {
-    expect(sealedCardNote(base, 0)).toBeNull();
+    expect(sealedCardNote(base, 0, 7)).toBeNull();
   });
 
   it("names the relay while the draw is still queued", () => {
-    expect(sealedCardNote({ ...base, pendingMoves: 2 }, 1)).toBe("Your new card: writing your draw to Sepolia (2 moves queued)");
+    expect(sealedCardNote({ ...base, pendingMoves: 2 }, 1, 8)).toBe("Your new card: writing your draw to Sepolia (2 moves queued)");
+  });
+
+  it("speaks of the whole hand right after the deal", () => {
+    expect(sealedCardNote(base, 7, 7)).toBe("Your hand: Zama KMS is decrypting it for your key only");
   });
 
   it("names the KMS once the draw is on chain", () => {
-    expect(sealedCardNote(base, 2)).toBe("2 new cards: Zama KMS is decrypting them for your key only");
+    expect(sealedCardNote(base, 2, 9)).toBe("2 new cards: Zama KMS is decrypting them for your key only");
   });
 });
