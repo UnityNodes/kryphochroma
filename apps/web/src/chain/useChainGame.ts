@@ -98,6 +98,8 @@ export function useChainGame(id: bigint, colorBlind: boolean, watchOnly = false)
   const actions = useRef<SignedAction[]>([]);
   const projected = useRef<GameState | null>(null);
   const permit = useRef<Promise<void> | null>(null);
+  const decrypting = useRef<Promise<void> | null>(null);
+  const wake = useRef<() => void>(() => undefined);
   const meRef = useRef(0);
   const settled = useRef<GameState["pub"]["lastResult"]>(null);
   const pendingPeek = useRef<{ seat: number; slot: number } | null>(null);
@@ -174,17 +176,22 @@ export function useChainGame(id: bigint, colorBlind: boolean, watchOnly = false)
       if (!sonarAt) sonarHandle.current = ping;
       const extra = [secret, ...(peekHandle ? [peekHandle] : []), ...(fresh ? [fresh] : [])].filter((h) => !/^0x0+$/.test(h) && !plain.current.has(h));
       const missing = [...own.filter((h, i) => (slots & (1 << i)) !== 0 && !plain.current.has(h)), ...extra];
-      if (missing.length > 0) {
-        try {
-          await (permit.current ?? sdk.permits.grantPermit([TABLE_ADDRESS]));
-          const { values, pending } = await decryptEach((batch) => sdk.decryption.decryptValues(batch.map((encryptedValue) => ({ encryptedValue, contractAddress: TABLE_ADDRESS }))), missing);
-          for (const [handle, value] of values) plain.current.set(handle, value);
-          setHandError(pending.length > 0 ? "Waiting for your new card to be decryptable" : null);
-        } catch (e) {
-          permit.current = null;
-          setHandError(`Could not decrypt your cards, retrying: ${friendlyError(e)}`);
-        }
-      } else {
+      if (missing.length > 0 && !decrypting.current) {
+        decrypting.current = (async () => {
+          try {
+            await (permit.current ?? sdk.permits.grantPermit([TABLE_ADDRESS]));
+            const { values } = await decryptEach((batch) => sdk.decryption.decryptValues(batch.map((encryptedValue) => ({ encryptedValue, contractAddress: TABLE_ADDRESS }))), missing);
+            for (const [handle, value] of values) plain.current.set(handle, value);
+            setHandError(null);
+          } catch (e) {
+            permit.current = null;
+            setHandError(`Could not decrypt your cards, retrying: ${friendlyError(e)}`);
+          }
+        })().finally(() => {
+          decrypting.current = null;
+          wake.current();
+        });
+      } else if (missing.length === 0) {
         setHandError(null);
       }
       known.set(seat, own.map((h, i) => ((slots & (1 << i)) !== 0 ? (plain.current.get(h) ?? null) : null)));
@@ -213,7 +220,9 @@ export function useChainGame(id: bigint, colorBlind: boolean, watchOnly = false)
     let stopped = false;
     let timer: ReturnType<typeof setTimeout> | undefined;
     let failures = 0;
+    let running = false;
     const loop = async () => {
+      running = true;
       try {
         await poll();
         failures = 0;
@@ -222,11 +231,18 @@ export function useChainGame(id: bigint, colorBlind: boolean, watchOnly = false)
         failures += 1;
         if (failures >= POLL_FAILURES_SHOWN) setError(friendlyError(e));
       }
+      running = false;
       if (!stopped) timer = setTimeout(loop, POLL_MS);
+    };
+    wake.current = () => {
+      if (running || stopped) return;
+      if (timer) clearTimeout(timer);
+      void loop();
     };
     void loop();
     return () => {
       stopped = true;
+      wake.current = () => undefined;
       if (timer) clearTimeout(timer);
     };
   }, [poll]);
@@ -264,7 +280,7 @@ export function useChainGame(id: bigint, colorBlind: boolean, watchOnly = false)
       if (!seated) return "You are watching this table";
       if (sending) return "Wait for the table";
       const base = chain.current;
-      if (!base) return "Table not ready";
+      if (!base) return "Still reading the table from Sepolia, try again in a second";
       setSending(true);
       try {
       const seat = meRef.current;
