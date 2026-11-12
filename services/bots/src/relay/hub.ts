@@ -27,6 +27,8 @@ import { sepolia } from "viem/chains";
 const MAX_BATCH = 40;
 const RELAY_GAS = JOIN_GAS_LIMIT;
 const GAS_HEADROOM_PCT = 130n;
+const ACTION_GAS_FLOOR = 200_000n;
+const RELAY_BASE_GAS = 300_000n;
 const GAS_PRICE = 5_000_000n;
 const THINK_MS = [250, 600] as const;
 const CATCH_DELAY_BLOCKS = 2n;
@@ -197,7 +199,7 @@ export function createRelay(deps: RelayDeps) {
           const again = decide(hub, now.state, seat);
           if (!again) return;
           const nonce = (hub.chainNonces[seat] ?? 0) + now.valid.filter((a) => a.seat === seat).length;
-          const handles = (await deps.publicClient.readContract({ address: deps.table, abi: kryphoTableAbi, functionName: "handOf", args: [id, seat] } as never)) as readonly Hex[];
+          const handles = (await deps.publicClient.readContract({ address: deps.table, abi: kryphoTableAbi, functionName: "handOf", args: [id, seat], blockNumber: hub.block } as never)) as readonly Hex[];
           const fields = fieldsFor(id, seat, again, nonce, handles);
           const signature = await bot.account.signTypedData({ domain, types: ACTION_TYPES, primaryType: "Action", message: { ...fields } });
           const result = await accept({ ...fields, signature });
@@ -230,8 +232,11 @@ export function createRelay(deps: RelayDeps) {
           functionName: "relay",
           args: [id, batch.map(toContractAction)],
           account: deps.relayer.account ?? null,
+          blockNumber: hubOf(id).block,
         } as never);
-        const gas = (estimate * GAS_HEADROOM_PCT) / 100n;
+        const floor = BigInt(batch.length) * ACTION_GAS_FLOOR + RELAY_BASE_GAS;
+        const scaled = (estimate * GAS_HEADROOM_PCT) / 100n;
+        const gas = scaled > floor ? scaled : floor;
         if (gas > RELAY_GAS && size > 1) continue;
         return { batch, gas: endsRound(id, batch) || gas > RELAY_GAS ? RELAY_GAS : gas };
       } catch (error) {
