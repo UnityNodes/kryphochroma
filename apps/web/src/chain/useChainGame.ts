@@ -34,6 +34,7 @@ import { toGameEvents } from "./events";
 const POLL_MS = 2000;
 const PERMIT_TIMEOUT_MS = 30_000;
 const DECRYPT_TIMEOUT_MS = 8_000;
+const DECRYPT_ROUND_MS = 20_000;
 const POLL_FAILURES_SHOWN = 3;
 const RELAYED_TOPICS = new Set([toEventSelector("ActionRelayed(uint256,uint8,uint32)"), toEventSelector("ActionRejected(uint256,uint8,uint32,bytes4)")]);
 
@@ -43,7 +44,7 @@ export interface ChainSnapshot {
   readonly me: number;
 }
 
-/** Granting the permit can wait on the relayer key fetch, and a stuck grant would block every decrypt behind it. */
+/** The SDK can stall before it reaches the relayer, where its own request timeout does not apply, and a stalled decrypt would keep its cards marked in flight forever. */
 function withTimeout<T>(task: Promise<T>, ms: number): Promise<T> {
   let timer: ReturnType<typeof setTimeout> | undefined;
   const timeout = new Promise<never>((_, reject) => {
@@ -196,7 +197,10 @@ export function useChainGame(id: bigint, colorBlind: boolean, watchOnly = false)
         void (async () => {
           try {
             await withTimeout(permit.current ?? sdk.permits.grantPermit([TABLE_ADDRESS]), PERMIT_TIMEOUT_MS);
-            const { values } = await decryptEach((batch) => sdk.decryption.decryptValues(batch.map((encryptedValue) => ({ encryptedValue, contractAddress: TABLE_ADDRESS })), { timeout: DECRYPT_TIMEOUT_MS }), queued);
+            const { values } = await withTimeout(
+              decryptEach((batch) => sdk.decryption.decryptValues(batch.map((encryptedValue) => ({ encryptedValue, contractAddress: TABLE_ADDRESS })), { timeout: DECRYPT_TIMEOUT_MS }), queued),
+              DECRYPT_ROUND_MS,
+            );
             for (const [handle, value] of values) plain.current.set(handle, value);
             setHandError(null);
           } catch (e) {
