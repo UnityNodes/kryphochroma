@@ -8,12 +8,13 @@ import { rpcTransport } from "../rpc.js";
 import { privateKeyToAccount } from "viem/accounts";
 import { sepolia } from "viem/chains";
 import { type KeeperAction, type PlannedAction, type TableView, nextKeeperAction, scheduleKeeper } from "./plan.js";
+import { createTableBackoff } from "./backoff.js";
 import { createTableScan } from "./scan.js";
 import { type GasBudget, belowAlert, canSpend, rollBudget, spend, stopRequested } from "./safety.js";
 
 const SETUP_GAS = 16_000_000n;
 const DEAL_GAS = JOIN_GAS_LIMIT;
-const REVEAL_GAS = 4_000_000n;
+const REVEAL_GAS = JOIN_GAS_LIMIT;
 const RECEIPT_POLL_MS = 1000;
 const URGENT_PIPELINE = 4;
 const BACKGROUND_PIPELINE = 8;
@@ -61,6 +62,7 @@ export async function runKeeper(config: KeeperConfig, env: NodeJS.ProcessEnv, un
   const publicClient = createPublicClient({ chain: sepolia, transport, batch: { multicall: true }, pollingInterval: RECEIPT_POLL_MS });
   const walletClient = createWalletClient({ account, chain: sepolia, transport });
   const scan = createTableScan();
+  const backoff = createTableBackoff();
   const sdk = new ZamaSDK(createConfig({ chains: [zamaSepolia], publicClient, walletClient, relayers: { [zamaSepolia.id]: node() } }));
   const address = config.table;
   let budget: GasBudget = { dayStart: Date.now(), spent: 0n, limit: config.dailyGasLimit };
@@ -81,6 +83,7 @@ export async function runKeeper(config: KeeperConfig, env: NodeJS.ProcessEnv, un
     minBlock = receipt.blockNumber;
     budget = spend(budget, receipt.gasUsed);
     log({ event: "tx", functionName, args, hash, gas: receipt.gasUsed, status: receipt.status });
+    if (receipt.status !== "success") throw new Error(`${functionName} reverted on chain in ${hash}, gas used ${receipt.gasUsed} of ${estimate}`);
   }
 
   async function pipelineSetup(id: bigint, remaining: number, functionName = "setupStep", gas = SETUP_GAS): Promise<void> {
@@ -92,12 +95,15 @@ export async function runKeeper(config: KeeperConfig, env: NodeJS.ProcessEnv, un
     for (let i = 0; i < count; i++) {
       hashes.push(await walletClient.writeContract({ ...(request as object), gas } as never));
     }
+    const reverted: Hex[] = [];
     for (const hash of hashes) {
       const receipt = await publicClient.waitForTransactionReceipt({ hash });
       minBlock = receipt.blockNumber > minBlock ? receipt.blockNumber : minBlock;
       budget = spend(budget, receipt.gasUsed);
+      if (receipt.status !== "success") reverted.push(hash);
     }
-    log({ event: functionName, id, sent: count, remaining: remaining - count });
+    log({ event: functionName, id, sent: count, remaining: remaining - count, reverted: reverted.length });
+    if (reverted.length > 0) throw new Error(`${reverted.length} of ${count} ${functionName} reverted on chain, first ${reverted[0]}`);
   }
 
   async function revealAndSend(functionName: string, id: bigint, handles: readonly Hex[]): Promise<void> {
@@ -180,10 +186,13 @@ export async function runKeeper(config: KeeperConfig, env: NodeJS.ProcessEnv, un
       const { urgent, background } = scheduleKeeper(planned);
       const lanes = { urgent, background, both: [...urgent, ...background.slice(0, 1)] };
       for (const entry of lanes[config.lane]) {
+        if (!backoff.ready(entry.id, Date.now())) continue;
         try {
           await act(entry.id, entry.action);
+          backoff.clear(entry.id);
         } catch (error) {
-          log({ event: "error", id: entry.id, action: entry.action.kind, message: (error as Error).message.slice(0, 300) });
+          const wait = backoff.fail(entry.id, Date.now());
+          log({ event: "error", id: entry.id, action: entry.action.kind, retryInMs: wait, message: (error as Error).message.slice(0, 300) });
         }
       }
     } catch (error) {

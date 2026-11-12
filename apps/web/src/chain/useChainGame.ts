@@ -32,6 +32,7 @@ import { RECEIPT_POLL_MS, RPC_PROXY_PATH, sepoliaTransport } from "./rpc";
 import { toGameEvents } from "./events";
 
 const POLL_MS = 2000;
+const DECRYPT_TIMEOUT_MS = 30_000;
 const POLL_FAILURES_SHOWN = 3;
 const RELAYED_TOPICS = new Set([toEventSelector("ActionRelayed(uint256,uint8,uint32)"), toEventSelector("ActionRejected(uint256,uint8,uint32,bytes4)")]);
 
@@ -39,6 +40,15 @@ export interface ChainSnapshot {
   readonly table: ChainTable & { readonly setupStep: number; readonly creator: Hex };
   readonly seats: readonly (ChainSeat & { readonly player: Hex; readonly session: Hex })[];
   readonly me: number;
+}
+
+/** A relayer call that never answers would hold the single in-flight decrypt forever and leave new cards sealed, so it is cut off and retried. */
+function withTimeout<T>(task: Promise<T>, ms: number): Promise<T> {
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  const timeout = new Promise<never>((_, reject) => {
+    timer = setTimeout(() => reject(new Error("The Zama relayer took too long to answer")), ms);
+  });
+  return Promise.race([task, timeout]).finally(() => clearTimeout(timer));
 }
 
 function placeholder(seats: number): GameState {
@@ -179,8 +189,8 @@ export function useChainGame(id: bigint, colorBlind: boolean, watchOnly = false)
       if (missing.length > 0 && !decrypting.current) {
         decrypting.current = (async () => {
           try {
-            await (permit.current ?? sdk.permits.grantPermit([TABLE_ADDRESS]));
-            const { values } = await decryptEach((batch) => sdk.decryption.decryptValues(batch.map((encryptedValue) => ({ encryptedValue, contractAddress: TABLE_ADDRESS }))), missing);
+            await withTimeout(permit.current ?? sdk.permits.grantPermit([TABLE_ADDRESS]), DECRYPT_TIMEOUT_MS);
+            const { values } = await withTimeout(decryptEach((batch) => sdk.decryption.decryptValues(batch.map((encryptedValue) => ({ encryptedValue, contractAddress: TABLE_ADDRESS }))), missing), DECRYPT_TIMEOUT_MS);
             for (const [handle, value] of values) plain.current.set(handle, value);
             setHandError(null);
           } catch (e) {
