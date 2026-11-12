@@ -1,9 +1,9 @@
 "use client";
 
 import { CARD_COLORS } from "@kryphochroma/cards";
-import { type Card, type Color, type Peek, type PublicState, cardLabel, colorOf, peekTargets, rankOf, veilClaims } from "@kryphochroma/rules";
+import { COLOR, type Card, type Color, type Peek, type PublicState, cardLabel, colorOf, peekTargets, rankOf, veilClaims } from "@kryphochroma/rules";
 import { EyeOff, Lock } from "lucide-react";
-import { useEffect, useState } from "react";
+import { Fragment, useEffect, useState } from "react";
 import { Dialog, DialogContent, DialogDescription, DialogTitle } from "@/components/ui/dialog";
 import { cn } from "@/lib/utils";
 import { CardBack, CardFace } from "./CardSvg";
@@ -57,27 +57,30 @@ export function VeilDialog({ open, pub, hand, colorBlind, onClose, onVeil }: Vei
           )}
         </div>
         <h3 className="text-xs font-semibold tracking-[.12em] text-muted uppercase">2. The card you name</h3>
-        <div className="grid gap-2">
+        {slot === null && <p className="-mt-1 text-xs text-muted">Pick the card you hide first, then name one of these.</p>}
+        <div className="grid grid-cols-[3.5rem_minmax(0,1fr)] items-start gap-x-2 gap-y-2">
           {CARD_COLORS.map((color, c) => {
             const row = claims.filter((claim) => colorOf(claim) === c);
             if (row.length === 0) return null;
             return (
-              <div key={color.name} className="flex flex-wrap items-center gap-1.5">
-                <span className="w-14 text-xs text-muted">{color.name}</span>
-                {row.map((claim) => (
-                  <button
-                    key={claim}
-                    type="button"
-                    disabled={slot === null}
-                    onClick={() => slot !== null && (onVeil(slot, claim), setSlot(null))}
-                    aria-label={`Name it ${cardLabel(claim)}`}
-                    className="grid size-9 place-items-center rounded-full border-2 border-cream font-display text-lg text-ink disabled:opacity-40"
-                    style={{ background: color.base }}
-                  >
-                    {rankOf(claim)}
-                  </button>
-                ))}
-              </div>
+              <Fragment key={color.name}>
+                <span className="flex h-11 items-center text-xs text-muted">{color.name}</span>
+                <div className="flex flex-wrap gap-1.5">
+                  {row.map((claim) => (
+                    <button
+                      key={claim}
+                      type="button"
+                      disabled={slot === null}
+                      onClick={() => slot !== null && (onVeil(slot, claim), setSlot(null))}
+                      aria-label={`Name it ${cardLabel(claim)}`}
+                      className="grid size-11 place-items-center rounded-full border-2 border-cream font-display text-xl transition-transform enabled:hover:-translate-y-0.5 disabled:opacity-35"
+                      style={{ background: color.base, color: c === COLOR.sun ? "var(--color-ink)" : "var(--color-cream)" }}
+                    >
+                      {rankOf(claim)}
+                    </button>
+                  ))}
+                </div>
+              </Fragment>
             );
           })}
         </div>

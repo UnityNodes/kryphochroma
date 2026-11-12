@@ -370,20 +370,51 @@ export function TableView({ controller: game, colorBlind, onToggleShapes }: Tabl
             {result?.winner === HUMAN && !game.watching ? "You win!" : result?.winner === null ? "No winner" : `${names[result?.winner ?? 0] ?? "Seat"} wins`}
           </DialogTitle>
           <DialogDescription className="text-muted">
-            {result ? `${result.points} points${result.bonus ? " · doubled by the secret colour" : ""} · every honesty bit checked${result.cheaters.length > 0 ? ` · liars: ${result.cheaters.map((s) => (s === HUMAN && !game.watching ? "you" : names[s])).join(", ")}` : ""}` : ""}
+            {result
+              ? result.winner === null
+                ? "Every hand was revealed and nobody played honestly, so nobody scores."
+                : `${result.points} points: the value of every card left in the other hands${result.bonus ? ", doubled by the secret colour" : ""}. All honesty bits were revealed and checked.`
+              : ""}
           </DialogDescription>
-          {result?.secrets && result.secrets.some((c) => c >= 0) && (
-            <ul className="grid gap-1 text-sm text-cream">
-              {result.secrets.map((color, seat) => (
-                <li key={seat} className="flex items-center justify-between gap-3">
-                  <span>{seat === HUMAN && !game.watching ? "You" : names[seat]}</span>
-                  <span className="flex items-center gap-1" style={{ color: CARD_COLORS[color]?.base }}>
-                    <span className="inline-block size-2.5 rounded-full" style={{ background: CARD_COLORS[color]?.base }} aria-hidden />
-                    {CARD_COLORS[color]?.name ?? "hidden"}
-                  </span>
-                </li>
-              ))}
-            </ul>
+          {result && (
+            <table className="w-full text-left text-sm">
+              <caption className="sr-only">Round results</caption>
+              <thead className="text-[11px] tracking-[.08em] text-muted uppercase">
+                <tr>
+                  <th scope="col" className="pb-2 font-semibold">Player</th>
+                  <th scope="col" className="pb-2 text-right font-semibold">Cards left</th>
+                  <th scope="col" className="pb-2 text-right font-semibold">Secret colour</th>
+                </tr>
+              </thead>
+              <tbody>
+                {pub.seats.map((s, seat) => {
+                  const color = result.secrets?.[seat] ?? -1;
+                  const swatch = color >= 0 ? CARD_COLORS[color] : undefined;
+                  const won = result.winner === seat;
+                  const lied = result.cheaters.includes(seat);
+                  return (
+                    <tr key={seat} className={cn("border-t border-cream/10", won && "text-sun")}>
+                      <th scope="row" className="py-2 font-semibold">
+                        {seat === HUMAN && !game.watching ? "You" : names[seat]}
+                        {won && <Trophy className="ml-1 inline size-3.5" aria-label="winner" />}
+                        {lied && <span className="ml-1 rounded-full bg-red/20 px-1.5 py-0.5 text-[11px] text-red">lied</span>}
+                      </th>
+                      <td className="py-2 text-right tabular-nums">{s.handSize === 0 ? "out" : s.handSize}</td>
+                      <td className="py-2 text-right">
+                        {swatch ? (
+                          <span className="inline-flex items-center gap-1" style={{ color: `color-mix(in srgb, ${swatch.base} 62%, var(--color-cream))` }}>
+                            <span className="inline-block size-2.5 rounded-full" style={{ background: swatch.base }} aria-hidden />
+                            {swatch.name}
+                          </span>
+                        ) : (
+                          <span className="text-muted">sealed</span>
+                        )}
+                      </td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
           )}
           <div className="flex flex-wrap justify-center gap-3">
             {game.restart && (
