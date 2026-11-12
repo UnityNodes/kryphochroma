@@ -74,12 +74,12 @@ flowchart LR
 
 | | |
 |---|---|
-| `KryphoTable` | [`0xa387FE75550f548D2452712165027BBd38902e81`](https://sepolia.etherscan.io/address/0xa387FE75550f548D2452712165027BBd38902e81) |
-| `KryphoDeck` library | [`0x9aab3051435C93A7781B57FcF4F9f1418d6CBd75`](https://sepolia.etherscan.io/address/0x9aab3051435C93A7781B57FcF4F9f1418d6CBd75) |
-| `KryphoScore` library | [`0x4E8BDb3Ff3bb34967126f823DF6410b43c949F82`](https://sepolia.etherscan.io/address/0x4E8BDb3Ff3bb34967126f823DF6410b43c949F82) |
-| `KryphoRadio` library (sonar, signatures) | [`0x7178A11B305013E2A06ce4Cf8329a66023d49180`](https://sepolia.etherscan.io/address/0x7178A11B305013E2A06ce4Cf8329a66023d49180) |
-| `KryphoLobby` library (join, leave, host) | [`0xFc439Da9C322fbaB13c487357581986343a93cdf`](https://sepolia.etherscan.io/address/0xFc439Da9C322fbaB13c487357581986343a93cdf) |
-| Deployment | [`0x72cd88…22a4`](https://sepolia.etherscan.io/tx/0x72cd8843a1ea64fd1f8fff3f66502dea5edc6be5e7f53470160c01a0af1622a4), block 12114738 |
+| `KryphoTable` | [`0x70fe82c1374F8C3c55aF03405F0533bC1680AdE6`](https://sepolia.etherscan.io/address/0x70fe82c1374F8C3c55aF03405F0533bC1680AdE6) |
+| `KryphoDeck` library | [`0xE11733838F85397dd7ADEc955Ee1342894b65327`](https://sepolia.etherscan.io/address/0xE11733838F85397dd7ADEc955Ee1342894b65327) |
+| `KryphoScore` library | [`0x24af2823a87c51918aB248F5ff2bc54cdedcd1Da`](https://sepolia.etherscan.io/address/0x24af2823a87c51918aB248F5ff2bc54cdedcd1Da) |
+| `KryphoRadio` library (sonar, signatures) | [`0xCc66a8250cDbaBF347616B8ffA2a4C25e893Fa7e`](https://sepolia.etherscan.io/address/0xCc66a8250cDbaBF347616B8ffA2a4C25e893Fa7e) |
+| `KryphoLobby` library (join, leave, host) | [`0xb1bec9E281c73B91b9448cda00413e9b9aC915bB`](https://sepolia.etherscan.io/address/0xb1bec9E281c73B91b9448cda00413e9b9aC915bB) |
+| Deployment | [`0xe0aa28…a482`](https://sepolia.etherscan.io/tx/0xe0aa28b588da5913081fbfb189889a2ff2b74887d76a4160ee490876b648a482), block 12117886 |
 
 A full round on chain on the previous deployment with the same rules, table 2: one human, three bots, three veils, one spyglass, Mono, a timeout and the reveal.
 

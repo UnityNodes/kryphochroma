@@ -191,7 +191,11 @@ async function playGame(setup: GameSetup, players: Signer[]): Promise<{ steps: n
       await (await table.resolveChallenge(id, checkSignaturesArgs.abiEncodedCleartexts, checkSignaturesArgs.decryptionProof)).wait();
       state = applyChallenge(state).state;
     } else if (stage === "Revealing") {
-      for (let seat = 0; seat < setup.seats; seat++) await (await table.prepareReveal(id)).wait();
+      await flush();
+      const openedInRelay = Number((await table.getTable(id)).revealPrepared);
+      expect([0, setup.seats], "a round-ending relay opens every hand or leaves them all").to.include(openedInRelay);
+      for (let seat = openedInRelay; seat < setup.seats; seat++) await (await table.prepareReveal(id)).wait();
+      await expect(table.prepareReveal(id)).to.be.revertedWithCustomError(table, "RevealNotReady");
       const handles = (await table.revealHandles(id)).map(hex);
       const { checkSignaturesArgs } = await fhevm.client.decryptPublicValuesWithSignatures({ encryptedValues: handles });
       await (await table.finishReveal(id, checkSignaturesArgs.abiEncodedCleartexts, checkSignaturesArgs.decryptionProof)).wait();

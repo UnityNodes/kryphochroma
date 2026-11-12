@@ -1,5 +1,6 @@
 import {
   ACTION_TYPES,
+  JOIN_GAS_LIMIT,
   type ChainSeat,
   type ChainTable,
   type SignedAction,
@@ -24,7 +25,7 @@ import { type GasBudget, canSpend, rollBudget, spend } from "../keeper/safety.js
 import { sepolia } from "viem/chains";
 
 const MAX_BATCH = 40;
-const RELAY_GAS = 16_000_000n;
+const RELAY_GAS = JOIN_GAS_LIMIT;
 const GAS_HEADROOM_PCT = 130n;
 const GAS_PRICE = 5_000_000n;
 const THINK_MS = [250, 600] as const;
@@ -211,6 +212,13 @@ export function createRelay(deps: RelayDeps) {
     }
   }
 
+  /** The contract opens the hands inside the batch that ends a round only while gas is left, and an estimate finds the cheapest path that skips them, so that batch always gets the full limit. */
+  function endsRound(id: bigint, batch: readonly SignedAction[]): boolean {
+    const hub = hubOf(id);
+    if (!hub.chain) return false;
+    return project(hub.chain, hub.chainNonces, [...batch]).state.pub.stage === "Revealing";
+  }
+
   /** A long backlog goes out in one transaction when it fits under the gas cap, so the chain catches up with the table in a block instead of one block per dozen moves. */
   async function sizedBatch(id: bigint, pending: readonly SignedAction[]): Promise<{ readonly batch: readonly SignedAction[]; readonly gas: bigint }> {
     for (let size = Math.min(pending.length, MAX_BATCH); ; size = Math.floor(size / 2)) {
@@ -224,7 +232,8 @@ export function createRelay(deps: RelayDeps) {
           account: deps.relayer.account ?? null,
         } as never);
         const gas = (estimate * GAS_HEADROOM_PCT) / 100n;
-        if (gas <= RELAY_GAS || size === 1) return { batch, gas: gas < RELAY_GAS ? gas : RELAY_GAS };
+        if (gas > RELAY_GAS && size > 1) continue;
+        return { batch, gas: endsRound(id, batch) || gas > RELAY_GAS ? RELAY_GAS : gas };
       } catch (error) {
         if (size === 1) throw error;
       }

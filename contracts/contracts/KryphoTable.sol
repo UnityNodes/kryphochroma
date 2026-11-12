@@ -22,6 +22,8 @@ contract KryphoTable is IKryphoTable, ZamaEthereumConfig {
     uint32 internal constant MAX_TURN_TIMEOUT = 1 days;
     uint8 internal constant MIN_REFILL = 16;
     uint256 internal constant SESSION_STIPEND = 10_000;
+    uint256 internal constant REVEAL_HANDLE_GAS = 300_000;
+    uint256 internal constant REVEAL_RESERVE_GAS = 300_000;
     uint16 internal constant MAX_TARGET_SCORE = 10_000;
     uint64 internal constant CATCH_DELAY_BLOCKS = 2;
     uint16 internal constant SETUP_STEPS = uint16(KryphoDeck.FILL_STEPS) + KryphoDeck.SHUFFLE_STEPS;
@@ -117,6 +119,22 @@ contract KryphoTable is IKryphoTable, ZamaEthereumConfig {
                 emit ActionRejected(id, a.seat, a.nonce, bytes4(reason));
             }
         }
+        _prepareWhileGas(id, t);
+    }
+
+    /** The move that ends a round opens the hands in its own transaction, so the KMS proof can be asked for one block earlier; seats that do not fit the gas left are opened later by prepareReveal. */
+    function _prepareWhileGas(uint256 id, Table storage t) internal {
+        while (t.stage == Stage.Revealing && t.revealPrepared < t.joined) {
+            uint256 handles = uint256(_seats[id][t.revealPrepared].handSize) + 2;
+            if (gasleft() < handles * REVEAL_HANDLE_GAS + REVEAL_RESERVE_GAS) return;
+            _prepareSeat(id, t);
+        }
+    }
+
+    function _prepareSeat(uint256 id, Table storage t) internal {
+        uint8 seat = t.revealPrepared;
+        KryphoScore.expose(_revealHandles[id], _honest[id][seat], _secret[id][seat], _hands, id, seat, _seats[id][seat].slots);
+        t.revealPrepared = seat + 1;
     }
 
     function relayOne(uint256 id, Action calldata a) external {
@@ -537,10 +555,8 @@ contract KryphoTable is IKryphoTable, ZamaEthereumConfig {
 
     function prepareReveal(uint256 id) external {
         Table storage t = _requireStage(id, Stage.Revealing);
-        uint8 seat = t.revealPrepared;
-        if (seat >= t.joined) revert RevealNotReady();
-        KryphoScore.expose(_revealHandles[id], _honest[id][seat], _secret[id][seat], _hands, id, seat, _seats[id][seat].slots);
-        t.revealPrepared = seat + 1;
+        if (t.revealPrepared >= t.joined) revert RevealNotReady();
+        _prepareSeat(id, t);
     }
 
     function finishReveal(uint256 id, bytes calldata cleartexts, bytes calldata proof) external {
