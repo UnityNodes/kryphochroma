@@ -162,3 +162,13 @@ export function stepAction(state: GameState, action: ActionFields): { state: Gam
 export function fillMessage(table: bigint): string {
   return `Kryphochroma: seat bots at table ${table.toString()}`;
 }
+
+/** A play or a veil names the handle that sits in its slot on chain; a card that reached the hand only through moves still waiting for the relay has no such handle yet, so that move has to wait or the contract rejects it as StaleHand and every later move in the batch with it. */
+export function slotSettled(chain: GameState, projected: GameState, seat: number, slot: number): boolean {
+  const base = chain.hands[seat]?.[slot] ?? null;
+  return base !== null && base === (projected.hands[seat]?.[slot] ?? null);
+}
+
+export function namesSlot(move: Move | { readonly type: "catch"; readonly target: number }): move is Extract<Move, { readonly type: "play" | "veil" }> {
+  return move.type === "play" || move.type === "veil";
+}

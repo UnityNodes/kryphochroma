@@ -8,6 +8,8 @@ import {
   actionDomain,
   decryptEach,
   fieldsFor,
+  namesSlot,
+  slotSettled,
   kryphoTableAbi,
   project,
   projectChain,
@@ -312,7 +314,12 @@ export function useChainGame(id: bigint, colorBlind: boolean, watchOnly = false)
       setSending(true);
       try {
       const seat = meRef.current;
-      const mineQueued = project(base.state, base.nonces, actions.current).valid.filter((a) => a.seat === seat).length;
+      const queued = project(base.state, base.nonces, actions.current);
+      if (namesSlot(move) && !slotSettled(base.state, queued.state, seat, move.slot)) {
+        wake.current();
+        return "That card is still on its way to Sepolia, pick it again in a moment";
+      }
+      const mineQueued = queued.valid.filter((a) => a.seat === seat).length;
       const fields = fieldsFor(id, seat, move, (base.nonces[seat] ?? 0) + mineQueued, handles.current);
       const signature = await burner.signTypedData({ domain, types: ACTION_TYPES, primaryType: "Action", message: { ...fields } });
       const res = await fetch("/api/act", { method: "POST", body: JSON.stringify({ ...fields, table: fields.table.toString(), signature }) });

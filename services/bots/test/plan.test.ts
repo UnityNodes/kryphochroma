@@ -85,4 +85,13 @@ describe("keeper plan", () => {
     ];
     expect(scheduleKeeper(lobbies).background.map((p) => p.id)).toEqual([3n, 2n]);
   });
+
+  it("shuffles the lobby a player waits at before spare tables and running shuffles", () => {
+    const lobbies: PlannedAction[] = [
+      { id: 1n, stage: 0, joined: 0, action: { kind: "setupStep", remaining: 4 } },
+      { id: 2n, stage: 0, joined: 1, action: { kind: "setupStep", remaining: 60 } },
+      { id: 3n, stage: 1, joined: 4, action: { kind: "setupStep", remaining: 10 } },
+    ];
+    expect(scheduleKeeper(lobbies).background.map((p) => p.id)).toEqual([2n, 3n]);
+  });
 });

@@ -7,6 +7,8 @@ import {
   actionDomain,
   decryptEach,
   fieldsFor,
+  namesSlot,
+  slotSettled,
   kryphoTableAbi,
   stepAction,
   project,
@@ -197,7 +199,8 @@ export function createRelay(deps: RelayDeps) {
           const now = projected(hub);
           if (!now || now.state.pub.stage !== "Playing") return;
           const again = decide(hub, now.state, seat);
-          if (!again) return;
+          if (!again || !hub.chain) return;
+          if (namesSlot(again) && !slotSettled(hub.chain, now.state, seat, again.slot)) return;
           const nonce = (hub.chainNonces[seat] ?? 0) + now.valid.filter((a) => a.seat === seat).length;
           const handles = (await deps.publicClient.readContract({ address: deps.table, abi: kryphoTableAbi, functionName: "handOf", args: [id, seat], blockNumber: hub.block } as never)) as readonly Hex[];
           const fields = fieldsFor(id, seat, again, nonce, handles);
