@@ -1,7 +1,8 @@
-import { ArrowLeft, BookOpen, EyeOff, Lock, Palette, Play, ScanEye, Shuffle } from "lucide-react";
+import { BookOpen, EyeOff, Lock, Palette, Play, ScanEye, Shuffle } from "lucide-react";
 import type { Metadata } from "next";
 import Link from "next/link";
 import { LeakDemo } from "@/components/secret/LeakDemo";
+import { SiteHeader } from "@/components/site/SiteHeader";
 
 export const metadata: Metadata = {
   title: "How it stays secret · Kryphochroma",
@@ -35,18 +36,9 @@ const LEAKS = [
 export default function SecretPage() {
   return (
     <div className="min-h-dvh bg-bg text-cream">
-      <main className="mx-auto grid w-full max-w-6xl gap-12 px-4 py-8 sm:px-6 lg:py-14">
+      <SiteHeader />
+      <main className="mx-auto grid w-full max-w-[1200px] gap-12 px-4 py-8 sm:px-6 lg:py-14">
         <header className="grid gap-4">
-          <nav className="flex flex-wrap items-center gap-4 text-sm text-muted">
-            <Link href="/" className="flex items-center gap-1 hover:text-cream">
-              <ArrowLeft className="size-4" aria-hidden />
-              Kryphochroma
-            </Link>
-            <Link href="/docs" className="flex items-center gap-1 hover:text-cream">
-              <BookOpen className="size-4" aria-hidden />
-              Docs
-            </Link>
-          </nav>
           <h1 className="font-display text-5xl leading-[0.95] text-sun [text-shadow:3px_3px_0_var(--r)] sm:text-7xl">How it stays secret</h1>
           <p className="max-w-3xl text-lg text-muted">Hands, the deck, veiled cards and secret colours live on Sepolia as Zama FHE ciphertexts. The contract shuffles, deals and checks every move without ever seeing a card.</p>
         </header>

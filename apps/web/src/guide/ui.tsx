@@ -32,9 +32,9 @@ export function Code({ children, title }: { readonly children: string; readonly 
 }
 
 export function Callout({ tone = "info", title, children }: { readonly tone?: "info" | "warn" | "ok"; readonly title: string; readonly children: ReactNode }) {
-  const border = tone === "warn" ? "border-red/60 bg-red/10" : tone === "ok" ? "border-teal/60 bg-teal/10" : "border-sun/60 bg-sun/10";
+  const border = tone === "warn" ? "border-red/40 bg-red/10" : tone === "ok" ? "border-teal/40 bg-teal/10" : "border-sun/35 bg-sun/10";
   return (
-    <aside className={cn("my-5 rounded-2xl border-l-4 px-4 py-3 text-sm", border)}>
+    <aside className={cn("my-5 rounded-2xl border px-4 py-3 text-sm", border)}>
       <b className="block text-cream">{title}</b>
       <div className="mt-1 text-muted">{children}</div>
     </aside>

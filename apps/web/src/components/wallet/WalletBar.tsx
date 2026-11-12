@@ -16,7 +16,7 @@ export function WalletBar({ disabled }: { readonly disabled?: boolean }) {
   const available = typeof window !== "undefined" && "ethereum" in window;
 
   if (!isConnected || !address) {
-    if (!available) return <p className="text-center text-sm text-muted">No browser wallet found. Guest mode needs none.</p>;
+    if (!available) return null;
     return (
       <div className="grid justify-items-center gap-1 text-sm">
         <button type="button" className="kc-chip" onClick={() => injected && connect({ connector: injected, chainId: sepolia.id })} disabled={disabled || isPending || !injected}>

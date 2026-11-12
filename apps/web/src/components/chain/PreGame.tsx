@@ -1,7 +1,7 @@
 "use client";
 
 import { DECK_SIZE, SETUP_STEPS } from "@kryphochroma/abi";
-import { Armchair, Bot, Eye, House, Link2, Loader2, LogOut, Play, Shuffle, Users } from "lucide-react";
+import { Armchair, Bot, Eye, Link2, Loader2, LogOut, Play, Shuffle, Users } from "lucide-react";
 import Link from "next/link";
 import { toast } from "sonner";
 import type { ChainSnapshot } from "@/chain/useChainGame";
@@ -9,6 +9,7 @@ import { AvatarGlyph, avatarColor } from "@/components/profile/Avatar";
 import { ProfileChip } from "@/components/profile/ProfileChip";
 import { useMyProfile } from "@/components/profile/useMyProfile";
 import { useProfiles } from "@/components/profile/useProfiles";
+import { PageShell } from "@/components/site/PageShell";
 import { WalletBar } from "@/components/wallet/WalletBar";
 import { tableCode, tablePath } from "@/lib/invite";
 
@@ -51,19 +52,18 @@ export function PreGame({ id, snapshot, address, watching, onFill, onStart, onJo
   const canStart = seated && (isCreator || free === 0);
   const progress = Math.round((Number(table.setupStep) / SETUP_STEPS) * 100);
   return (
-    <div className="kc-app">
-      <main className="kc-table grid place-items-center">
-        <div className="kc-rays" />
-        <div className="kc-grain" />
-        <div className="kc-box relative z-10 col-[1/-1] row-[1/-1] mx-4 grid gap-4 place-self-center">
+    <PageShell>
+      <div className="grid flex-1 place-items-center px-4 py-8 sm:py-14">
+        <div className="kc-box grid gap-4" style={{ maxWidth: 420 }}>
           {stage === 0 && (
             <>
-              <h2>Table lobby</h2>
-              <div className="font-display text-3xl tracking-wide text-sun">{tableCode(id)}</div>
-              <p>
-                <Users className="mr-1 inline size-4" aria-hidden />
-                {seats.length} of {table.config.seats ?? seats.length} seats taken
-              </p>
+              <div className="grid gap-1">
+                <h1 className="font-display text-4xl leading-none tracking-wide text-sun">{tableCode(id)}</h1>
+                <p className="flex items-center justify-center gap-1">
+                  <Users className="size-4" aria-hidden />
+                  Table lobby · {seats.length} of {table.config.seats ?? seats.length} seats taken
+                </p>
+              </div>
               <ol className="grid gap-2 text-left text-sm">
                 {seats.map((s, i) => {
                   const profile = profiles[s.session.toLowerCase()];
@@ -119,21 +119,17 @@ export function PreGame({ id, snapshot, address, watching, onFill, onStart, onJo
               {free > 0 && <p className="text-sm">Share the invite link: friends sit down as guests or with a wallet. The game starts by itself when the last seat is taken{isCreator ? ", or start earlier and fill the empty seats with bots." : "."}</p>}
               <div className="flex flex-wrap justify-center gap-3 text-sm">
                 {seated && (
-                  <button type="button" className="kc-chip" onClick={onLeave} disabled={working}>
+                  <button type="button" className="kc-chip min-h-11" onClick={onLeave} disabled={working}>
                     <LogOut aria-hidden />
                     Leave table
                   </button>
                 )}
-                <Link href="/new" className="kc-chip">
-                  <House aria-hidden />
-                  Menu
-                </Link>
-                <button type="button" className="kc-chip" onClick={() => void copyInvite(id)}>
+                <button type="button" className="kc-chip min-h-11" onClick={() => void copyInvite(id)}>
                   <Link2 aria-hidden />
                   Copy invite link
                 </button>
                 {!watching && (
-                  <Link href={`/t/${id}/watch`} className="kc-chip">
+                  <Link href={`/t/${id}/watch`} className="kc-chip min-h-11">
                     <Eye aria-hidden />
                     Watch only
                   </Link>
@@ -161,7 +157,7 @@ export function PreGame({ id, snapshot, address, watching, onFill, onStart, onJo
             </>
           )}
         </div>
-      </main>
-    </div>
+      </div>
+    </PageShell>
   );
 }

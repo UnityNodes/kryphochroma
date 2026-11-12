@@ -2,6 +2,7 @@ import { CARD_COLORS, cardBack, cardFace, sharedDefs } from "@kryphochroma/cards
 import { cardOf } from "@kryphochroma/rules";
 import { ArrowRight, ArrowUpRight, Bot, EyeOff, Lock, Play, Radar, ScanEye, ShieldCheck, Shuffle, Sparkles, Users, Wallet } from "lucide-react";
 import Link from "next/link";
+import { SiteHeader } from "@/components/site/SiteHeader";
 import { readDeployment } from "@/guide/deployment";
 
 const VIOLET = CARD_COLORS[4]?.base ?? "#9b4fc9";
@@ -47,41 +48,17 @@ function Fan() {
   );
 }
 
-function Eyebrow({ children }: { readonly children: React.ReactNode }) {
-  return <p className="text-xs font-semibold tracking-[.16em] text-sun uppercase">{children}</p>;
-}
-
 export default function Home() {
   const { table } = readDeployment();
   const short = `${table.slice(0, 6)}…${table.slice(-4)}`;
   return (
     <div className="min-h-dvh overflow-x-clip bg-bg text-cream">
-      <header className="relative z-20 mx-auto flex max-w-[1200px] items-center justify-between gap-4 px-4 py-4 sm:px-6">
-        <Link href="/" className="font-display text-2xl text-sun">
-          Kryphochroma
-        </Link>
-        <nav className="flex items-center gap-1 text-sm sm:gap-2" aria-label="Main">
-          <Link href="/secret" className="hidden rounded-full px-3 py-2 text-cream/80 hover:text-cream sm:inline">
-            How it stays secret
-          </Link>
-          <Link href="/docs" className="rounded-full px-3 py-2 text-cream/80 hover:text-cream">
-            Docs
-          </Link>
-          <Link href="/new" className="kc-chip kc-chip-on min-h-11">
-            <Play aria-hidden />
-            Play
-          </Link>
-        </nav>
-      </header>
+      <SiteHeader />
 
       <section className="relative isolate">
         <div className="kc-rays -z-10" />
-        <div className="mx-auto grid max-w-[1200px] items-center gap-10 px-4 pt-6 pb-16 sm:px-6 lg:min-h-[calc(100dvh-76px)] lg:grid-cols-[1.05fr_.95fr] lg:gap-6 lg:pb-24">
+        <div className="mx-auto grid max-w-[1200px] items-center gap-10 px-4 pt-6 pb-16 sm:px-6 lg:min-h-[min(760px,calc(100dvh-64px))] lg:grid-cols-[1.05fr_.95fr] lg:gap-6 lg:pb-24">
           <div className="grid gap-6 text-center lg:text-left">
-            <p className="kc-chip mx-auto w-fit lg:mx-0">
-              <span className="size-2 rounded-full bg-teal shadow-[0_0_0_4px_rgba(31,158,138,.25)]" aria-hidden />
-              Live on Sepolia · Zama FHEVM
-            </p>
             <h1 className="font-display text-[56px] leading-[.9] text-sun [text-shadow:3px_3px_0_var(--color-red),6px_6px_0_var(--color-ink)] sm:text-8xl lg:text-[104px]">Kryphochroma</h1>
             <p className="text-2xl font-semibold text-cream sm:text-3xl">The card game nobody can peek at.</p>
             <p className="mx-auto max-w-[52ch] text-base leading-relaxed text-cream/75 sm:text-lg lg:mx-0">
@@ -96,40 +73,50 @@ export default function Home() {
                 Practice offline
               </Link>
             </div>
-            <p className="flex items-center justify-center gap-2 text-sm text-muted lg:justify-start">
-              <Wallet className="size-4 shrink-0 text-sun" aria-hidden />
-              No wallet needed: your tab gets a guest key and free test ETH.
-            </p>
+            <ul className="flex flex-wrap items-center justify-center gap-x-5 gap-y-2 text-sm text-muted lg:justify-start">
+              <li className="flex items-center gap-2">
+                <span className="size-2 rounded-full bg-teal shadow-[0_0_0_4px_rgba(31,158,138,.25)]" aria-hidden />
+                Live on Sepolia with Zama FHEVM
+              </li>
+              <li className="flex items-center gap-2">
+                <Wallet className="size-4 shrink-0 text-sun" aria-hidden />
+                No wallet needed, test ETH is on us
+              </li>
+            </ul>
           </div>
           <Fan />
         </div>
       </section>
 
       <section className="mx-auto max-w-[1200px] px-4 py-16 sm:px-6 lg:py-24" aria-labelledby="moves">
-        <div className="grid max-w-2xl gap-3">
-          <Eyebrow>Hidden information is the game</Eyebrow>
+        <div className="grid max-w-2xl gap-4">
           <h2 id="moves" className="font-display text-4xl leading-none text-cream sm:text-5xl">
             Four moves that only work encrypted
           </h2>
+          <p className="max-w-[60ch] text-lg leading-relaxed text-cream/70">Hidden information is the game. Each of these needs a card the contract can compute on and nobody can read.</p>
         </div>
-        <ul className="mt-10 grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
-          {MOVES.map(({ icon: Icon, color, title, text, hidden }) => (
-            <li key={title} className="flex flex-col gap-4 rounded-[28px] border border-cream/12 bg-ink/70 p-6">
-              <span className="grid size-12 place-items-center rounded-2xl" style={{ background: `color-mix(in srgb, ${color} 22%, transparent)`, color }}>
-                <Icon className="size-6" aria-hidden />
+        <ul className="mt-12 grid gap-x-10 gap-y-12 sm:grid-cols-2">
+          {MOVES.map(({ icon: Icon, color: base, title, text, hidden }) => {
+            const color = `color-mix(in srgb, ${base} 62%, var(--color-cream))`;
+            return (
+            <li key={title} className="grid grid-cols-[auto_1fr] gap-x-5 gap-y-2">
+              <span className="row-span-3 grid size-14 place-items-center rounded-2xl" style={{ background: `color-mix(in srgb, ${base} 22%, transparent)`, color }}>
+                <Icon className="size-7" aria-hidden />
               </span>
-              <h3 className="font-display text-2xl tracking-wide text-cream">{title}</h3>
-              <p className="leading-relaxed text-cream/80">{text}</p>
-              <p className="mt-auto border-t border-cream/10 pt-4 text-sm text-muted">{hidden}</p>
+              <h3 className="font-display text-3xl leading-none tracking-wide" style={{ color }}>
+                {title}
+              </h3>
+              <p className="max-w-[46ch] leading-relaxed text-cream/85">{text}</p>
+              <p className="max-w-[46ch] text-sm text-muted">{hidden}</p>
             </li>
-          ))}
+            );
+          })}
         </ul>
       </section>
 
       <section className="border-y border-cream/10 bg-ink/40" aria-labelledby="chain">
         <div className="mx-auto max-w-[1200px] px-4 py-16 sm:px-6 lg:py-24">
           <div className="grid max-w-2xl gap-3">
-            <Eyebrow>What happens on chain</Eyebrow>
             <h2 id="chain" className="font-display text-4xl leading-none text-cream sm:text-5xl">
               A deck nobody holds
             </h2>
@@ -161,15 +148,14 @@ export default function Home() {
 
       <section className="mx-auto max-w-[1200px] px-4 py-16 sm:px-6 lg:py-24" aria-labelledby="modes">
         <div className="grid max-w-2xl gap-3">
-          <Eyebrow>Sit down</Eyebrow>
           <h2 id="modes" className="font-display text-4xl leading-none text-cream sm:text-5xl">
             Three ways to play
           </h2>
         </div>
-        <ul className="mt-10 grid gap-4 md:grid-cols-3">
+        <ul className="mt-10 grid border-y border-cream/12 md:grid-cols-3 md:divide-x md:divide-cream/12 max-md:divide-y max-md:divide-cream/12">
           {MODES.map(({ icon: Icon, title, text, href }) => (
             <li key={title}>
-              <Link href={href} className="group flex h-full flex-col gap-3 rounded-[28px] border border-cream/12 p-6 transition-colors hover:border-sun/70 hover:bg-sun/5">
+              <Link href={href} className="group flex h-full flex-col gap-3 px-1 py-8 transition-colors hover:bg-sun/5 md:px-8">
                 <Icon className="size-7 text-sun" aria-hidden />
                 <h3 className="text-xl font-semibold text-cream">{title}</h3>
                 <p className="leading-relaxed text-cream/75">{text}</p>

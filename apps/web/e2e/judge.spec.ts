@@ -68,7 +68,8 @@ test("a practice game teaches the rules, plays a move and keeps the table access
 
 test("a new table can start as a guest without a wallet", async ({ page }) => {
   await page.goto("/new");
-  await expect(page.getByText("No browser wallet found")).toBeVisible();
+  await expect(page.getByRole("heading", { level: 1, name: "Play on Sepolia" })).toBeVisible();
+  await expect(page.getByRole("link", { name: "Kryphochroma home" })).toHaveAttribute("href", "/");
   await expect(page.getByRole("button", { name: /Quick game/ })).toBeEnabled();
   await expect(page.getByRole("button", { name: "With friends" })).toBeEnabled();
   await expect(page.getByRole("button", { name: "With bots" })).toBeEnabled();

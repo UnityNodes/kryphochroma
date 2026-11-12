@@ -15,6 +15,7 @@ import { trackSeat } from "@/chain/inflight";
 import { type SeatDeps, fundBurner, openTable, requestBots, seatWithRetry, serviceDrip as drip, startTable, takeSeat } from "@/chain/seat";
 import { ProfileChip } from "@/components/profile/ProfileChip";
 import { useMyProfile } from "@/components/profile/useMyProfile";
+import { PageShell } from "@/components/site/PageShell";
 import { WalletBar } from "@/components/wallet/WalletBar";
 import { useFunder } from "@/components/wallet/useFunder";
 import { tableCode, tablePath } from "@/lib/invite";
@@ -173,72 +174,81 @@ export function NewTable() {
   const disabled = running || !funderState.ready;
 
   return (
-    <div className="kc-app">
-      <main className="kc-table grid place-items-center overflow-auto">
-        <div className="kc-rays" />
-        <div className="kc-grain" />
-        <div className="relative z-10 col-[1/-1] row-[1/-1] mx-4 my-6 grid w-full max-w-[960px] gap-5 place-self-center md:grid-cols-[minmax(0,1.2fr)_minmax(0,1fr)]">
-          <section className="kc-box grid gap-4 text-left" style={{ maxWidth: "none" }} aria-labelledby="new-title">
-            <h2 id="new-title" className="text-center">
+    <PageShell>
+      <div className="mx-auto grid w-full max-w-[1040px] items-start gap-6 px-4 py-8 sm:px-6 lg:grid-cols-[minmax(0,1.25fr)_minmax(0,1fr)] lg:py-14">
+        <section className="kc-box grid gap-5 text-left" style={{ maxWidth: "none" }} aria-labelledby="new-title">
+          <div className="grid gap-2 text-center">
+            <h1 id="new-title" className="font-display text-4xl leading-none text-sun">
               Play on Sepolia
-            </h2>
-            <p className="text-center">
+            </h1>
+            <p className="text-sm text-cream/75">
               {wallet
                 ? "Your wallet signs one join for a session key that lives only in this tab. The session key plays the moves, it can never move your funds."
                 : "You play with a key that lives only in this tab. We send it a little test ETH, so you do not need a wallet."}
             </p>
+          </div>
+          <div className="flex flex-wrap items-center justify-center gap-2">
             <ProfileChip profile={me.profile} onSave={me.update} />
             <WalletBar disabled={running} />
-            <div className="grid gap-3">
-              <button type="button" className="kc-btn kc-mono justify-center" onClick={quick} disabled={disabled}>
-                <Zap aria-hidden />
-                Quick game vs bots
-              </button>
-              <div className="flex items-center justify-center gap-2" role="radiogroup" aria-label="Players">
-                {[2, 3, 4].map((n) => (
-                  <button key={n} type="button" role="radio" aria-checked={seats === n} className={cn("kc-chip", seats === n && "kc-chip-on")} onClick={() => setSeats(n)} disabled={running}>
-                    {n} players
-                  </button>
-                ))}
-              </div>
-              <label className="flex items-center justify-center gap-2 text-sm">
-                <input type="checkbox" checked={stack} onChange={(e) => setStack(e.target.checked)} disabled={running} />
-                Stack draw two cards
-              </label>
-              <div className="grid grid-cols-2 gap-3">
-                <button type="button" className="kc-btn justify-center" onClick={friends} disabled={disabled}>
-                  <Users aria-hidden />
-                  With friends
+          </div>
+          <div className="grid gap-2">
+            <button type="button" className="kc-btn kc-mono justify-center" onClick={quick} disabled={disabled}>
+              <Zap aria-hidden />
+              Quick game vs bots
+            </button>
+            <p className="text-center text-xs text-muted">You and three bots at a table that was shuffled before you clicked.</p>
+          </div>
+          <div className="flex items-center gap-3 text-xs text-muted" aria-hidden>
+            <span className="h-px flex-1 bg-cream/15" />
+            or open your own table
+            <span className="h-px flex-1 bg-cream/15" />
+          </div>
+          <div className="grid gap-3">
+            <div className="flex flex-wrap items-center justify-center gap-2" role="radiogroup" aria-label="Players at your table">
+              {[2, 3, 4].map((n) => (
+                <button key={n} type="button" role="radio" aria-checked={seats === n} className={cn("kc-chip min-h-11", seats === n && "kc-chip-on")} onClick={() => setSeats(n)} disabled={running}>
+                  {n} players
                 </button>
-                <button type="button" className="kc-btn justify-center" onClick={withBots} disabled={disabled}>
-                  <Bot aria-hidden />
-                  With bots
-                </button>
-              </div>
+              ))}
             </div>
-            {done >= 0 && (
-              <ol className="grid gap-2 text-sm" aria-live="polite">
-                {steps.map((step, i) => (
-                  <li key={step} className={cn("flex items-center gap-2", i > done + 1 && "text-muted")}>
-                    {i <= done ? <Check className="size-4 text-teal" aria-hidden /> : i === done + 1 && running ? <Loader2 className="size-4 animate-spin" aria-hidden /> : <span className="inline-block size-4" />}
-                    {step}
-                  </li>
-                ))}
-              </ol>
-            )}
-            {error && (
-              <p role="alert" className="text-center text-red">
-                {error}
-              </p>
-            )}
-            {warming !== null && (
-              <p className="text-center text-sm" role="status">
-                A shuffled table is warming up on chain: step {warming} of {SETUP_STEPS}. Try again in a minute, or open a table with friends or bots.
-              </p>
-            )}
-          </section>
+            <label className="flex min-h-11 items-center justify-center gap-2 text-sm">
+              <input type="checkbox" checked={stack} onChange={(e) => setStack(e.target.checked)} disabled={running} className="size-4 accent-[var(--color-sun)]" />
+              Stack draw two cards
+            </label>
+            <div className="grid grid-cols-2 gap-3">
+              <button type="button" className="kc-btn justify-center whitespace-nowrap" style={{ paddingInline: 12 }} onClick={friends} disabled={disabled}>
+                <Users aria-hidden />
+                With friends
+              </button>
+              <button type="button" className="kc-btn justify-center whitespace-nowrap" style={{ paddingInline: 12 }} onClick={withBots} disabled={disabled}>
+                <Bot aria-hidden />
+                With bots
+              </button>
+            </div>
+          </div>
+          {done >= 0 && (
+            <ol className="grid gap-2 text-sm" aria-live="polite">
+              {steps.map((step, i) => (
+                <li key={step} className={cn("flex items-center gap-2", i > done + 1 && "text-muted")}>
+                  {i <= done ? <Check className="size-4 text-teal" aria-hidden /> : i === done + 1 && running ? <Loader2 className="size-4 animate-spin" aria-hidden /> : <span className="inline-block size-4" />}
+                  {step}
+                </li>
+              ))}
+            </ol>
+          )}
+          {error && (
+            <p role="alert" className="text-center text-red">
+              {error}
+            </p>
+          )}
+          {warming !== null && (
+            <p className="text-center text-sm" role="status">
+              A shuffled table is warming up on chain: step {warming} of {SETUP_STEPS}. Try again in a minute, or open a table with friends or bots.
+            </p>
+          )}
+        </section>
           <section className="kc-box grid content-start gap-3 text-left" style={{ maxWidth: "none" }} aria-labelledby="open-title">
-            <h2 id="open-title" className="text-center">
+            <h2 id="open-title" className="text-center font-display text-3xl leading-none text-sun">
               Open tables
             </h2>
             <p className="text-center text-sm">Tables people opened and are waiting to fill. Sit down as a guest or with your wallet.</p>
@@ -262,8 +272,7 @@ export function NewTable() {
               </ul>
             )}
           </section>
-        </div>
-      </main>
-    </div>
+      </div>
+    </PageShell>
   );
 }

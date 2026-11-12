@@ -13,6 +13,7 @@ import { type Funder, type SeatDeps, fundBurner, requestBots, seatWithRetry, ser
 import { useChainGame } from "@/chain/useChainGame";
 import { useFunder } from "@/components/wallet/useFunder";
 import { TableView, useColorBlind } from "@/components/table/Table";
+import { PageShell } from "@/components/site/PageShell";
 import { PreGame } from "./PreGame";
 
 function seatDeps(funder: Funder): SeatDeps {
@@ -80,11 +81,13 @@ export function ChainTable({ id, watch }: { readonly id: string; readonly watch?
 
   if (!game.snapshot) {
     return (
-      <div className="kc-app grid place-items-center" aria-busy="true">
-        <p className="kc-status" role="status">
-          {game.error ? `Reconnecting to Sepolia. ${game.error}` : "Reading the table from Sepolia…"}
-        </p>
-      </div>
+      <PageShell>
+        <div className="grid flex-1 place-items-center px-4 py-14" aria-busy="true">
+          <p className="kc-status" role="status">
+            {game.error ? `Reconnecting to Sepolia. ${game.error}` : "Reading the table from Sepolia…"}
+          </p>
+        </div>
+      </PageShell>
     );
   }
   if (Number(game.snapshot.table.stage) < 3) {

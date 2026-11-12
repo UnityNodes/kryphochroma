@@ -19,7 +19,7 @@ function Links({ groups }: { readonly groups: readonly NavGroup[] }) {
           {g.pages.map((p) => {
             const active = path === `/docs/${p.slug}`;
             return (
-              <Link key={p.slug} href={`/docs/${p.slug}`} aria-current={active ? "page" : undefined} className={cn("rounded-xl px-3 py-2 text-sm transition-colors", active ? "bg-sun/15 font-semibold text-sun" : "text-cream/80 hover:bg-cream/5 hover:text-cream")}>
+              <Link key={p.slug} href={`/docs/${p.slug}`} aria-current={active ? "page" : undefined} className={cn("flex min-h-11 items-center rounded-xl px-3 text-sm transition-colors", active ? "bg-sun/15 font-semibold text-sun" : "text-cream/80 hover:bg-cream/5 hover:text-cream")}>
                 {p.title}
               </Link>
             );

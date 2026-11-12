@@ -1,4 +1,5 @@
 import type { ReactNode } from "react";
+import { cn } from "@/lib/utils";
 import { Callout, Code } from "./ui";
 
 export interface Deployment {
@@ -41,7 +42,7 @@ function C({ children }: { readonly children: ReactNode }) {
 function Table({ head, rows }: { readonly head: readonly string[]; readonly rows: readonly (readonly ReactNode[])[] }) {
   return (
     <div className="my-5 overflow-x-auto rounded-2xl border border-cream/15" tabIndex={0} role="region" aria-label="Table, scroll sideways on small screens">
-      <table className="w-full min-w-[520px] border-collapse text-left text-sm">
+      <table className={cn("w-full border-collapse text-left text-sm", head.length > 2 && "min-w-[520px]")}>
         {head.some(Boolean) && (
           <thead className="bg-black/30 text-xs tracking-[.08em] text-muted uppercase">
             <tr>

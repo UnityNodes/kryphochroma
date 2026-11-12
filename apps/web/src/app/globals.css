@@ -74,6 +74,16 @@
   body:has(.kc-app) {
     overflow: hidden;
   }
+
+  html {
+    scrollbar-color: color-mix(in srgb, var(--color-cream) 22%, transparent) var(--color-bg);
+    caret-color: var(--color-sun);
+  }
+
+  ::selection {
+    background: color-mix(in srgb, var(--color-sun) 38%, transparent);
+    color: var(--color-cream);
+  }
 }
 
 button {
