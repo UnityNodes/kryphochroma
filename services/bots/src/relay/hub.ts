@@ -24,7 +24,7 @@ import { type PrivateKeyAccount, privateKeyToAccount } from "viem/accounts";
 import { type GasBudget, canSpend, rollBudget, spend } from "../keeper/safety.js";
 import { sepolia } from "viem/chains";
 
-const MAX_BATCH = 40;
+const MAX_BATCH = 64;
 const RELAY_GAS = JOIN_GAS_LIMIT;
 const GAS_HEADROOM_PCT = 130n;
 const ACTION_GAS_FLOOR = 200_000n;
