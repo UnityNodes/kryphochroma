@@ -37,7 +37,7 @@ export default function Home() {
   const { table } = readDeployment();
   const short = `${table.slice(0, 6)}…${table.slice(-4)}`;
   return (
-    <div className="min-h-dvh overflow-x-clip bg-bg text-cream">
+    <div className="min-h-dvh overflow-clip bg-bg text-cream">
       <SiteHeader />
 
       <section className="relative isolate">
