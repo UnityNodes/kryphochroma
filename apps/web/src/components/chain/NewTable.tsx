@@ -1,8 +1,5 @@
 "use client";
 
-import { SETUP_STEPS } from "@kryphochroma/abi";
-import { Bot, Check, Loader2, Users, Zap } from "lucide-react";
-import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
 import { toast } from "sonner";
@@ -18,8 +15,8 @@ import { useMyProfile } from "@/components/profile/useMyProfile";
 import { PageShell } from "@/components/site/PageShell";
 import { WalletBar } from "@/components/wallet/WalletBar";
 import { useFunder } from "@/components/wallet/useFunder";
-import { tableCode, tablePath } from "@/lib/invite";
-import { cn } from "@/lib/utils";
+import { tablePath } from "@/lib/invite";
+import { FlowProgress, type OpenTable, OpenTablesPanel, OwnTablePanel, QuickPanel } from "./NewTableParts";
 
 type Flow = "quick" | "friends" | "bots";
 
@@ -30,13 +27,6 @@ const FLOW_STEPS: Record<Flow, readonly string[]> = {
 };
 const TURN_TIMEOUT_S = 120;
 const OPEN_REFRESH_MS = 8000;
-
-interface OpenTable {
-  readonly id: string;
-  readonly joined: number;
-  readonly seats: number;
-  readonly creator: string;
-}
 
 function useOpenTables(): readonly OpenTable[] {
   const [tables, setTables] = useState<readonly OpenTable[]>([]);
@@ -174,106 +164,37 @@ export function NewTable() {
 
   const disabled = running || !funderState.ready;
 
+  const status = { steps, done, running, error, warming };
+  const ownFlow = flow !== "quick";
+
   return (
     <PageShell>
-      <div className="mx-auto grid w-full max-w-[1040px] items-start gap-6 px-4 py-8 sm:px-6 lg:grid-cols-[minmax(0,1.25fr)_minmax(0,1fr)] lg:py-14">
-        <section className="kc-box grid gap-5 text-left" style={{ maxWidth: "none" }} aria-labelledby="new-title">
-          <div className="grid gap-2 text-center">
-            <h1 id="new-title" className="font-display text-4xl leading-none text-sun">
-              Play on Sepolia
-            </h1>
-            <p className="text-sm text-cream/75">
+      <div className="mx-auto grid w-full max-w-[1200px] grid-cols-1 gap-8 px-4 pt-8 pb-16 sm:px-6 lg:pt-12">
+        <div className="flex flex-wrap items-end justify-between gap-x-8 gap-y-5">
+          <div className="grid max-w-2xl gap-3">
+            <h1 className="font-display text-6xl leading-[.88] text-sun [text-shadow:3px_3px_0_var(--color-red),6px_6px_0_var(--color-ink)] sm:text-7xl">Pick a table</h1>
+            <p className="max-w-[58ch] text-base leading-relaxed text-cream/75">
               {wallet
-                ? "Your wallet signs one join for a session key that lives only in this tab. The session key plays the moves, it can never move your funds."
-                : "You play with a key that lives only in this tab. We send it a little test ETH, so you do not need a wallet."}
+                ? "Your wallet signs one join for a session key that lives only in this tab. The session key plays the moves and can never touch your funds."
+                : "You play with a key that lives only in this tab. We send it a little Sepolia test ETH, no wallet needed."}
             </p>
           </div>
-          <div className="flex flex-wrap items-center justify-center gap-2">
+          <div className="flex flex-wrap items-center gap-2">
             <ProfileChip profile={me.profile} onSave={me.update} />
             <WalletBar disabled={running} />
           </div>
-          <div className="grid gap-2">
-            <button type="button" className="kc-btn kc-mono justify-center" onClick={quick} disabled={disabled}>
-              <Zap aria-hidden />
-              Quick game vs bots
-            </button>
-            <p className="text-center text-xs text-muted">You and three bots at a table that was shuffled before you clicked.</p>
+        </div>
+        <div className="grid grid-cols-1 items-start gap-8 lg:grid-cols-[minmax(0,1.4fr)_minmax(0,1fr)]">
+          <div className="grid gap-8">
+            <QuickPanel onPlay={quick} disabled={disabled}>
+              {!ownFlow && <div className="mt-6"><FlowProgress status={status} /></div>}
+            </QuickPanel>
+            <OwnTablePanel seats={seats} onSeats={setSeats} stack={stack} onStack={setStack} onFriends={friends} onBots={withBots} locked={running} disabled={disabled}>
+              {ownFlow && <FlowProgress status={status} />}
+            </OwnTablePanel>
           </div>
-          <div className="flex items-center gap-3 text-xs text-muted" aria-hidden>
-            <span className="h-px flex-1 bg-cream/15" />
-            or open your own table
-            <span className="h-px flex-1 bg-cream/15" />
-          </div>
-          <div className="grid gap-3">
-            <div className="flex flex-wrap items-center justify-center gap-2" role="radiogroup" aria-label="Players at your table">
-              {[2, 3, 4].map((n) => (
-                <button key={n} type="button" role="radio" aria-checked={seats === n} className={cn("kc-chip min-h-11", seats === n && "kc-chip-on")} onClick={() => setSeats(n)} disabled={running}>
-                  {n} players
-                </button>
-              ))}
-            </div>
-            <label className="flex min-h-11 items-center justify-center gap-2 text-sm">
-              <input type="checkbox" checked={stack} onChange={(e) => setStack(e.target.checked)} disabled={running} className="size-4 accent-[var(--color-sun)]" />
-              Stack draw two cards
-            </label>
-            {stack && <p className="-mt-2 text-center text-xs text-muted">Ready tables use the official rule, so a stacking table is shuffled after you open it, about 3 minutes.</p>}
-            <div className="grid grid-cols-2 gap-3">
-              <button type="button" className="kc-btn justify-center whitespace-nowrap" style={{ paddingInline: 12 }} onClick={friends} disabled={disabled}>
-                <Users aria-hidden />
-                With friends
-              </button>
-              <button type="button" className="kc-btn justify-center whitespace-nowrap" style={{ paddingInline: 12 }} onClick={withBots} disabled={disabled}>
-                <Bot aria-hidden />
-                With bots
-              </button>
-            </div>
-          </div>
-          {done >= 0 && (
-            <ol className="grid gap-2 text-sm" aria-live="polite">
-              {steps.map((step, i) => (
-                <li key={step} className={cn("flex items-center gap-2", i > done + 1 && "text-muted")}>
-                  {i <= done ? <Check className="size-4 text-teal" aria-hidden /> : i === done + 1 && running ? <Loader2 className="size-4 animate-spin" aria-hidden /> : <span className="inline-block size-4" />}
-                  {step}
-                </li>
-              ))}
-            </ol>
-          )}
-          {error && (
-            <p role="alert" className="text-center text-red">
-              {error}
-            </p>
-          )}
-          {warming !== null && (
-            <p className="text-center text-sm" role="status">
-              A shuffled table is warming up on chain: step {warming} of {SETUP_STEPS}. Try again in a minute, or open a table with friends or bots.
-            </p>
-          )}
-        </section>
-          <section className="kc-box grid content-start gap-3 text-left" style={{ maxWidth: "none" }} aria-labelledby="open-title">
-            <h2 id="open-title" className="text-center font-display text-3xl leading-none text-sun">
-              Open tables
-            </h2>
-            <p className="text-center text-sm">Tables people opened and are waiting to fill. Sit down as a guest or with your wallet.</p>
-            {openTables.length === 0 ? (
-              <p className="text-center text-sm text-muted">No open tables right now. Open one with friends and share the link.</p>
-            ) : (
-              <ul className="grid gap-2">
-                {openTables.map((t) => (
-                  <li key={t.id} className="flex items-center justify-between gap-3 rounded-2xl border border-cream/15 px-3 py-2">
-                    <span className="text-sm">
-                      <b className="text-cream">{tableCode(t.id)}</b>
-                      <span className="block text-muted">
-                        {t.joined} of {t.seats} seats · host {t.creator.slice(0, 6)}…{t.creator.slice(-4)}
-                      </span>
-                    </span>
-                    <Link href={tablePath(t.id)} className="kc-chip kc-chip-on">
-                      Join
-                    </Link>
-                  </li>
-                ))}
-              </ul>
-            )}
-          </section>
+          <OpenTablesPanel tables={openTables} onOpen={friends} disabled={disabled} />
+        </div>
       </div>
     </PageShell>
   );

@@ -2,7 +2,7 @@
 
 import { CARD_COLORS, sharedDefs } from "@kryphochroma/cards";
 import { type Color, type Peek, canDraw, cardLabel, canSayMono, botCatchTarget, isPlayable, isSpyglass, isWild, legalMoves, veilClaims } from "@kryphochroma/rules";
-import { Eye, EyeOff, House, Layers, Radar, Shapes, Shuffle, Swords, Trophy, Volume2, VolumeX, WifiOff } from "lucide-react";
+import { ArrowLeft, Eye, EyeOff, House, Layers, Radar, Shapes, Shuffle, Swords, Trophy, Volume2, VolumeX, WifiOff } from "lucide-react";
 import Link from "next/link";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { toast } from "sonner";
@@ -166,6 +166,9 @@ export function TableView({ controller: game, colorBlind, onToggleShapes }: Tabl
       <div aria-hidden dangerouslySetInnerHTML={{ __html: sharedDefs() }} />
       <header className="kc-top">
         <Link href="/" className="kc-brand" aria-label="Kryphochroma, back to the menu">
+          <span className="grid size-10 shrink-0 place-items-center rounded-full border-2 border-cream/70" aria-hidden>
+            <ArrowLeft className="size-[18px]" />
+          </span>
           <Logo />
           <div>
             <b>Kryphochroma</b>

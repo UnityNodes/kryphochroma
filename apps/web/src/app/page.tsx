@@ -1,16 +1,17 @@
-import { CARD_COLORS, cardBack, cardFace, sharedDefs } from "@kryphochroma/cards";
+import { CARD_COLORS, cardBack, cardFace } from "@kryphochroma/cards";
 import { cardOf } from "@kryphochroma/rules";
 import { ArrowRight, ArrowUpRight, Bot, EyeOff, Lock, Play, Radar, ScanEye, ShieldCheck, Shuffle, Sparkles, Users, Wallet } from "lucide-react";
 import Link from "next/link";
+import { CardFan } from "@/components/site/CardFan";
 import { SiteHeader } from "@/components/site/SiteHeader";
 import { readDeployment } from "@/guide/deployment";
 
 const VIOLET = CARD_COLORS[4]?.base ?? "#9b4fc9";
 
 const FAN = [
-  { svg: cardBack("0x7a3f1c09e4b2"), rotate: -16, x: "-62%", y: "6%", z: 1 },
-  { svg: cardFace(cardOf(4, 7)), rotate: -3, x: "-10%", y: "-4%", z: 2 },
-  { svg: cardFace(cardOf(2, 13)), rotate: 12, x: "40%", y: "4%", z: 3 },
+  { svg: cardBack("0x7a3f1c09e4b2"), rotate: -16, x: "-62%", y: "6%" },
+  { svg: cardFace(cardOf(4, 7)), rotate: -3, x: "-10%", y: "-4%" },
+  { svg: cardFace(cardOf(2, 13)), rotate: 12, x: "40%", y: "4%" },
 ] as const;
 
 const MOVES = [
@@ -31,22 +32,6 @@ const MODES = [
   { icon: Users, title: "With friends", text: "Share a link like /j/teal-otter. Play opens the moment the last seat is taken.", href: "/new" },
   { icon: Play, title: "Practice offline", text: "Learn the rules against bots in your browser. Nothing goes on chain.", href: "/play" },
 ] as const;
-
-function Fan() {
-  return (
-    <div className="relative mx-auto aspect-[5/4] w-full max-w-[340px] sm:max-w-[440px] lg:max-w-[560px]" aria-hidden>
-      <div className="absolute size-0 overflow-hidden" dangerouslySetInnerHTML={{ __html: sharedDefs() }} />
-      {FAN.map((card, i) => (
-        <div
-          key={i}
-          className="kc-fan-card absolute top-1/2 left-1/2 w-[40%] drop-shadow-[8px_10px_0_rgba(0,0,0,.45)] [&>svg]:block [&>svg]:h-auto [&>svg]:w-full"
-          style={{ zIndex: card.z, transform: `translate(calc(-50% + ${card.x}), calc(-50% + ${card.y})) rotate(${card.rotate}deg)`, animationDelay: `${i * -1.6}s` }}
-          dangerouslySetInnerHTML={{ __html: card.svg }}
-        />
-      ))}
-    </div>
-  );
-}
 
 export default function Home() {
   const { table } = readDeployment();
@@ -84,7 +69,7 @@ export default function Home() {
               </li>
             </ul>
           </div>
-          <Fan />
+          <CardFan cards={FAN} className="mx-auto aspect-[5/4] w-full max-w-[340px] sm:max-w-[440px] lg:max-w-[560px]" />
         </div>
       </section>
 

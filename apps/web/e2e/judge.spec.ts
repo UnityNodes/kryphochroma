@@ -68,11 +68,12 @@ test("a practice game teaches the rules, plays a move and keeps the table access
 
 test("a new table can start as a guest without a wallet", async ({ page }) => {
   await page.goto("/new");
-  await expect(page.getByRole("heading", { level: 1, name: "Play on Sepolia" })).toBeVisible();
+  await expect(page.getByRole("heading", { level: 1, name: "Pick a table" })).toBeVisible();
   await expect(page.getByRole("link", { name: "Kryphochroma home" })).toHaveAttribute("href", "/");
-  await expect(page.getByRole("button", { name: /Quick game/ })).toBeEnabled();
-  await expect(page.getByRole("button", { name: "With friends" })).toBeEnabled();
-  await expect(page.getByRole("button", { name: "With bots" })).toBeEnabled();
+  await expect(page.getByRole("link", { name: "Back to Home" })).toHaveAttribute("href", "/");
+  await expect(page.getByRole("button", { name: /Deal me in/ })).toBeEnabled();
+  await expect(page.getByRole("button", { name: /With friends/ }).first()).toBeEnabled();
+  await expect(page.getByRole("button", { name: /With bots/ })).toBeEnabled();
   await expect(page.getByRole("heading", { name: "Open tables" })).toBeVisible();
   expect(await seriousViolations(page)).toEqual([]);
 });
