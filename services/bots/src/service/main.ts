@@ -415,16 +415,20 @@ async function relayLoop(): Promise<void> {
       knownTables = count;
       const ids = scan.ids(count);
       const views = await Promise.all(ids.map((id) => publicClient.readContract({ address: table, abi: kryphoTableAbi, functionName: "getTable", args: [id] }) as Promise<{ stage: number }>));
+      const active: bigint[] = [];
       for (const [i, id] of ids.entries()) {
         const view = views[i] as { stage: number };
         scan.settle(id, Number(view.stage));
-        if (!ACTIVE_STAGES.has(Number(view.stage))) {
-          relay.forget(id);
-          continue;
-        }
-        if (block !== lastBlock) await relay.refresh(id);
-        await relay.submit(id);
+        if (ACTIVE_STAGES.has(Number(view.stage))) active.push(id);
+        else relay.forget(id);
       }
+      const fresh = block !== lastBlock;
+      await Promise.all(
+        active.map(async (id) => {
+          if (fresh) await relay.refresh(id);
+          await relay.submit(id);
+        }),
+      );
       if (block !== lastBlock && block % 5n === 0n) await ensurePool();
       lastBlock = block;
       beats.relay = Date.now();

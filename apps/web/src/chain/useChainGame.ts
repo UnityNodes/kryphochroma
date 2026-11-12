@@ -32,7 +32,8 @@ import { RECEIPT_POLL_MS, RPC_PROXY_PATH, sepoliaTransport } from "./rpc";
 import { toGameEvents } from "./events";
 
 const POLL_MS = 2000;
-const DECRYPT_TIMEOUT_MS = 30_000;
+const PERMIT_TIMEOUT_MS = 30_000;
+const DECRYPT_TIMEOUT_MS = 8_000;
 const POLL_FAILURES_SHOWN = 3;
 const RELAYED_TOPICS = new Set([toEventSelector("ActionRelayed(uint256,uint8,uint32)"), toEventSelector("ActionRejected(uint256,uint8,uint32,bytes4)")]);
 
@@ -42,7 +43,7 @@ export interface ChainSnapshot {
   readonly me: number;
 }
 
-/** A relayer call that never answers would hold the single in-flight decrypt forever and leave new cards sealed, so it is cut off and retried. */
+/** Granting the permit can wait on the relayer key fetch, and a stuck grant would block every decrypt behind it. */
 function withTimeout<T>(task: Promise<T>, ms: number): Promise<T> {
   let timer: ReturnType<typeof setTimeout> | undefined;
   const timeout = new Promise<never>((_, reject) => {
@@ -108,7 +109,7 @@ export function useChainGame(id: bigint, colorBlind: boolean, watchOnly = false)
   const actions = useRef<SignedAction[]>([]);
   const projected = useRef<GameState | null>(null);
   const permit = useRef<Promise<void> | null>(null);
-  const decrypting = useRef<Promise<void> | null>(null);
+  const inflight = useRef(new Set<Hex>());
   const wake = useRef<() => void>(() => undefined);
   const meRef = useRef(0);
   const settled = useRef<GameState["pub"]["lastResult"]>(null);
@@ -186,11 +187,13 @@ export function useChainGame(id: bigint, colorBlind: boolean, watchOnly = false)
       if (!sonarAt) sonarHandle.current = ping;
       const extra = [secret, ...(peekHandle ? [peekHandle] : []), ...(fresh ? [fresh] : [])].filter((h) => !/^0x0+$/.test(h) && !plain.current.has(h));
       const missing = [...own.filter((h, i) => (slots & (1 << i)) !== 0 && !plain.current.has(h)), ...extra];
-      if (missing.length > 0 && !decrypting.current) {
-        decrypting.current = (async () => {
+      const queued = missing.filter((h) => !inflight.current.has(h));
+      if (queued.length > 0) {
+        for (const h of queued) inflight.current.add(h);
+        void (async () => {
           try {
-            await withTimeout(permit.current ?? sdk.permits.grantPermit([TABLE_ADDRESS]), DECRYPT_TIMEOUT_MS);
-            const { values } = await withTimeout(decryptEach((batch) => sdk.decryption.decryptValues(batch.map((encryptedValue) => ({ encryptedValue, contractAddress: TABLE_ADDRESS }))), missing), DECRYPT_TIMEOUT_MS);
+            await withTimeout(permit.current ?? sdk.permits.grantPermit([TABLE_ADDRESS]), PERMIT_TIMEOUT_MS);
+            const { values } = await decryptEach((batch) => sdk.decryption.decryptValues(batch.map((encryptedValue) => ({ encryptedValue, contractAddress: TABLE_ADDRESS })), { timeout: DECRYPT_TIMEOUT_MS }), queued);
             for (const [handle, value] of values) plain.current.set(handle, value);
             setHandError(null);
           } catch (e) {
@@ -198,12 +201,11 @@ export function useChainGame(id: bigint, colorBlind: boolean, watchOnly = false)
             setHandError(`Could not decrypt your cards, retrying: ${friendlyError(e)}`);
           }
         })().finally(() => {
-          decrypting.current = null;
+          for (const h of queued) inflight.current.delete(h);
           wake.current();
         });
-      } else if (missing.length === 0) {
-        setHandError(null);
       }
+      if (missing.length === 0) setHandError(null);
       known.set(seat, own.map((h, i) => ((slots & (1 << i)) !== 0 ? (plain.current.get(h) ?? null) : null)));
       setSecretColor(plain.current.get(secret) ?? null);
       if (sonarAt && fresh && plain.current.has(fresh)) {

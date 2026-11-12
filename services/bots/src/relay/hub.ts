@@ -23,8 +23,9 @@ import { type PrivateKeyAccount, privateKeyToAccount } from "viem/accounts";
 import { type GasBudget, canSpend, rollBudget, spend } from "../keeper/safety.js";
 import { sepolia } from "viem/chains";
 
-const MAX_BATCH = 12;
+const MAX_BATCH = 40;
 const RELAY_GAS = 16_000_000n;
+const GAS_HEADROOM_PCT = 130n;
 const GAS_PRICE = 5_000_000n;
 const THINK_MS = [250, 600] as const;
 const CATCH_DELAY_BLOCKS = 2n;
@@ -209,11 +210,31 @@ export function createRelay(deps: RelayDeps) {
     }
   }
 
+  /** A long backlog goes out in one transaction when it fits under the gas cap, so the chain catches up with the table in a block instead of one block per dozen moves. */
+  async function sizedBatch(id: bigint, pending: readonly SignedAction[]): Promise<{ readonly batch: readonly SignedAction[]; readonly gas: bigint }> {
+    for (let size = Math.min(pending.length, MAX_BATCH); ; size = Math.floor(size / 2)) {
+      const batch = pending.slice(0, size);
+      try {
+        const estimate = await deps.publicClient.estimateContractGas({
+          address: deps.table,
+          abi: kryphoTableAbi,
+          functionName: "relay",
+          args: [id, batch.map(toContractAction)],
+          account: deps.relayer.account ?? null,
+        } as never);
+        const gas = (estimate * GAS_HEADROOM_PCT) / 100n;
+        if (gas <= RELAY_GAS || size === 1) return { batch, gas: gas < RELAY_GAS ? gas : RELAY_GAS };
+      } catch (error) {
+        if (size === 1) throw error;
+      }
+    }
+  }
+
   async function submit(id: bigint): Promise<void> {
     const hub = hubOf(id);
     if (hub.inflight || !hub.chain) return;
-    const batch = project(hub.chain, hub.chainNonces, hub.log).valid.slice(0, MAX_BATCH);
-    if (batch.length === 0) return;
+    const pending = project(hub.chain, hub.chainNonces, hub.log).valid;
+    if (pending.length === 0) return;
     budget = rollBudget(budget, Date.now());
     const perTable = tableBudget(id);
     if (!canSpend(budget, RELAY_GAS) || !canSpend(perTable, RELAY_GAS)) {
@@ -222,12 +243,13 @@ export function createRelay(deps: RelayDeps) {
     }
     hub.inflight = true;
     try {
+      const { batch, gas } = await sizedBatch(id, pending);
       const hash = await deps.relayer.writeContract({
         address: deps.table,
         abi: kryphoTableAbi,
         functionName: "relay",
         args: [id, batch.map(toContractAction)],
-        gas: RELAY_GAS,
+        gas,
         gasPrice: GAS_PRICE,
         chain: sepolia,
         account: deps.relayer.account ?? null,
@@ -235,7 +257,7 @@ export function createRelay(deps: RelayDeps) {
       const receipt = await deps.publicClient.waitForTransactionReceipt({ hash });
       budget = spend(budget, receipt.gasUsed);
       tableBudgets.set(id.toString(), spend(tableBudget(id), receipt.gasUsed));
-      deps.log({ event: "relay", id, actions: batch.length, hash, status: receipt.status, gas: receipt.gasUsed });
+      deps.log({ event: "relay", id, actions: batch.length, backlog: pending.length, hash, status: receipt.status, gas: receipt.gasUsed });
     } catch (error) {
       deps.log({ event: "relay-error", id, message: (error as Error).message.slice(0, 200) });
     } finally {
