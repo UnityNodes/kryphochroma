@@ -266,6 +266,29 @@ export function useChainGame(id: bigint, colorBlind: boolean, watchOnly = false)
     };
   }, [poll]);
 
+  /** The hub echoes an accepted move over the stream, but a dropped stream would leave the table on the old turn and a second click would reuse the nonce, so the sender applies its own move at once and the echo is skipped. */
+  const applyAction = useCallback(
+    (action: SignedAction) => {
+      if (actions.current.some((a) => a.seat === action.seat && a.nonce === action.nonce)) return;
+      actions.current = [...actions.current, action];
+      setPendingMoves((n) => n + 1);
+      const current = projected.current;
+      const next = current ? stepAction(current, action) : null;
+      if (!next) {
+        reconcile([]);
+        return;
+      }
+      projected.current = next.state;
+      for (const e of next.events) if (e.type === "Sonared" && e.seat === meRef.current) startSonar(e.target, e.color);
+      for (const e of next.events) if (e.type === "Peeked" && e.seat === meRef.current) {
+        pendingPeek.current = { seat: e.target, slot: e.slot };
+        setPeek({ seat: e.target, slot: e.slot, card: null });
+      }
+      enqueue({ state: next.state, events: next.events });
+    },
+    [enqueue, reconcile, startSonar],
+  );
+
   useEffect(() => {
     const source = new EventSource(`/api/stream?id=${id}`);
     source.onmessage = (event) => {
@@ -274,26 +297,11 @@ export function useChainGame(id: bigint, colorBlind: boolean, watchOnly = false)
         actions.current = message.actions.map(parseAction);
         reconcile([]);
       } else if (message.type === "action" && message.action) {
-        const action = parseAction(message.action);
-        actions.current = [...actions.current, action];
-        setPendingMoves((n) => n + 1);
-        const current = projected.current;
-        const next = current ? stepAction(current, action) : null;
-        if (next) {
-          projected.current = next.state;
-          for (const e of next.events) if (e.type === "Sonared" && e.seat === meRef.current) startSonar(e.target, e.color);
-          for (const e of next.events) if (e.type === "Peeked" && e.seat === meRef.current) {
-            pendingPeek.current = { seat: e.target, slot: e.slot };
-            setPeek({ seat: e.target, slot: e.slot, card: null });
-          }
-          enqueue({ state: next.state, events: next.events });
-        } else {
-          reconcile([]);
-        }
+        applyAction(parseAction(message.action));
       }
     };
     return () => source.close();
-  }, [id, enqueue, reconcile, startSonar]);
+  }, [id, reconcile, applyAction]);
 
   const submit = useCallback(
     async (move: Move | { readonly type: "catch"; readonly target: number }): Promise<string | null> => {
@@ -308,14 +316,21 @@ export function useChainGame(id: bigint, colorBlind: boolean, watchOnly = false)
       const fields = fieldsFor(id, seat, move, (base.nonces[seat] ?? 0) + mineQueued, handles.current);
       const signature = await burner.signTypedData({ domain, types: ACTION_TYPES, primaryType: "Action", message: { ...fields } });
       const res = await fetch("/api/act", { method: "POST", body: JSON.stringify({ ...fields, table: fields.table.toString(), signature }) });
-      if (res.ok) return null;
+      if (res.ok) {
+        applyAction({ ...fields, signature });
+        return null;
+      }
       const body = (await res.json().catch(() => ({}))) as { reason?: string; error?: string };
+      if (body.reason === "BadNonce") {
+        wake.current();
+        return "The table moved on, try again in a second";
+      }
       return body.reason ?? body.error ?? "Move refused";
       } finally {
         setSending(false);
       }
     },
-    [burner, domain, id, seated, sending],
+    [burner, domain, id, seated, sending, applyAction],
   );
 
   const act = useCallback((move: Move) => submit(move), [submit]);
