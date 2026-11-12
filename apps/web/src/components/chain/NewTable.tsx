@@ -103,7 +103,8 @@ export function NewTable() {
 
   async function reserve(path: string, body?: unknown): Promise<bigint | null> {
     const res = await fetch(path, { method: "POST", body: body === undefined ? undefined : JSON.stringify(body) });
-    const pool = (await res.json().catch(() => ({}))) as { id?: string; warming?: number };
+    const pool = (await res.json().catch(() => ({}))) as { id?: string; warming?: number; error?: string };
+    if (!res.ok) throw new Error(res.status === 429 ? "Too many tables asked for at once, wait a few seconds and try again" : (pool.error ?? "The table server did not answer, try again"));
     if (pool.id) return BigInt(pool.id);
     setWarming(pool.warming ?? 0);
     return null;
@@ -215,6 +216,7 @@ export function NewTable() {
               <input type="checkbox" checked={stack} onChange={(e) => setStack(e.target.checked)} disabled={running} className="size-4 accent-[var(--color-sun)]" />
               Stack draw two cards
             </label>
+            {stack && <p className="-mt-2 text-center text-xs text-muted">Ready tables use the official rule, so a stacking table is shuffled after you open it, about 3 minutes.</p>}
             <div className="grid grid-cols-2 gap-3">
               <button type="button" className="kc-btn justify-center whitespace-nowrap" style={{ paddingInline: 12 }} onClick={friends} disabled={disabled}>
                 <Users aria-hidden />

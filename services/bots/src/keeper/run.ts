@@ -44,7 +44,7 @@ export function loadKeeperConfig(env: NodeJS.ProcessEnv): KeeperConfig {
     rpcUrl: required(env, "SEPOLIA_RPC_URL"),
     privateKey: required(env, "KEEPER_PRIVATE_KEY") as Hex,
     table: required(env, "TABLE_ADDRESS") as Hex,
-    dailyGasLimit: BigInt(env.KEEPER_DAILY_GAS ?? "3000000000"),
+    dailyGasLimit: BigInt(env.KEEPER_DAILY_GAS ?? "30000000000"),
     alertBalance: BigInt(env.KEEPER_ALERT_WEI ?? "10000000000000000"),
     stopFile: env.KEEPER_STOP_FILE ?? "/run/kryphochroma/keeper.stop",
     pollMs: Number(env.KEEPER_POLL_MS ?? "2000"),

@@ -111,6 +111,8 @@ interface LobbyView {
 const POOL_SEATS = 4;
 const POOL_TURN_TIMEOUT = 120;
 const RESERVE_MS = 120_000;
+/** Each pool table costs about 0.7 billion gas to shuffle, so the shuffler budget is sized for a hundred tables a day; the wallet balance stays the real ceiling. */
+const SHUFFLER_DAILY_GAS = "80000000000";
 const MAX_POOL_TABLES = 20;
 const FILL_SEAT_TRIES = 5;
 const FILL_SEAT_WAIT_MS = 3000;
@@ -454,7 +456,7 @@ if (shufflerKey) {
   };
   await fundShuffler();
   setInterval(() => void fundShuffler(), SHUFFLER_TOPUP_CHECK_MS);
-  void runKeeper({ ...keeperConfig, privateKey: shufflerKey, lane: "background", poolOwner: keeper.address }, process.env, beat("shuffler"));
+  void runKeeper({ ...keeperConfig, privateKey: shufflerKey, lane: "background", poolOwner: keeper.address, dailyGasLimit: BigInt(env("SHUFFLER_DAILY_GAS", SHUFFLER_DAILY_GAS)) }, process.env, beat("shuffler"));
   await runKeeper({ ...keeperConfig, lane: "urgent" }, process.env, beat("keeper"));
 } else {
   beats.shuffler = Number.POSITIVE_INFINITY;
