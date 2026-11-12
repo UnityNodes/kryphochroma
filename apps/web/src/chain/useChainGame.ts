@@ -83,7 +83,7 @@ export function useChainGame(id: bigint, colorBlind: boolean, watchOnly = false)
   const burner = useMemo(() => loadBurner(window.sessionStorage), []);
   const clients = useMemo(() => {
     const transport = sepoliaTransport();
-    const publicClient = createPublicClient({ chain: sepolia, transport, pollingInterval: RECEIPT_POLL_MS });
+    const publicClient = createPublicClient({ chain: sepolia, transport, batch: { multicall: true }, pollingInterval: RECEIPT_POLL_MS });
     const walletClient = createWalletClient({ account: burner, chain: sepolia, transport });
     const sdk = new ZamaSDK(createConfig({ chains: [relayerChain()], publicClient, walletClient, relayers: { [zamaSepolia.id]: web() } }));
     return { publicClient, sdk };
@@ -177,17 +177,26 @@ export function useChainGame(id: bigint, colorBlind: boolean, watchOnly = false)
       lastBlock.current = block;
       return;
     }
-    const discard = ((await read("discardOf", [id])) as readonly number[]).map(Number);
-    const nonces = ((await read("noncesOf", [id])) as readonly number[]).map(Number);
+    const peekAt = pendingPeek.current;
+    const zero = Promise.resolve(undefined);
+    const [discardRaw, noncesRaw, ownRaw, secretRaw, peekRaw, pingRaw] = await Promise.all([
+      read("discardOf", [id]),
+      read("noncesOf", [id]),
+      seat >= 0 ? read("handOf", [id, seat]) : zero,
+      seat >= 0 ? read("secretOf", [id, seat]) : zero,
+      seat >= 0 && peekAt ? read("handOf", [id, peekAt.seat]) : zero,
+      seat >= 0 ? read("sonarOf", [id, seat]) : zero,
+    ]);
+    const discard = (discardRaw as readonly number[]).map(Number);
+    const nonces = (noncesRaw as readonly number[]).map(Number);
     const known = new Map<number, readonly (Card | null)[]>();
     if (seat >= 0) {
       const slots = Number(seats[seat]?.slots ?? 0);
-      const own = (await read("handOf", [id, seat])) as readonly Hex[];
+      const own = ownRaw as readonly Hex[];
       handles.current = own;
-      const secret = (await read("secretOf", [id, seat])) as Hex;
-      const peekAt = pendingPeek.current;
-      const peekHandle = peekAt ? ((await read("handOf", [id, peekAt.seat])) as readonly Hex[])[peekAt.slot] : undefined;
-      const ping = (await read("sonarOf", [id, seat])) as Hex;
+      const secret = secretRaw as Hex;
+      const peekHandle = peekAt ? (peekRaw as readonly Hex[])[peekAt.slot] : undefined;
+      const ping = pingRaw as Hex;
       const sonarAt = pendingSonar.current;
       const fresh = sonarAt && !/^0x0+$/.test(ping) && ping !== sonarAt.stale ? ping : undefined;
       if (!sonarAt) sonarHandle.current = ping;

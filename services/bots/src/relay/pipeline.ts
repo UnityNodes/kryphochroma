@@ -1,4 +1,4 @@
-export const MAX_PIPELINE = 4;
+export const MAX_PIPELINE = 16;
 const PIPED_ACTION_GAS = 1_000_000n;
 const PIPED_BASE_GAS = 300_000n;
 
