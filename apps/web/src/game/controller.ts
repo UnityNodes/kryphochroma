@@ -21,6 +21,14 @@ export interface TableController {
   readonly clearPeek?: () => void;
   readonly sonar?: SonarReading | null;
   readonly clearSonar?: () => void;
+  readonly sync?: ChainSync | null;
+}
+
+export interface ChainSync {
+  readonly pendingMoves: number;
+  readonly chainStage: number;
+  readonly revealPrepared: number;
+  readonly seats: number;
 }
 
 export interface SonarReading {

@@ -52,6 +52,7 @@ export interface RelayDeps {
   readonly dailyGas?: bigint;
   readonly tableDailyGas?: bigint;
   readonly log: (entry: Record<string, unknown>) => void;
+  readonly onRelayed?: (id: bigint) => void;
 }
 
 interface TableHub {
@@ -258,6 +259,7 @@ export function createRelay(deps: RelayDeps) {
       budget = spend(budget, receipt.gasUsed);
       tableBudgets.set(id.toString(), spend(tableBudget(id), receipt.gasUsed));
       deps.log({ event: "relay", id, actions: batch.length, backlog: pending.length, hash, status: receipt.status, gas: receipt.gasUsed });
+      deps.onRelayed?.(id);
     } catch (error) {
       deps.log({ event: "relay-error", id, message: (error as Error).message.slice(0, 200) });
     } finally {

@@ -10,6 +10,7 @@ import { sepolia } from "viem/chains";
 import { type KeeperAction, type PlannedAction, type TableView, nextKeeperAction, scheduleKeeper } from "./plan.js";
 import { createTableBackoff } from "./backoff.js";
 import { createTableScan } from "./scan.js";
+import type { Waker } from "./waker.js";
 import { type GasBudget, belowAlert, canSpend, rollBudget, spend, stopRequested } from "./safety.js";
 
 const SETUP_GAS = 16_000_000n;
@@ -32,6 +33,7 @@ export interface KeeperConfig {
   readonly pollMs: number;
   readonly lane: KeeperLane;
   readonly poolOwner?: Hex;
+  readonly waker?: Waker;
 }
 
 export type KeeperLane = "urgent" | "background" | "both";
@@ -215,6 +217,6 @@ export async function runKeeper(config: KeeperConfig, env: NodeJS.ProcessEnv, un
     } catch (error) {
       log({ event: "loop-error", message: (error as Error).message.slice(0, 200) });
     }
-    await new Promise((resolve) => setTimeout(resolve, config.pollMs));
+    await (config.waker ? config.waker.sleep(config.pollMs) : new Promise((resolve) => setTimeout(resolve, config.pollMs)));
   }
 }

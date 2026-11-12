@@ -7,6 +7,7 @@ import { rpcTransport } from "../rpc.js";
 import { privateKeyToAccount } from "viem/accounts";
 import { sepolia } from "viem/chains";
 import { loadKeeperConfig, runKeeper } from "../keeper/run.js";
+import { createWaker } from "../keeper/waker.js";
 import { createBot } from "../player/run.js";
 import { type SignedAction } from "@kryphochroma/abi";
 import { createRelay, encodeMessage } from "../relay/hub.js";
@@ -63,6 +64,7 @@ let keeperBusy = Promise.resolve();
 const takeoverKey = env("TAKEOVER_PRIVATE_KEY", env("RELAYER_PRIVATE_KEY", env("DEPLOYER_PRIVATE_KEY"))) as Hex;
 const onChainTakeover = (await publicClient.readContract({ address: table, abi: kryphoTableAbi, functionName: "TAKEOVER" })) as Hex;
 if (onChainTakeover.toLowerCase() !== privateKeyToAccount(takeoverKey).address.toLowerCase()) throw new Error(`takeover key does not match the contract TAKEOVER ${onChainTakeover}`);
+const keeperWaker = createWaker();
 const relayAccount = privateKeyToAccount(env("RELAYER_PRIVATE_KEY", env("DEPLOYER_PRIVATE_KEY")) as Hex, { nonceManager });
 const relay = createRelay({
   publicClient,
@@ -74,6 +76,7 @@ const relay = createRelay({
   dailyGas: BigInt(env("RELAY_DAILY_GAS", "2000000000")),
   tableDailyGas: BigInt(env("RELAY_TABLE_DAILY_GAS", "400000000")),
   log,
+  onRelayed: () => keeperWaker.wake(),
 });
 
 function withKeeperWallet<T>(task: () => Promise<T>): Promise<T> {
@@ -461,8 +464,8 @@ if (shufflerKey) {
   await fundShuffler();
   setInterval(() => void fundShuffler(), SHUFFLER_TOPUP_CHECK_MS);
   void runKeeper({ ...keeperConfig, privateKey: shufflerKey, lane: "background", poolOwner: keeper.address, dailyGasLimit: BigInt(env("SHUFFLER_DAILY_GAS", SHUFFLER_DAILY_GAS)) }, process.env, beat("shuffler"));
-  await runKeeper({ ...keeperConfig, lane: "urgent" }, process.env, beat("keeper"));
+  await runKeeper({ ...keeperConfig, lane: "urgent", waker: keeperWaker }, process.env, beat("keeper"));
 } else {
   beats.shuffler = Number.POSITIVE_INFINITY;
-  await runKeeper(keeperConfig, process.env, beat("keeper"));
+  await runKeeper({ ...keeperConfig, waker: keeperWaker }, process.env, beat("keeper"));
 }

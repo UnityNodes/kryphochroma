@@ -38,7 +38,7 @@ const POLL_FAILURES_SHOWN = 3;
 const RELAYED_TOPICS = new Set([toEventSelector("ActionRelayed(uint256,uint8,uint32)"), toEventSelector("ActionRejected(uint256,uint8,uint32,bytes4)")]);
 
 export interface ChainSnapshot {
-  readonly table: ChainTable & { readonly setupStep: number; readonly creator: Hex };
+  readonly table: ChainTable & { readonly setupStep: number; readonly creator: Hex; readonly revealPrepared?: number };
   readonly seats: readonly (ChainSeat & { readonly player: Hex; readonly session: Hex })[];
   readonly me: number;
 }
@@ -125,6 +125,7 @@ export function useChainGame(id: bigint, colorBlind: boolean, watchOnly = false)
     setSonar({ target, color, count: null });
   }, []);
   const [sending, setSending] = useState(false);
+  const [pendingMoves, setPendingMoves] = useState(0);
 
   const reconcile = useCallback(
     (events: Parameters<typeof enqueue>[0]["events"]) => {
@@ -135,7 +136,9 @@ export function useChainGame(id: bigint, colorBlind: boolean, watchOnly = false)
         if (e.type === "Peeked" && e.seat === meRef.current) pendingPeek.current = { seat: e.target, slot: e.slot };
         if (e.type === "Sonared" && e.seat === meRef.current) startSonar(e.target, e.color);
       }
-      const projectedState = project(base.state, base.nonces, actions.current).state;
+      const projection = project(base.state, base.nonces, actions.current);
+      setPendingMoves(projection.valid.length);
+      const projectedState = projection.state;
       const over = projectedState.pub.stage === "RoundOver" || projectedState.pub.stage === "MatchOver";
       const target = over && settled.current ? { ...projectedState, pub: { ...projectedState.pub, lastResult: settled.current } } : projectedState;
       const previous = projected.current;
@@ -269,6 +272,7 @@ export function useChainGame(id: bigint, colorBlind: boolean, watchOnly = false)
       } else if (message.type === "action" && message.action) {
         const action = parseAction(message.action);
         actions.current = [...actions.current, action];
+        setPendingMoves((n) => n + 1);
         const current = projected.current;
         const next = current ? stepAction(current, action) : null;
         if (next) {
@@ -331,6 +335,7 @@ export function useChainGame(id: bigint, colorBlind: boolean, watchOnly = false)
     clearPeek: () => setPeek(null),
     sonar,
     clearSonar: () => setSonar(null),
+    sync: snapshot ? { pendingMoves, chainStage: Number(snapshot.table.stage), revealPrepared: Number(snapshot.table.revealPrepared ?? 0), seats: Number(snapshot.table.joined) } : null,
     snapshot,
     address: burner.address,
     error: error ?? handError,

@@ -17,6 +17,7 @@ import { useSound } from "@/game/useSound";
 import { useOfflineGame } from "@/game/useOfflineGame";
 import { cn } from "@/lib/utils";
 import { Center } from "./Center";
+import { RoundEndProgress, sealedCardNote } from "./ChainProgress";
 import { Feed } from "./Feed";
 import { Hand } from "./Hand";
 import { HowToPlay } from "./HowToPlay";
@@ -247,6 +248,7 @@ export function TableView({ controller: game, colorBlind, onToggleShapes }: Tabl
           deckCount={pub.deckCount}
           dir={pub.dir}
           status={status}
+          note={game.watching ? null : sealedCardNote(game.sync, hand.filter((c) => c === null).length)}
           canDraw={mine && drawLabel === "Draw" && pub.drawFour === null && pub.pendingDraw === 0}
           colorBlind={colorBlind}
           onDraw={onDraw}
@@ -254,6 +256,7 @@ export function TableView({ controller: game, colorBlind, onToggleShapes }: Tabl
           pileRef={anchor(anchorKey.pile)}
         />
         {game.feed.length > 0 && <Feed lines={game.feed} title="Table feed" />}
+        {pub.stage === "Revealing" && !result && game.sync && <RoundEndProgress sync={game.sync} winner={roundLeader(pub.seats, names)} />}
         <div className="kc-you" hidden={game.watching}>
           <Hand
             hand={hand}
@@ -450,6 +453,11 @@ function Logo() {
       <circle cx="20" cy="20" r="6" fill="var(--ink)" stroke="var(--cream)" strokeWidth="2" />
     </svg>
   );
+}
+
+function roundLeader(seats: readonly { readonly handSize: number }[], names: readonly string[]): string | null {
+  const out = seats.findIndex((s) => s.handSize === 0);
+  return out >= 0 ? (names[out] ?? null) : null;
 }
 
 function statusText(stage: string, turn: number, me: number, names: readonly string[], busy: boolean, drawn: boolean, drawFour: boolean, pending: number): string {
