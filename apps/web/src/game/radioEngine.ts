@@ -109,8 +109,14 @@ export function createRadioEngine(ctx: AudioContext, stationIndex: number, volum
       if (step === 0) bar += 1;
     }
   };
-  const timer = setInterval(tick, TICK_MS);
   tick();
+  const timer = setInterval(() => {
+    try {
+      tick();
+    } catch {
+      clearInterval(timer);
+    }
+  }, TICK_MS);
 
   return {
     setStation: (index) => {

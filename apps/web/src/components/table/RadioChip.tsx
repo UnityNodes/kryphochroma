@@ -48,7 +48,9 @@ export function RadioChip({ radio }: { readonly radio: RadioControls }) {
             <span className="text-muted">Volume</span>
             <input type="range" min={0} max={1} step={0.05} value={radio.volume} onChange={(e) => radio.setVolume(Number(e.target.value))} className="accent-[var(--y)]" />
           </label>
-          <p className="text-xs text-muted">Composed live in your browser. The beat speeds up when someone is down to one card.</p>
+          <p className="text-xs text-muted" role={radio.unavailable ? "status" : undefined}>
+            {radio.unavailable ? "This browser blocked the audio engine, so the radio stays off. The game works as usual." : "Composed live in your browser. The beat speeds up when someone is down to one card."}
+          </p>
         </Popover.Content>
       </Popover.Portal>
     </Popover.Root>
