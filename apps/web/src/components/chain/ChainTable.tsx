@@ -87,18 +87,19 @@ export function ChainTable({ id, watch }: { readonly id: string; readonly watch?
       await startTable(deps, BigInt(id));
     });
 
-  if (!game.snapshot) {
+  const dealt = Number(game.snapshot?.table.stage ?? 0) >= 3;
+  if (!game.snapshot || (dealt && !game.ready)) {
     return (
       <PageShell>
         <div className="grid flex-1 place-items-center px-4 py-14" aria-busy="true">
           <p className="kc-status" role="status">
-            {game.error ? `Reconnecting to Sepolia. ${game.error}` : "Reading the table from Sepolia…"}
+            {game.error ? `Reconnecting to Sepolia. ${game.error}` : dealt ? "Reading the dealt cards from Sepolia…" : "Reading the table from Sepolia…"}
           </p>
         </div>
       </PageShell>
     );
   }
-  if (Number(game.snapshot.table.stage) < 3) {
+  if (!dealt) {
     return <PreGame id={id} snapshot={game.snapshot} address={game.address} watching={Boolean(watch)} onFill={fill} onStart={start} onJoin={join} onLeave={leave} working={working} joining={joining} />;
   }
   return <TableView controller={game} colorBlind={colorBlind} onToggleShapes={() => setColorBlind((v) => !v)} />;

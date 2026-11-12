@@ -70,6 +70,7 @@ function parseAction(raw: SignedAction & { table: string | bigint }): SignedActi
 
 export interface ChainGame extends TableController {
   readonly snapshot: ChainSnapshot | null;
+  readonly ready: boolean;
   readonly address: Hex;
   readonly error: string | null;
 }
@@ -129,6 +130,7 @@ export function useChainGame(id: bigint, colorBlind: boolean, watchOnly = false)
   }, []);
   const [sending, setSending] = useState(false);
   const [pendingMoves, setPendingMoves] = useState(0);
+  const [ready, setReady] = useState(false);
 
   const reconcile = useCallback(
     (events: Parameters<typeof enqueue>[0]["events"]) => {
@@ -146,7 +148,10 @@ export function useChainGame(id: bigint, colorBlind: boolean, watchOnly = false)
       const target = over && settled.current ? { ...projectedState, pub: { ...projectedState.pub, lastResult: settled.current } } : projectedState;
       const previous = projected.current;
       projected.current = target;
-      if (!previous) reset(target);
+      if (!previous) {
+        reset(target);
+        setReady(true);
+      }
       else if (events.length > 0 || JSON.stringify(previous.pub) !== JSON.stringify(target.pub) || JSON.stringify(previous.hands[meRef.current]) !== JSON.stringify(target.hands[meRef.current])) {
         enqueue({ state: target, events });
       }
@@ -374,6 +379,7 @@ export function useChainGame(id: bigint, colorBlind: boolean, watchOnly = false)
     clearSonar: () => setSonar(null),
     sync: snapshot ? { pendingMoves, chainStage: Number(snapshot.table.stage), revealPrepared: Number(snapshot.table.revealPrepared ?? 0), seats: Number(snapshot.table.joined) } : null,
     snapshot,
+    ready,
     address: burner.address,
     error: error ?? handError,
   };
