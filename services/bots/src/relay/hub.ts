@@ -18,7 +18,7 @@ import { ZamaSDK } from "@zama-fhe/sdk";
 import { sepolia as zamaSepolia } from "@zama-fhe/sdk/chains";
 import { node } from "@zama-fhe/sdk/node";
 import { createConfig } from "@zama-fhe/sdk/viem";
-import { type Hex, type PublicClient, type WalletClient, createWalletClient, recoverTypedDataAddress } from "viem";
+import { type Hex, type PublicClient, type WalletClient, createWalletClient, parseEventLogs, recoverTypedDataAddress } from "viem";
 import { rpcTransport } from "../rpc.js";
 import { type PrivateKeyAccount, privateKeyToAccount } from "viem/accounts";
 import { type GasBudget, canSpend, rollBudget, spend } from "../keeper/safety.js";
@@ -273,6 +273,8 @@ export function createRelay(deps: RelayDeps) {
       budget = spend(budget, receipt.gasUsed);
       tableBudgets.set(id.toString(), spend(tableBudget(id), receipt.gasUsed));
       deps.log({ event: "relay", id, actions: batch.length, backlog: pending.length, hash, status: receipt.status, gas: receipt.gasUsed });
+      const rejected = parseEventLogs({ abi: kryphoTableAbi, logs: receipt.logs, eventName: "ActionRejected" });
+      if (rejected.length > 0) deps.log({ event: "relay-rejected", id, actions: rejected.map((e) => e.args) });
       deps.onRelayed?.(id);
     } catch (error) {
       deps.log({ event: "relay-error", id, message: (error as Error).message.slice(0, 200) });
