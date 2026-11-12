@@ -1,7 +1,7 @@
-import { Activity, CircleSlash, Eye, Layers, Lock, Megaphone, Shuffle, Swords, Trophy } from "lucide-react";
+import { Activity, CircleSlash, Eye, Layers, Lock, Megaphone, Shuffle, Siren, Swords, Trophy } from "lucide-react";
 import type { FeedLine } from "@/game/offline";
 
-const ICONS = { play: Eye, draw: Layers, pass: CircleSlash, mono: Megaphone, challenge: Swords, lock: Lock, trophy: Trophy, shuffle: Shuffle } as const;
+const ICONS = { play: Eye, draw: Layers, pass: CircleSlash, mono: Megaphone, caught: Siren, challenge: Swords, lock: Lock, trophy: Trophy, shuffle: Shuffle } as const;
 
 export function Feed({ lines, title }: { readonly lines: readonly FeedLine[]; readonly title: string }) {
   return (

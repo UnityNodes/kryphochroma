@@ -22,7 +22,8 @@ describe("keeper plan", () => {
 
   it("resolves challenges and reveals", () => {
     expect(nextKeeperAction({ ...base, stage: 4 }, 0n)).toEqual({ kind: "resolveChallenge" });
-    expect(nextKeeperAction({ ...base, stage: 5, candidate: 1 }, 0n)).toEqual({ kind: "prepareReveal" });
+    expect(nextKeeperAction({ ...base, stage: 5, candidate: 1 }, 0n)).toEqual({ kind: "prepareReveal", remaining: 3 });
+    expect(nextKeeperAction({ ...base, stage: 5, candidate: 1, revealPrepared: 1 }, 0n)).toEqual({ kind: "prepareReveal", remaining: 2 });
     expect(nextKeeperAction({ ...base, stage: 5, candidate: 1, revealPrepared: 3 }, 0n)).toEqual({ kind: "finishReveal" });
     expect(nextKeeperAction({ ...base, stage: 5 }, 0n)).toEqual({ kind: "idle" });
   });

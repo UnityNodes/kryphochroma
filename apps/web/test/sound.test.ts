@@ -25,5 +25,7 @@ describe("sound settings", () => {
     for (const name of Object.values(SOUND_FOR_ICON)) if (name) expect(VOICES[name]).toBeTypeOf("function");
     expect(SOUND_FOR_ICON.play).toBe("slap");
     expect(SOUND_FOR_ICON.trophy).toBe("win");
+    expect(SOUND_FOR_ICON.mono).toBe("mono");
+    expect(SOUND_FOR_ICON.caught).toBe("caught");
   });
 });

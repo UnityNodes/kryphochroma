@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState } from "react";
-import { DEFAULT_VOLUME, type SoundName, VOICES, loadMuted, saveMuted } from "./sound";
+import { DEFAULT_VOLUME, SHOUT_TEXT, type SoundName, VOICES, loadMuted, saveMuted } from "./sound";
 
 const storage = (): Storage | null => {
   try {
@@ -17,6 +17,24 @@ export interface SoundControls {
   readonly play: (name: SoundName) => void;
 }
 
+const SHOUT_RATE = 0.75;
+const SHOUT_PITCH = 1.4;
+
+/** The call is spoken by the browser's own speech engine, so there is no recorded voice to license; browsers without it just play the horn. */
+function shout(text: string): void {
+  try {
+    if (typeof window === "undefined" || !("speechSynthesis" in window)) return;
+    const line = new SpeechSynthesisUtterance(text);
+    line.rate = SHOUT_RATE;
+    line.pitch = SHOUT_PITCH;
+    line.volume = 1;
+    window.speechSynthesis.cancel();
+    window.speechSynthesis.speak(line);
+  } catch {
+    return;
+  }
+}
+
 export function useSound(): SoundControls {
   const [muted, setMuted] = useState(() => (typeof window === "undefined" ? false : loadMuted(storage())));
   const ctx = useRef<{ audio: AudioContext; out: GainNode } | null>(null);
@@ -24,11 +42,15 @@ export function useSound(): SoundControls {
   useEffect(() => {
     const unlock = () => {
       if (ctx.current || typeof AudioContext === "undefined") return;
-      const audio = new AudioContext();
-      const out = audio.createGain();
-      out.gain.value = DEFAULT_VOLUME;
-      out.connect(audio.destination);
-      ctx.current = { audio, out };
+      try {
+        const audio = new AudioContext();
+        const out = audio.createGain();
+        out.gain.value = DEFAULT_VOLUME;
+        out.connect(audio.destination);
+        ctx.current = { audio, out };
+      } catch {
+        ctx.current = null;
+      }
     };
     window.addEventListener("pointerdown", unlock, { once: true });
     window.addEventListener("keydown", unlock, { once: true });
@@ -42,9 +64,15 @@ export function useSound(): SoundControls {
 
   const play = useCallback(
     (name: SoundName) => {
+      if (muted) return;
+      if (name === "mono") shout(SHOUT_TEXT);
       const current = ctx.current;
-      if (muted || !current) return;
-      VOICES[name](current.audio, current.out, current.audio.currentTime + 0.01);
+      if (!current) return;
+      try {
+        VOICES[name](current.audio, current.out, current.audio.currentTime + 0.01);
+      } catch {
+        return;
+      }
     },
     [muted],
   );

@@ -56,9 +56,10 @@ export function humanMove(state: GameState, move: Move): Transition {
 
 
 export interface FeedLine {
-  readonly icon: "play" | "draw" | "pass" | "mono" | "challenge" | "lock" | "trophy" | "shuffle";
+  readonly icon: "play" | "draw" | "pass" | "mono" | "caught" | "challenge" | "lock" | "trophy" | "shuffle";
   readonly text: string;
   readonly sub: string;
+  readonly actor?: string;
 }
 
 export function describe(event: GameEvent, names: readonly string[] = SEAT_NAMES, me = HUMAN): FeedLine | null {
@@ -71,9 +72,9 @@ export function describe(event: GameEvent, names: readonly string[] = SEAT_NAMES
     case "Passed":
       return { icon: "pass", text: `${name(event.seat)} passed`, sub: "turn moves on" };
     case "MonoSaid":
-      return { icon: "mono", text: `${name(event.seat)} called Mono!`, sub: "one card left" };
+      return { icon: "mono", text: `${name(event.seat)} called Mono!`, sub: "one card left", actor: name(event.seat) };
     case "MonoCaught":
-      return { icon: "mono", text: `${name(event.seat)} was caught`, sub: "draws 2" };
+      return { icon: "caught", text: `${name(event.seat)} was caught`, sub: "draws 2" };
     case "DrawFourChallenged":
       return { icon: "challenge", text: `${name(event.seat)} challenged the +4`, sub: "revealing exactly 1 bit" };
     case "ChallengeResolved":

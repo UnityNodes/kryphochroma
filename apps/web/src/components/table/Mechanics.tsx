@@ -3,7 +3,7 @@
 import { CARD_COLORS } from "@kryphochroma/cards";
 import { type Card, type Color, type Peek, type PublicState, cardLabel, colorOf, peekTargets, rankOf, veilClaims } from "@kryphochroma/rules";
 import { EyeOff, Lock } from "lucide-react";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { Dialog, DialogContent, DialogDescription, DialogTitle } from "@/components/ui/dialog";
 import { cn } from "@/lib/utils";
 import { CardBack, CardFace } from "./CardSvg";
@@ -247,12 +247,29 @@ export function SonarResult({ sonar, names, onClose }: SonarResultProps) {
             {sonar.count}
           </p>
         ) : (
-          <p className="flex items-center justify-center gap-1 text-sm text-muted" role="status">
-            <Lock className="size-4" aria-hidden />
-            Counting inside the encrypted hand…
-          </p>
+          <SonarWaiting onClose={onClose} />
         )}
       </DialogContent>
     </Dialog>
+  );
+}
+
+function SonarWaiting({ onClose }: { readonly onClose: () => void }) {
+  const [seconds, setSeconds] = useState(0);
+  useEffect(() => {
+    const timer = setInterval(() => setSeconds((s) => s + 1), 1000);
+    return () => clearInterval(timer);
+  }, []);
+  return (
+    <div className="grid gap-3 text-center">
+      <p className="flex items-center justify-center gap-1 text-sm text-muted" role="status">
+        <Lock className="size-4" aria-hidden />
+        {seconds < 15 ? "The contract is counting inside the encrypted hand" : "Zama KMS is decrypting the count for your key only"} · {seconds} s
+      </p>
+      <p className="text-xs text-muted">This takes about half a minute on Sepolia. Close this and keep playing, the answer pops up by itself.</p>
+      <button type="button" className="kc-btn justify-center" onClick={onClose}>
+        Keep playing
+      </button>
+    </div>
   );
 }

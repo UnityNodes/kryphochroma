@@ -13,6 +13,8 @@ import { type GasBudget, belowAlert, canSpend, rollBudget, spend, stopRequested 
 
 const SETUP_GAS = 16_000_000n;
 const DEAL_GAS = JOIN_GAS_LIMIT;
+const REVEAL_GAS = 4_000_000n;
+const RECEIPT_POLL_MS = 1000;
 const URGENT_PIPELINE = 4;
 const BACKGROUND_PIPELINE = 8;
 const ALERT_EVERY_MS = 600_000;
@@ -45,7 +47,7 @@ export function loadKeeperConfig(env: NodeJS.ProcessEnv): KeeperConfig {
     dailyGasLimit: BigInt(env.KEEPER_DAILY_GAS ?? "3000000000"),
     alertBalance: BigInt(env.KEEPER_ALERT_WEI ?? "10000000000000000"),
     stopFile: env.KEEPER_STOP_FILE ?? "/run/kryphochroma/keeper.stop",
-    pollMs: Number(env.KEEPER_POLL_MS ?? "4000"),
+    pollMs: Number(env.KEEPER_POLL_MS ?? "2000"),
     lane: "both",
   };
 }
@@ -56,7 +58,7 @@ const log = (entry: Record<string, unknown>) =>
 export async function runKeeper(config: KeeperConfig, env: NodeJS.ProcessEnv, until: () => Promise<boolean> = async () => false): Promise<void> {
   const transport = rpcTransport(config.rpcUrl);
   const account = privateKeyToAccount(config.privateKey, { nonceManager });
-  const publicClient = createPublicClient({ chain: sepolia, transport, batch: { multicall: true } });
+  const publicClient = createPublicClient({ chain: sepolia, transport, batch: { multicall: true }, pollingInterval: RECEIPT_POLL_MS });
   const walletClient = createWalletClient({ account, chain: sepolia, transport });
   const scan = createTableScan();
   const sdk = new ZamaSDK(createConfig({ chains: [zamaSepolia], publicClient, walletClient, relayers: { [zamaSepolia.id]: node() } }));
@@ -81,14 +83,14 @@ export async function runKeeper(config: KeeperConfig, env: NodeJS.ProcessEnv, un
     log({ event: "tx", functionName, args, hash, gas: receipt.gasUsed, status: receipt.status });
   }
 
-  async function pipelineSetup(id: bigint, remaining: number, functionName = "setupStep"): Promise<void> {
+  async function pipelineSetup(id: bigint, remaining: number, functionName = "setupStep", gas = SETUP_GAS): Promise<void> {
     const count = Math.min(remaining, config.lane === "background" ? BACKGROUND_PIPELINE : URGENT_PIPELINE);
-    if (!canSpend(budget, SETUP_GAS * BigInt(count))) throw new Error("daily gas budget exhausted");
+    if (!canSpend(budget, gas * BigInt(count))) throw new Error("daily gas budget exhausted");
     const request = { address, abi: kryphoTableAbi, functionName, args: [id], account, chain: sepolia } as never;
     await publicClient.simulateContract({ ...(request as object), blockNumber: snapshot } as never);
     const hashes: Hex[] = [];
     for (let i = 0; i < count; i++) {
-      hashes.push(await walletClient.writeContract({ ...(request as object), gas: SETUP_GAS } as never));
+      hashes.push(await walletClient.writeContract({ ...(request as object), gas } as never));
     }
     for (const hash of hashes) {
       const receipt = await publicClient.waitForTransactionReceipt({ hash });
@@ -101,6 +103,13 @@ export async function runKeeper(config: KeeperConfig, env: NodeJS.ProcessEnv, un
   async function revealAndSend(functionName: string, id: bigint, handles: readonly Hex[]): Promise<void> {
     const result = await sdk.decryption.decryptPublicValues([...handles]);
     await send(functionName, [id, result.abiEncodedClearValues, result.decryptionProof]);
+  }
+
+  /** Each prepareReveal exposes the next seat by the stored counter, so every seat goes out in one block, and the settle follows without waiting for another loop. */
+  async function prepareAndFinish(id: bigint, remaining: number): Promise<void> {
+    await pipelineSetup(id, remaining, "prepareReveal", REVEAL_GAS);
+    const handles = (await publicClient.readContract({ address, abi: kryphoTableAbi, functionName: "revealHandles", args: [id], blockNumber: minBlock } as never)) as Hex[];
+    await revealAndSend("finishReveal", id, handles);
   }
 
   /** Dealing and the starter reveal are independent, so the KMS round trip runs while the deal transaction is mined. */
@@ -130,7 +139,7 @@ export async function runKeeper(config: KeeperConfig, env: NodeJS.ProcessEnv, un
       case "resolveChallenge":
         return revealAndSend("resolveChallenge", id, [(await read("hadColorOf", [id])) as Hex]);
       case "prepareReveal":
-        return send("prepareReveal", [id]);
+        return prepareAndFinish(id, action.remaining);
       case "finishReveal":
         return revealAndSend("finishReveal", id, (await read("revealHandles", [id])) as Hex[]);
       case "forceTimeout":

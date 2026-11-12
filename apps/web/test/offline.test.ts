@@ -40,5 +40,9 @@ group("offline driver", () => {
     expect(describe({ type: "RoundSettled", winner: 2, points: 40, cheaters: [1] })?.sub).toBe("caught lying: Mira");
     expect(describe({ type: "RoundSettled", winner: null, points: 0, cheaters: [0, 1] })?.text).toBe("No honest winner");
     expect(describe({ type: "Dealt", round: 0, firstSeat: 0, topCard: 3 })).toBeNull();
+    expect(describe({ type: "MonoSaid", seat: 1 })).toMatchObject({ icon: "mono", actor: "Mira" });
+    expect(describe({ type: "MonoSaid", seat: 0 })?.actor).toBe("You");
+    expect(describe({ type: "MonoCaught", seat: 2 })).toMatchObject({ icon: "caught" });
+    expect(describe({ type: "MonoCaught", seat: 2 })?.actor).toBeUndefined();
   });
 });

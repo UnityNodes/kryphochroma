@@ -50,7 +50,8 @@ function tableAddress(): Hex {
 
 const rpcUrl = env("SEPOLIA_RPC_URL");
 const table = tableAddress();
-const publicClient = createPublicClient({ chain: sepolia, transport: rpcTransport(rpcUrl), batch: { multicall: true } });
+const RECEIPT_POLL_MS = 1000;
+const publicClient = createPublicClient({ chain: sepolia, transport: rpcTransport(rpcUrl), batch: { multicall: true }, pollingInterval: RECEIPT_POLL_MS });
 const scan = createTableScan();
 const keeper = privateKeyToAccount(env("KEEPER_PRIVATE_KEY") as Hex, { nonceManager });
 const keeperWallet = createWalletClient({ account: keeper, chain: sepolia, transport: rpcTransport(rpcUrl) });

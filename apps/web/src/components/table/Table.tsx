@@ -21,6 +21,7 @@ import { Feed } from "./Feed";
 import { Hand } from "./Hand";
 import { HowToPlay } from "./HowToPlay";
 import { PeekDialog, PeekResult, SecretBadge, SecretChip, SonarDialog, SonarResult, VeilDialog } from "./Mechanics";
+import { MonoBurst } from "./MonoBurst";
 import { RadioChip } from "./RadioChip";
 import { AvatarGlyph, avatarColor } from "@/components/profile/Avatar";
 import { Seat } from "./Seat";
@@ -77,9 +78,11 @@ export function TableView({ controller: game, colorBlind, onToggleShapes }: Tabl
   const sound = useSound();
   const { play: playSound } = sound;
   const lastLine = game.feed[0];
+  const [burst, setBurst] = useState<{ readonly actor: string | null; readonly stamp: number }>({ actor: null, stamp: 0 });
   useEffect(() => {
     const name = lastLine ? SOUND_FOR_ICON[lastLine.icon] : undefined;
     if (name) playSound(name);
+    if (lastLine?.icon === "mono" && lastLine.actor) setBurst({ actor: lastLine.actor, stamp: Date.now() });
   }, [lastLine, playSound]);
 
   const anchorCache = useRef(new Map<string, (el: HTMLElement | null) => void>());
@@ -202,6 +205,7 @@ export function TableView({ controller: game, colorBlind, onToggleShapes }: Tabl
         </div>
       </header>
       <main className="kc-table">
+        <MonoBurst actor={burst.actor} stamp={burst.stamp} />
         <div className="kc-rays" />
         <div className="kc-grain" />
         {opponents.map((position, i) => {

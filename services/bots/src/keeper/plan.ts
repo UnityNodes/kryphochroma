@@ -22,7 +22,7 @@ export type KeeperAction =
   | { readonly kind: "deal"; readonly reveal: boolean }
   | { readonly kind: "revealStarter" }
   | { readonly kind: "resolveChallenge" }
-  | { readonly kind: "prepareReveal" }
+  | { readonly kind: "prepareReveal"; readonly remaining: number }
   | { readonly kind: "finishReveal" }
   | { readonly kind: "forceTimeout" }
   | { readonly kind: "reshuffleStep"; readonly remaining: number }
@@ -64,7 +64,7 @@ export function nextKeeperAction(table: TableView, nowSeconds: bigint, poolOwner
       return { kind: "resolveChallenge" };
     case "Revealing":
       if (table.candidate === NO_SEAT) return { kind: "idle" };
-      return table.revealPrepared < table.joined ? { kind: "prepareReveal" } : { kind: "finishReveal" };
+      return table.revealPrepared < table.joined ? { kind: "prepareReveal", remaining: table.joined - table.revealPrepared } : { kind: "finishReveal" };
     case "Playing":
       return nowSeconds > table.turnDeadline ? { kind: "forceTimeout" } : refillAction(table);
     default:

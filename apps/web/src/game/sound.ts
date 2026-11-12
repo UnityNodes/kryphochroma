@@ -1,4 +1,4 @@
-export type SoundName = "deal" | "rustle" | "slap" | "mono" | "win" | "shuffle";
+export type SoundName = "deal" | "rustle" | "slap" | "mono" | "caught" | "win" | "shuffle";
 
 export const DEFAULT_VOLUME = 0.6;
 const MUTE_KEY = "kc-muted";
@@ -41,6 +41,32 @@ function tone(ctx: AudioContext, out: AudioNode, at: number, freq: number, peak:
   osc.stop(at + decay + 0.05);
 }
 
+const HORN = [233, 294, 349] as const;
+const HORN_VIBRATO_HZ = 7;
+const HORN_VIBRATO_DEPTH = 5;
+
+function horn(ctx: AudioContext, out: AudioNode, at: number, freq: number, peak: number, decay: number): void {
+  const osc = ctx.createOscillator();
+  osc.type = "sawtooth";
+  osc.frequency.setValueAtTime(freq * 0.94, at);
+  osc.frequency.exponentialRampToValueAtTime(freq, at + 0.06);
+  const vibrato = ctx.createOscillator();
+  vibrato.frequency.value = HORN_VIBRATO_HZ;
+  const depth = ctx.createGain();
+  depth.gain.value = HORN_VIBRATO_DEPTH;
+  vibrato.connect(depth).connect(osc.frequency);
+  const filter = ctx.createBiquadFilter();
+  filter.type = "lowpass";
+  filter.frequency.value = 2600;
+  osc.connect(filter).connect(envelope(ctx, out, at, peak, 0.02, decay));
+  osc.start(at);
+  vibrato.start(at);
+  osc.stop(at + decay + 0.1);
+  vibrato.stop(at + decay + 0.1);
+}
+
+export const SHOUT_TEXT = "Monooo!";
+
 export const VOICES: Record<SoundName, Voice> = {
   deal: (ctx, out, at) => filteredNoise(ctx, out, at, "highpass", 3500, 0.35, 0.06),
   rustle: (ctx, out, at) => {
@@ -51,8 +77,15 @@ export const VOICES: Record<SoundName, Voice> = {
     tone(ctx, out, at, 110, 0.5, 0.1, "sine");
   },
   mono: (ctx, out, at) => {
-    tone(ctx, out, at, 660, 0.35, 0.14, "square");
-    tone(ctx, out, at + 0.12, 990, 0.35, 0.22, "square");
+    for (const [k, freq] of HORN.entries()) {
+      horn(ctx, out, at, freq, 0.16, 0.22);
+      horn(ctx, out, at + 0.28, freq * 1.06, 0.2, 0.75 + k * 0.05);
+    }
+  },
+  caught: (ctx, out, at) => {
+    tone(ctx, out, at, 880, 0.3, 0.12, "square");
+    tone(ctx, out, at + 0.14, 587, 0.3, 0.12, "square");
+    tone(ctx, out, at + 0.28, 392, 0.35, 0.3, "square");
   },
   win: (ctx, out, at) => {
     [523, 659, 784, 1047].forEach((f, k) => tone(ctx, out, at + k * 0.11, f, 0.4, 0.3));
@@ -82,6 +115,7 @@ export const SOUND_FOR_ICON: Record<string, SoundName | undefined> = {
   play: "slap",
   draw: "rustle",
   mono: "mono",
+  caught: "caught",
   trophy: "win",
   shuffle: "shuffle",
   pass: "deal",
