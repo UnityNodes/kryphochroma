@@ -19,6 +19,8 @@ const RECEIPT_POLL_MS = 1000;
 const URGENT_PIPELINE = 4;
 const BACKGROUND_PIPELINE = 8;
 const ALERT_EVERY_MS = 600_000;
+const DECRYPT_TRIES = 20;
+const DECRYPT_RETRY_MS = 1500;
 
 export interface KeeperConfig {
   readonly rpcUrl: string;
@@ -106,8 +108,20 @@ export async function runKeeper(config: KeeperConfig, env: NodeJS.ProcessEnv, un
     if (reverted.length > 0) throw new Error(`${reverted.length} of ${count} ${functionName} reverted on chain, first ${reverted[0]}`);
   }
 
+  /** A handle made public in the last block is often not decryptable yet, so the KMS is asked again for a short while instead of waiting a whole backoff. */
+  async function decryptPublic(handles: readonly Hex[]) {
+    for (let attempt = 1; ; attempt++) {
+      try {
+        return await sdk.decryption.decryptPublicValues([...handles]);
+      } catch (error) {
+        if (attempt >= DECRYPT_TRIES) throw error;
+        await new Promise((resolve) => setTimeout(resolve, DECRYPT_RETRY_MS));
+      }
+    }
+  }
+
   async function revealAndSend(functionName: string, id: bigint, handles: readonly Hex[]): Promise<void> {
-    const result = await sdk.decryption.decryptPublicValues([...handles]);
+    const result = await decryptPublic(handles);
     await send(functionName, [id, result.abiEncodedClearValues, result.decryptionProof]);
   }
 
@@ -122,7 +136,7 @@ export async function runKeeper(config: KeeperConfig, env: NodeJS.ProcessEnv, un
   async function dealAndReveal(id: bigint, reveal: boolean): Promise<void> {
     const handles = reveal ? ((await read("starterHandles", [id])) as Hex[]) : null;
     const starter = handles
-      ? sdk.decryption.decryptPublicValues([...handles]).then(
+      ? decryptPublic(handles).then(
           (result) => ({ result }),
           (error: unknown) => ({ error }),
         )
