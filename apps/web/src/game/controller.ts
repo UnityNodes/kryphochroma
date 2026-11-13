@@ -22,6 +22,7 @@ export interface TableController {
   readonly sonar?: SonarReading | null;
   readonly clearSonar?: () => void;
   readonly sync?: ChainSync | null;
+  readonly verifying?: boolean;
 }
 
 export interface ChainSync {

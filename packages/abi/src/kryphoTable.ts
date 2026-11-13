@@ -1801,6 +1801,76 @@ export const kryphoTableAbi = [
         "type": "tuple"
       }
     ],
+    "name": "relayJoin",
+    "outputs": [],
+    "stateMutability": "nonpayable",
+    "type": "function"
+  },
+  {
+    "inputs": [
+      {
+        "internalType": "uint256",
+        "name": "id",
+        "type": "uint256"
+      },
+      {
+        "components": [
+          {
+            "internalType": "uint8",
+            "name": "seat",
+            "type": "uint8"
+          },
+          {
+            "internalType": "uint8",
+            "name": "kind",
+            "type": "uint8"
+          },
+          {
+            "internalType": "uint8",
+            "name": "slot",
+            "type": "uint8"
+          },
+          {
+            "internalType": "uint8",
+            "name": "card",
+            "type": "uint8"
+          },
+          {
+            "internalType": "uint8",
+            "name": "color",
+            "type": "uint8"
+          },
+          {
+            "internalType": "bytes32",
+            "name": "seenHandle",
+            "type": "bytes32"
+          },
+          {
+            "internalType": "uint32",
+            "name": "nonce",
+            "type": "uint32"
+          },
+          {
+            "internalType": "uint8",
+            "name": "v",
+            "type": "uint8"
+          },
+          {
+            "internalType": "bytes32",
+            "name": "r",
+            "type": "bytes32"
+          },
+          {
+            "internalType": "bytes32",
+            "name": "s",
+            "type": "bytes32"
+          }
+        ],
+        "internalType": "struct IKryphoTable.Action",
+        "name": "a",
+        "type": "tuple"
+      }
+    ],
     "name": "relayOne",
     "outputs": [],
     "stateMutability": "nonpayable",

@@ -7,9 +7,9 @@ const STREAM_LIMIT_PER_WINDOW = 30;
 const OPEN_LIMIT_PER_WINDOW = 30;
 const PROFILES_LIMIT_PER_WINDOW = 60;
 const RPC_LIMIT_PER_WINDOW = 900;
-const GLOBAL_LIMIT_PER_WINDOW: Record<string, number> = { "/rpc": 30_000, "/drip": 60, "/quick": 60, "/fill": 60, "/act": 6000, "/stream": 600, "/open": 600, "/profile": 120, "/profiles": 1200, "/friends": 120 };
+const GLOBAL_LIMIT_PER_WINDOW: Record<string, number> = { "/rpc": 30_000, "/drip": 60, "/quick": 60, "/fill": 60, "/act": 6000, "/stream": 600, "/open": 600, "/profile": 120, "/profiles": 1200, "/friends": 120, "/seat": 120 };
 const PRUNE_EVERY = 500;
-const UPSTREAM_TIMEOUT_MS: Record<string, number> = { "/fill": 120_000, "/drip": 60_000, "/quick": 30_000, "/friends": 30_000, "/act": 15_000 };
+const UPSTREAM_TIMEOUT_MS: Record<string, number> = { "/fill": 120_000, "/drip": 60_000, "/quick": 30_000, "/friends": 30_000, "/act": 15_000, "/seat": 30_000 };
 const hits = new Map<string, number[]>();
 let calls = 0;
 
@@ -61,7 +61,7 @@ export function admit(request: Request, path: string): Response | null {
 
 export const botsUrl = BOTS_URL;
 
-export async function forward(request: Request, path: "/drip" | "/fill" | "/act" | "/quick" | "/profile" | "/friends", body: Record<string, unknown>): Promise<Response> {
+export async function forward(request: Request, path: "/drip" | "/fill" | "/act" | "/quick" | "/profile" | "/friends" | "/seat", body: Record<string, unknown>): Promise<Response> {
   const refused = admit(request, path);
   if (refused) return refused;
   try {

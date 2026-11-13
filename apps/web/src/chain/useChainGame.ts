@@ -34,6 +34,7 @@ import { tableCode } from "@/lib/invite";
 import { friendlyError } from "./errors";
 import { RECEIPT_POLL_MS, RPC_PROXY_PATH, sepoliaTransport } from "./rpc";
 import { toGameEvents } from "./events";
+import { type RevealedBots, provisionalResult } from "@/game/provisional";
 
 const POLL_MS = 2000;
 const PERMIT_TIMEOUT_MS = 30_000;
@@ -117,7 +118,12 @@ export function useChainGame(id: bigint, colorBlind: boolean, watchOnly = false)
   const inflight = useRef(new Set<Hex>());
   const wake = useRef<() => void>(() => undefined);
   const meRef = useRef(0);
+  const mySeat = useRef(-1);
   const settled = useRef<GameState["pub"]["lastResult"]>(null);
+  const revealedBots = useRef<RevealedBots | null>(null);
+  const ownSecret = useRef<Hex | null>(null);
+  const shownSecrets = useRef<readonly number[] | undefined>(undefined);
+  const [verifying, setVerifying] = useState(false);
   const pendingPeek = useRef<{ seat: number; slot: number } | null>(null);
   const [secretColor, setSecretColor] = useState<number | null>(null);
   const [peek, setPeek] = useState<TableController["peek"]>(null);
@@ -144,9 +150,13 @@ export function useChainGame(id: bigint, colorBlind: boolean, watchOnly = false)
       }
       const projection = project(base.state, base.nonces, actions.current);
       setPendingMoves(projection.valid.length);
-      const projectedState = projection.state;
+      const secret = ownSecret.current ? (plain.current.get(ownSecret.current) ?? null) : null;
+      const provisional = settled.current ? null : provisionalResult(projection.state, mySeat.current, secret, revealedBots.current);
+      if (provisional?.pub.lastResult?.secrets) shownSecrets.current = provisional.pub.lastResult.secrets;
+      setVerifying(provisional !== null);
+      const projectedState = provisional ?? projection.state;
       const over = projectedState.pub.stage === "RoundOver" || projectedState.pub.stage === "MatchOver";
-      const target = over && settled.current ? { ...projectedState, pub: { ...projectedState.pub, lastResult: settled.current } } : projectedState;
+      const target = over && settled.current ? { ...projectedState, pub: { ...projectedState.pub, lastResult: { ...settled.current, secrets: settled.current.secrets ?? shownSecrets.current } } } : projectedState;
       const previous = projected.current;
       projected.current = target;
       if (!previous) {
@@ -223,6 +233,7 @@ export function useChainGame(id: bigint, colorBlind: boolean, watchOnly = false)
     const mine = burner.address.toLowerCase();
     const seat = watchOnly ? -1 : seats.findIndex((s) => s.session.toLowerCase() === mine || (s.player.toLowerCase() === mine && !s.abandoned));
     meRef.current = Math.max(seat, 0);
+    mySeat.current = seat;
     setSnapshot({ table, seats, me: seat });
     if (seat >= 0) ensurePermit();
     if (Number(table.stage) < 3) {
@@ -264,6 +275,7 @@ export function useChainGame(id: bigint, colorBlind: boolean, watchOnly = false)
       if (missing.length === 0) setHandError(null);
       known.set(seat, own.map((h, i) => ((slots & (1 << i)) !== 0 ? (plain.current.get(h) ?? null) : null)));
       setSecretColor(plain.current.get(secret) ?? null);
+      ownSecret.current = secret;
       if (sonarAt && fresh && plain.current.has(fresh)) {
         setSonar({ target: sonarAt.target, color: sonarAt.color, count: Number(plain.current.get(fresh)) });
         sonarHandle.current = fresh;
@@ -348,7 +360,7 @@ export function useChainGame(id: bigint, colorBlind: boolean, watchOnly = false)
   useEffect(() => {
     const source = new EventSource(`/api/stream?id=${id}`);
     source.onmessage = (event) => {
-      const message = JSON.parse(event.data as string) as { type: string; action?: SignedAction & { table: string }; actions?: (SignedAction & { table: string })[] };
+      const message = JSON.parse(event.data as string) as { type: string; action?: SignedAction & { table: string }; actions?: (SignedAction & { table: string })[]; round?: number; seats?: RevealedBots["seats"] };
       if (message.type === "backlog" && message.actions) {
         actions.current = message.actions.map(parseAction);
         reconcile([]);
@@ -356,6 +368,9 @@ export function useChainGame(id: bigint, colorBlind: boolean, watchOnly = false)
         applyAction(parseAction(message.action));
       } else if (message.type === "chain") {
         wake.current();
+      } else if (message.type === "reveal" && message.seats) {
+        revealedBots.current = { round: message.round ?? 0, seats: message.seats };
+        reconcile([]);
       }
     };
     return () => source.close();
@@ -421,6 +436,7 @@ export function useChainGame(id: bigint, colorBlind: boolean, watchOnly = false)
     sync: snapshot ? { pendingMoves, chainStage: Number(snapshot.table.stage), revealPrepared: Number(snapshot.table.revealPrepared ?? 0), seats: Number(snapshot.table.joined) } : null,
     snapshot,
     ready,
+    verifying,
     address: burner.address,
     error: error ?? handError,
   };

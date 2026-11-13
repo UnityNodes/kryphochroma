@@ -2,7 +2,7 @@
 
 import { CARD_COLORS, sharedDefs } from "@kryphochroma/cards";
 import { type Color, type Peek, canDraw, cardLabel, canSayMono, botCatchTarget, isPlayable, isSpyglass, isWild, legalMoves, veilClaims } from "@kryphochroma/rules";
-import { ArrowLeft, Eye, EyeOff, House, Layers, Radar, Shapes, Shuffle, Swords, Trophy, Volume2, VolumeX, WifiOff } from "lucide-react";
+import { ArrowLeft, BadgeCheck, Eye, EyeOff, House, Layers, Loader2, Play, Radar, Shapes, Shuffle, Swords, Trophy, Volume2, VolumeX, WifiOff } from "lucide-react";
 import Link from "next/link";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { toast } from "sonner";
@@ -380,9 +380,15 @@ export function TableView({ controller: game, colorBlind, onToggleShapes }: Tabl
             {result
               ? result.winner === null
                 ? "Every hand was revealed and nobody played honestly, so nobody scores."
-                : `${result.points} points: the value of every card left in the other hands${result.bonus ? ", doubled by the secret colour" : ""}. All honesty bits were revealed and checked.`
+                : `${result.points} points: the value of every card left in the other hands${result.bonus ? ", doubled by the secret colour" : ""}. ${game.verifying ? "Zama KMS is now proving every hand and honesty bit on chain." : "All honesty bits were revealed and checked on chain."}`
               : ""}
           </DialogDescription>
+          {result && game.mode === "chain" && (
+            <p className="flex items-center gap-2 text-xs font-semibold text-muted" role="status">
+              {game.verifying ? <Loader2 className="size-3.5 animate-spin text-sun" aria-hidden /> : <BadgeCheck className="size-3.5 text-teal" aria-hidden />}
+              {game.verifying ? "Scored from the revealed hands, proof on Sepolia in a few seconds" : "Verified on Sepolia"}
+            </p>
+          )}
           {result && (
             <table className="w-full text-left text-sm">
               <caption className="sr-only">Round results</caption>
@@ -430,7 +436,13 @@ export function TableView({ controller: game, colorBlind, onToggleShapes }: Tabl
                 Deal again
               </button>
             )}
-            <Link href={game.mode === "chain" ? "/new" : "/"} className="kc-btn">
+            {game.mode === "chain" && (
+              <Link href="/new" className="kc-btn">
+                <Play aria-hidden />
+                Play again
+              </Link>
+            )}
+            <Link href="/" className="kc-btn">
               <House aria-hidden />
               Menu
             </Link>

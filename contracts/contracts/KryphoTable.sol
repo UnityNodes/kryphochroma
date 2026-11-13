@@ -40,6 +40,7 @@ contract KryphoTable is IKryphoTable, ZamaEthereumConfig {
     uint8 internal constant KIND_VEIL = 8;
     uint8 internal constant KIND_DOUBT = 9;
     uint8 internal constant KIND_SONAR = 10;
+    uint8 internal constant KIND_JOIN = 11;
     uint8 internal constant VEIL_TRUE_DRAW = 2;
     uint8 internal constant VEIL_LIE_DRAW = 4;
 
@@ -148,15 +149,27 @@ contract KryphoTable is IKryphoTable, ZamaEthereumConfig {
     }
 
     function join(uint256 id, address session) external payable {
-        Table storage t = _requireStage(id, Stage.Lobby);
-        if (session == address(0) || session == TAKEOVER) revert BadSession();
-        if (t.joined >= t.config.seats) revert TableFull();
-        KryphoLobby.join(_seats, id, t.joined++, msg.sender, session);
-        if (t.joined == t.config.seats) _begin(id, t);
+        _join(id, msg.sender, session);
         if (msg.value > 0) {
             (bool ok, ) = session.call{value: msg.value, gas: SESSION_STIPEND}("");
             if (!ok) revert TransferFailed();
         }
+    }
+
+    /** A guest key holds no ETH, so its join comes signed through the relayer instead of waiting a block for a faucet top up; the signature names the table, and a session can take only one seat at it. */
+    function relayJoin(uint256 id, Action calldata a) external {
+        if (a.kind != KIND_JOIN) revert BadAction();
+        address session = KryphoRadio.signer(DOMAIN_SEPARATOR, id, a);
+        if (session == address(0)) revert BadSignature();
+        _join(id, session, session);
+    }
+
+    function _join(uint256 id, address player, address session) internal {
+        Table storage t = _requireStage(id, Stage.Lobby);
+        if (session == address(0) || session == TAKEOVER) revert BadSession();
+        if (t.joined >= t.config.seats) revert TableFull();
+        KryphoLobby.join(_seats, id, t.joined++, player, session);
+        if (t.joined == t.config.seats) _begin(id, t);
     }
 
     function cancel(uint256 id) external {

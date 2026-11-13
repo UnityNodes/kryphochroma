@@ -1,8 +1,8 @@
 import { createServer, type IncomingMessage, type ServerResponse } from "node:http";
 import { readFileSync, writeFileSync } from "node:fs";
-import { BOT_PROFILES, NO_CARD, type Profile, STAND_IN_PROFILE, fillMessage, kryphoTableAbi, profileMessage, validProfile } from "@kryphochroma/abi";
+import { ACTION_TYPES, BOT_PROFILES, JOIN_GAS_LIMIT, NO_CARD, type Profile, STAND_IN_PROFILE, actionDomain, fillMessage, joinFields, kryphoTableAbi, profileMessage, toContractAction, validProfile } from "@kryphochroma/abi";
 import { parseSignedAction, parseTableId } from "./parse.js";
-import { type Hex, createPublicClient, createWalletClient, nonceManager, parseEther, parseEventLogs, recoverMessageAddress } from "viem";
+import { type Hex, createPublicClient, createWalletClient, nonceManager, parseEther, parseEventLogs, recoverMessageAddress, recoverTypedDataAddress } from "viem";
 import { rpcTransport } from "../rpc.js";
 import { privateKeyToAccount } from "viem/accounts";
 import { sepolia } from "viem/chains";
@@ -10,7 +10,7 @@ import { loadKeeperConfig, runKeeper } from "../keeper/run.js";
 import { createWaker } from "../keeper/waker.js";
 import { createBot } from "../player/run.js";
 import { type SignedAction } from "@kryphochroma/abi";
-import { createRelay, encodeMessage } from "../relay/hub.js";
+import { GAS_PRICE, createRelay, encodeMessage } from "../relay/hub.js";
 import { type DripLedger, decideDrip, releaseDrip } from "./drip.js";
 import { createTableScan } from "../keeper/scan.js";
 import { type PoolTable, SPARE_BY_SEATS, pickBots, pickReady, planPool } from "./pool.js";
@@ -66,9 +66,10 @@ const onChainTakeover = (await publicClient.readContract({ address: table, abi: 
 if (onChainTakeover.toLowerCase() !== privateKeyToAccount(takeoverKey).address.toLowerCase()) throw new Error(`takeover key does not match the contract TAKEOVER ${onChainTakeover}`);
 const keeperWaker = createWaker();
 const relayAccount = privateKeyToAccount(env("RELAYER_PRIVATE_KEY", env("DEPLOYER_PRIVATE_KEY")) as Hex, { nonceManager });
+const relayWallet = createWalletClient({ account: relayAccount, chain: sepolia, transport: rpcTransport(rpcUrl) });
 const relay = createRelay({
   publicClient,
-  relayer: createWalletClient({ account: relayAccount, chain: sepolia, transport: rpcTransport(rpcUrl) }),
+  relayer: relayWallet,
   table,
   rpcUrl,
   botKeys: env("BOT_KEYS").split(",") as Hex[],
@@ -316,6 +317,28 @@ function tableId(raw: unknown): bigint {
   return parseTableId(raw, knownTables);
 }
 
+function signatureOf(raw: unknown): Hex {
+  if (typeof raw !== "string" || !/^0x[0-9a-fA-F]{130}$/.test(raw)) throw new Error("bad signature");
+  return raw as Hex;
+}
+
+/** The relayer submits a guest's signed join, so taking a seat costs the guest one block instead of a faucet top up and then a block of its own. */
+async function relaySeat(id: bigint, signature: Hex): Promise<{ ok: boolean; seated?: boolean; hash?: Hex; error?: string }> {
+  const fields = joinFields(id);
+  const session = (await recoverTypedDataAddress({ domain: actionDomain(sepolia.id, table), types: ACTION_TYPES, primaryType: "Action", message: { ...fields }, signature })).toLowerCase();
+  const view = await readLobby(id);
+  const sessions = (await seatedPlayers(id, Number(view.joined))).map((p) => p.toLowerCase());
+  if (sessions.includes(session)) return { ok: true, seated: true };
+  if (Number(view.stage) !== 0 || Number(view.joined) >= Number(view.config.seats)) return { ok: false, error: "This table is already full" };
+  const hash = await relayWallet.writeContract({ address: table, abi: kryphoTableAbi, functionName: "relayJoin", args: [id, toContractAction({ ...fields, signature })], gas: JOIN_GAS_LIMIT, gasPrice: GAS_PRICE, chain: sepolia, account: relayAccount } as never);
+  log({ event: "relay-seat", id, session, hash });
+  void publicClient
+    .waitForTransactionReceipt({ hash })
+    .then((receipt) => log({ event: "relay-seat-mined", id, status: receipt.status, gas: receipt.gasUsed }))
+    .catch((error: Error) => log({ event: "relay-seat-error", id, message: error.message.slice(0, 200) }));
+  return { ok: true, hash };
+}
+
 function parseAction(raw: Record<string, unknown>): SignedAction {
   return parseSignedAction(raw, knownTables);
 }
@@ -396,6 +419,7 @@ const server = createServer(async (req, res) => {
     if (url.pathname === "/drip") return reply(res, 200, await drip(String(body.address ?? "")));
     if (url.pathname === "/quick") return reply(res, 200, await quick());
     if (url.pathname === "/friends") return reply(res, 200, await friends(Number(body.seats)));
+    if (url.pathname === "/seat") return reply(res, 200, await relaySeat(tableId(body.table), signatureOf(body.signature)));
     if (url.pathname === "/act") {
       const action = parseAction(body);
       const result = await relay.accept(action);

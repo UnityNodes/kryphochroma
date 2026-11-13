@@ -228,6 +228,24 @@ describe("KryphoTable guards", function () {
     await expect(table.prepareReveal(id)).to.be.revertedWithCustomError(table, "WrongStage");
   });
 
+  it("seats a guest from its signed join sent by anyone, once", async function () {
+    const table = await deployHarness(ethers, ethers.ZeroAddress);
+    await (await table.connect(s[0]!).createTable({ ...config, seats: 2 })).wait();
+    const id = await table.tableCount();
+    const guest = ethers.Wallet.createRandom();
+    const relayer = s[5]!;
+    const join = await signAction(table, guest as never, id, 255, 11, {}, 0);
+    await expect(table.connect(relayer).relayJoin(id, join)).to.emit(table, "Joined").withArgs(id, 0, guest.address, guest.address);
+    const seat = await table.getSeat(id, 0);
+    expect([seat.player, seat.session]).to.deep.equal([guest.address, guest.address]);
+    await expect(table.connect(relayer).relayJoin(id, join)).to.be.revertedWithCustomError(table, "AlreadySeated");
+    const wrongKind = await signAction(table, guest as never, id, 255, 1, {}, 0);
+    await expect(table.relayJoin(id, wrongKind)).to.be.revertedWithCustomError(table, "BadAction");
+    const second = ethers.Wallet.createRandom();
+    await (await table.relayJoin(id, await signAction(table, second as never, id, 255, 11, {}, 0))).wait();
+    expect(Number((await table.getTable(id)).stage), "the join that fills the table starts it").to.equal(1);
+  });
+
   it("queues each seat's next cards open to that seat only", async function () {
     const { table, id } = await ready([s[0]!, s[1]!]);
     await expect(table.fillQueues(id), "the queues wait until play is open").to.be.revertedWithCustomError(table, "WrongStage");

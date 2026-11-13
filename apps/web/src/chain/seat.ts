@@ -1,4 +1,4 @@
-import { JOIN_GAS_LIMIT, fillMessage, kryphoTableAbi } from "@kryphochroma/abi";
+import { ACTION_TYPES, JOIN_GAS_LIMIT, actionDomain, fillMessage, joinFields, kryphoTableAbi } from "@kryphochroma/abi";
 import { type Hex, type PrivateKeyAccount, type PublicClient, type WalletClient, createWalletClient, encodeFunctionData, keccak256, parseEventLogs } from "viem";
 import { sepolia } from "viem/chains";
 import { BURNER_GAS_LIMIT, BURNER_GAS_PRICE, TABLE_ADDRESS } from "./config";
@@ -129,6 +129,7 @@ const SEAT_RETRY_MS = 3000;
 
 /** Public nodes drop requests under load, so a seat taken in the background tries again, and first checks the chain in case the earlier join did land. */
 export async function seatWithRetry(deps: SeatDeps, id: bigint): Promise<void> {
+  if (deps.funder.kind === "guest") return relaySeat(deps, id);
   for (let attempt = 1; ; attempt++) {
     try {
       await fundBurner(deps);
@@ -140,6 +141,24 @@ export async function seatWithRetry(deps: SeatDeps, id: bigint): Promise<void> {
       if (await sitsAt(deps.publicClient, id, deps.burner.address).catch(() => false)) return;
     }
   }
+}
+
+const SEAT_POLL_MS = 1000;
+const SEAT_WAIT_MS = 90_000;
+
+/** A guest signs its join and the relayer submits it, so the guest key needs no faucet top up before its first block at the table. */
+export async function relaySeat(deps: SeatDeps, id: bigint): Promise<void> {
+  const fields = joinFields(id);
+  const signature = await deps.burner.signTypedData({ domain: actionDomain(sepolia.id, TABLE_ADDRESS), types: ACTION_TYPES, primaryType: "Action", message: { ...fields } });
+  const res = await fetch("/api/seat", { method: "POST", body: JSON.stringify({ table: id.toString(), signature }) });
+  const body = (await res.json().catch(() => ({}))) as { ok?: boolean; error?: string };
+  if (!res.ok || !body.ok) throw new Error(body.error ?? "The table server did not answer, try again");
+  const end = Date.now() + SEAT_WAIT_MS;
+  while (Date.now() < end) {
+    if (await sitsAt(deps.publicClient, id, deps.burner.address).catch(() => false)) return;
+    await new Promise((r) => setTimeout(r, SEAT_POLL_MS));
+  }
+  throw new Error("Your seat did not reach Sepolia yet, try again");
 }
 
 /** A slow RPC can miss the receipt of a join that did land, so the seat list on chain decides. */

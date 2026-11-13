@@ -163,6 +163,14 @@ export function stepAction(state: GameState, action: ActionFields): { state: Gam
   }
 }
 
+export const JOIN_KIND = 11;
+export const JOIN_SEAT = 255;
+
+/** A guest signs this fixed action to take a seat; the relayer submits it with relayJoin, so the guest key never needs ETH. */
+export function joinFields(table: bigint): ActionFields {
+  return { table, seat: JOIN_SEAT, kind: JOIN_KIND, slot: 0, card: 0, color: 0, seenHandle: ZERO_HANDLE, nonce: 0 };
+}
+
 export function fillMessage(table: bigint): string {
   return `Kryphochroma: seat bots at table ${table.toString()}`;
 }

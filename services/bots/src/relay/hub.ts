@@ -34,14 +34,21 @@ const RELAY_GAS = JOIN_GAS_LIMIT;
 const GAS_HEADROOM_PCT = 130n;
 const ACTION_GAS_FLOOR = 200_000n;
 const RELAY_BASE_GAS = 300_000n;
-const GAS_PRICE = 5_000_000n;
+export const GAS_PRICE = 5_000_000n;
 const THINK_MS = [250, 600] as const;
 const CATCH_DELAY_BLOCKS = 2n;
 
 export type HubMessage =
   | { readonly type: "action"; readonly action: SignedAction; readonly events: readonly GameEvent[] }
   | { readonly type: "backlog"; readonly actions: readonly SignedAction[] }
-  | { readonly type: "chain"; readonly block: string };
+  | { readonly type: "chain"; readonly block: string }
+  | { readonly type: "reveal"; readonly round: number; readonly seats: readonly RevealedSeat[] };
+
+export interface RevealedSeat {
+  readonly seat: number;
+  readonly hand: readonly (number | null)[];
+  readonly secret: number;
+}
 
 interface Bot {
   readonly account: PrivateKeyAccount;
@@ -78,6 +85,7 @@ interface TableHub {
   catchableAt: bigint | null;
   block: bigint;
   hands: (readonly Hex[])[];
+  reveal: HubMessage | null;
   queues: (readonly Hex[])[];
   subscribers: Set<(message: HubMessage) => void>;
 }
@@ -105,7 +113,7 @@ export function createRelay(deps: RelayDeps) {
     const key = id.toString();
     let hub = hubs.get(key);
     if (!hub) {
-      hub = { chain: null, chainNonces: [0, 0, 0, 0], sessions: [], log: [], signers: new Map(), abandoned: [], sending: false, pipes: 0, sent: new Set(), thinking: new Set(), monoSeat: 255, catchableAt: null, block: 0n, hands: [], queues: [], subscribers: new Set() };
+      hub = { chain: null, chainNonces: [0, 0, 0, 0], sessions: [], log: [], signers: new Map(), abandoned: [], sending: false, pipes: 0, sent: new Set(), thinking: new Set(), monoSeat: 255, catchableAt: null, block: 0n, hands: [], queues: [], reveal: null, subscribers: new Set() };
       hubs.set(key, hub);
     }
     return hub;
@@ -149,6 +157,7 @@ export function createRelay(deps: RelayDeps) {
       : [[], []];
     const known = new Map<number, readonly (Card | null)[]>();
     const queued: (Card | null)[][] = [];
+    const secrets = new Map<number, number>();
     for (const [seat, s] of seats.entries()) {
       const session = s.session.toLowerCase();
       const bot = session === takeover && !s.abandoned ? undefined : bots.find((b) => b.account.address.toLowerCase() === session);
@@ -156,7 +165,10 @@ export function createRelay(deps: RelayDeps) {
       const hand = hands[seat] ?? [];
       const queue = (queues[seat] ?? []).filter((h) => h !== ZERO_HANDLE);
       if (bot && dealt) {
-        await decryptFor(bot, id, seat, [...hand.filter((_, i) => (slots & (1 << i)) !== 0), ...queue]);
+        const secret = (await read("secretOf", [id, seat])) as Hex;
+        await decryptFor(bot, id, seat, [...hand.filter((_, i) => (slots & (1 << i)) !== 0), ...queue, secret]);
+        const value = bot.plain.get(secret);
+        if (value !== undefined) secrets.set(seat, value);
         known.set(seat, hand.map((h, i) => ((slots & (1 << i)) !== 0 ? (bot.plain.get(h) ?? null) : null)));
       }
       queued.push(queue.map((h) => (bot ? (bot.plain.get(h) ?? null) : null)));
@@ -166,6 +178,7 @@ export function createRelay(deps: RelayDeps) {
     hub.chain = projectChain(table, seats, discard, known, dealt ? queued : undefined);
     hub.hands = hands;
     hub.queues = queues;
+    revealBots(hub, secrets);
     hub.chainNonces = nonces;
     hub.sessions = seats.map((s) => s.session.toLowerCase());
     hub.monoSeat = Number(table.monoWindow);
@@ -175,6 +188,26 @@ export function createRelay(deps: RelayDeps) {
     const kept = new Set(hub.log.map(actionKey));
     for (const key of [...hub.signers.keys()]) if (!kept.has(key)) hub.signers.delete(key);
     driveBots(id, hub);
+  }
+
+  /** Once the chain itself has reached the reveal, every hand is about to become public, so the bot hands go to the table at once and players see the scores without waiting for the KMS proof; a round that only the pending moves end stays sealed. */
+  function revealBots(hub: TableHub, secrets: ReadonlyMap<number, number>): void {
+    const chain = hub.chain;
+    if (!chain || chain.pub.stage !== "Revealing") {
+      if (chain && chain.pub.stage === "Playing") hub.reveal = null;
+      return;
+    }
+    if (hub.reveal) return;
+    const seats: RevealedSeat[] = [];
+    for (const seat of hub.sessions.keys()) {
+      if (!botFor(hub, seat)) continue;
+      const hand = chain.hands[seat] ?? [];
+      const secret = secrets.get(seat);
+      if (secret === undefined || hand.some((card) => card !== null && card < 0)) return;
+      seats.push({ seat, hand, secret });
+    }
+    hub.reveal = { type: "reveal", round: chain.pub.round, seats };
+    broadcast(hub, hub.reveal);
   }
 
   async function accept(action: SignedAction): Promise<{ ok: true } | { ok: false; reason: string; expected?: number; chainNonce?: number; queued?: string[] }> {
@@ -344,6 +377,7 @@ export function createRelay(deps: RelayDeps) {
     hub.subscribers.add(send);
     const current = projected(hub);
     send({ type: "backlog", actions: current?.valid ?? [] });
+    if (hub.reveal) send(hub.reveal);
     return () => hub.subscribers.delete(send);
   }
 

@@ -1,5 +1,5 @@
 import { kryphoTableAbi } from "@kryphochroma/abi";
-import { type Hex, type PublicClient, RpcRequestError, type WalletClient, encodeAbiParameters, encodeEventTopics } from "viem";
+import { type Hex, type PublicClient, type WalletClient, encodeAbiParameters, encodeEventTopics } from "viem";
 import { privateKeyToAccount } from "viem/accounts";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
@@ -169,26 +169,26 @@ describe("funding the session key", () => {
 });
 
 describe("seating in the background", () => {
-  it("tries again when the node drops the request and sits once it answers", async () => {
-    vi.useFakeTimers();
-    let failures = 1;
-    const base = client(MIN_BURNER_BALANCE);
-    const publicClient = {
-      ...base,
-      getTransactionCount: async () => {
-        if (failures-- > 0) throw new RpcRequestError({ body: {}, error: { code: 429, message: "rate limited" }, url: "https://node" });
-        return 0;
-      },
-      readContract: async () => ({ joined: 0 }),
-    } as unknown as PublicClient;
-    const seated = seatWithRetry({ publicClient, burner, funder: { kind: "guest" }, drip: async () => true }, 7n);
-    await vi.advanceTimersByTimeAsync(3000);
-    await expect(seated).resolves.toBeUndefined();
-    vi.useRealTimers();
+  const seatedClient = (session: string | null) =>
+    ({
+      readContract: async ({ functionName }: { functionName: string }) => (functionName === "getTable" ? { joined: 1 } : { session: session ?? "0x0000000000000000000000000000000000000001" }),
+    }) as unknown as PublicClient;
+
+  it("lets a guest sign its join for the relayer and sits once the chain shows it", async () => {
+    const fetchMock = vi.fn(async () => Response.json({ ok: true, hash: "0x1" }));
+    vi.stubGlobal("fetch", fetchMock);
+    const drip = vi.fn(async () => true);
+    await expect(seatWithRetry({ publicClient: seatedClient(burner.address), burner, funder: { kind: "guest" }, drip }, 7n)).resolves.toBeUndefined();
+    const [url, init] = fetchMock.mock.calls[0] as unknown as [string, RequestInit];
+    expect(url).toBe("/api/seat");
+    expect(JSON.parse(String(init.body))).toMatchObject({ table: "7" });
+    expect(drip).not.toHaveBeenCalled();
+    vi.unstubAllGlobals();
   });
 
-  it("gives up on errors that a retry can not fix", async () => {
-    const publicClient = { ...client(0n), getBalance: async () => 0n } as unknown as PublicClient;
-    await expect(seatWithRetry({ publicClient, burner, funder: { kind: "guest" }, drip: async () => false }, 7n)).rejects.toThrow(/faucet/);
+  it("passes the table server refusal to the guest", async () => {
+    vi.stubGlobal("fetch", vi.fn(async () => Response.json({ ok: false, error: "This table is already full" })));
+    await expect(seatWithRetry({ publicClient: seatedClient(null), burner, funder: { kind: "guest" }, drip: async () => true }, 7n)).rejects.toThrow("already full");
+    vi.unstubAllGlobals();
   });
 });
