@@ -38,6 +38,7 @@ export const GAS_PRICE = 5_000_000n;
 const THINK_MS = [250, 600] as const;
 const CATCH_DELAY_BLOCKS = 2n;
 const DECRYPT_RETRY_MS = 3000;
+const RECEIPT_TIMEOUT_MS = 90_000;
 
 export type HubMessage =
   | { readonly type: "action"; readonly action: SignedAction; readonly events: readonly GameEvent[] }
@@ -356,7 +357,7 @@ export function createRelay(deps: RelayDeps) {
     const hub = hubOf(id);
     let mined = 0n;
     try {
-      const receipt = await deps.publicClient.waitForTransactionReceipt({ hash });
+      const receipt = await deps.publicClient.waitForTransactionReceipt({ hash, timeout: RECEIPT_TIMEOUT_MS });
       mined = receipt.blockNumber;
       budget = spend(budget, receipt.gasUsed);
       tableBudgets.set(id.toString(), spend(tableBudget(id), receipt.gasUsed));

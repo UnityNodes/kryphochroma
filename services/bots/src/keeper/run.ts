@@ -17,6 +17,8 @@ const SETUP_GAS = 16_000_000n;
 const DEAL_GAS = JOIN_GAS_LIMIT;
 const REVEAL_GAS = JOIN_GAS_LIMIT;
 const RECEIPT_POLL_MS = 1000;
+const DECRYPT_TIMEOUT_MS = 15_000;
+const RECEIPT_TIMEOUT_MS = 90_000;
 const URGENT_PIPELINE = 4;
 const BACKGROUND_PIPELINE = 8;
 const ALERT_EVERY_MS = 600_000;
@@ -86,7 +88,7 @@ export async function runKeeper(config: KeeperConfig, env: NodeJS.ProcessEnv, un
     if (!canSpend(budget, estimate)) throw new Error("daily gas budget exhausted");
     await publicClient.simulateContract({ ...(request as object), blockNumber: latestKnown() } as never);
     const hash = await walletClient.writeContract({ ...(request as object), gas: estimate } as never);
-    const receipt = await publicClient.waitForTransactionReceipt({ hash });
+    const receipt = await publicClient.waitForTransactionReceipt({ hash, timeout: RECEIPT_TIMEOUT_MS });
     minBlock = receipt.blockNumber;
     budget = spend(budget, receipt.gasUsed);
     log({ event: "tx", functionName, args, hash, gas: receipt.gasUsed, status: receipt.status });
@@ -104,7 +106,7 @@ export async function runKeeper(config: KeeperConfig, env: NodeJS.ProcessEnv, un
     }
     const reverted: Hex[] = [];
     for (const hash of hashes) {
-      const receipt = await publicClient.waitForTransactionReceipt({ hash });
+      const receipt = await publicClient.waitForTransactionReceipt({ hash, timeout: RECEIPT_TIMEOUT_MS });
       minBlock = receipt.blockNumber > minBlock ? receipt.blockNumber : minBlock;
       budget = spend(budget, receipt.gasUsed);
       if (receipt.status !== "success") reverted.push(hash);
@@ -117,7 +119,7 @@ export async function runKeeper(config: KeeperConfig, env: NodeJS.ProcessEnv, un
   async function decryptPublic(handles: readonly Hex[]) {
     for (let attempt = 1; ; attempt++) {
       try {
-        return await sdk.decryption.decryptPublicValues([...handles]);
+        return await sdk.decryption.decryptPublicValues([...handles], { timeout: DECRYPT_TIMEOUT_MS });
       } catch (error) {
         if (attempt >= DECRYPT_TRIES) throw error;
         await new Promise((resolve) => setTimeout(resolve, DECRYPT_RETRY_MS));

@@ -18,6 +18,7 @@ import { type ProfileStore, fromDisk, lookup, parseAddresses, putProfile, toDisk
 
 const ACTIVE_STAGES = new Set([3, 4]);
 const FLEET_POLL_MS = 1000;
+const RECEIPT_TIMEOUT_MS = 90_000;
 const BOT_MIN_WEI = parseEther("0.005");
 const BOT_TOPUP_WEI = parseEther("0.02");
 const MAX_BODY_BYTES = 1024;
@@ -94,7 +95,7 @@ async function topUp(address: Hex, min: bigint, amount: bigint, event: string): 
   if (balance >= min) return;
   await withKeeperWallet(async () => {
     const hash = await keeperWallet.sendTransaction({ to: address, value: amount });
-    await publicClient.waitForTransactionReceipt({ hash });
+    await publicClient.waitForTransactionReceipt({ hash, timeout: RECEIPT_TIMEOUT_MS });
     log({ event, address, hash });
   });
 }
@@ -192,7 +193,7 @@ async function createPoolTable(seats: number): Promise<void> {
       functionName: "createTable",
       args: [{ seats, turnTimeout: POOL_TURN_TIMEOUT, targetScore: 500, singleRound: true, stackDrawTwo: false }],
     });
-    const receipt = await publicClient.waitForTransactionReceipt({ hash });
+    const receipt = await publicClient.waitForTransactionReceipt({ hash, timeout: RECEIPT_TIMEOUT_MS });
     log({ event: "pool-table", hash });
     return parseEventLogs({ abi: kryphoTableAbi, logs: receipt.logs, eventName: "TableCreated" })[0]?.args.id;
   });
@@ -304,7 +305,7 @@ async function drip(address: string): Promise<{ ok: boolean; reason?: string; ha
     if (balance >= dripWei / 2n) return { ok: true, reason: "funded" };
     const hash = await withKeeperWallet(async () => {
       const tx = await keeperWallet.sendTransaction({ to: address as Hex, value: dripWei });
-      await publicClient.waitForTransactionReceipt({ hash: tx });
+      await publicClient.waitForTransactionReceipt({ hash: tx, timeout: RECEIPT_TIMEOUT_MS });
       return tx;
     });
     log({ event: "drip", address, hash });
@@ -351,7 +352,7 @@ async function relaySeat(id: bigint, signature: Hex): Promise<{ ok: boolean; sea
   const hash = await relayWallet.writeContract({ address: table, abi: kryphoTableAbi, functionName: "relayJoin", args: [id, toContractAction({ ...fields, signature })], gas: JOIN_GAS_LIMIT, gasPrice: GAS_PRICE, chain: sepolia, account: relayAccount } as never);
   log({ event: "relay-seat", id, session, hash });
   void publicClient
-    .waitForTransactionReceipt({ hash })
+    .waitForTransactionReceipt({ hash, timeout: RECEIPT_TIMEOUT_MS })
     .then((receipt) => log({ event: "relay-seat-mined", id, status: receipt.status, gas: receipt.gasUsed }))
     .catch((error: Error) => log({ event: "relay-seat-error", id, message: error.message.slice(0, 200) }));
   return { ok: true, hash };
