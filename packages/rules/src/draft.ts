@@ -11,6 +11,7 @@ import {
 
 export const HAND_SLOTS = 24;
 export const HAND_START = 7;
+export const NEXT_CARDS = 2;
 export const MAX_TIMEOUTS = 3;
 export const MIN_SEATS = 2;
 export const MAX_SEATS = 4;
@@ -75,6 +76,22 @@ function recycle(d: Draft): void {
   d.events.push({ type: "Reshuffled", count: rest.length });
 }
 
+function deckCard(d: Draft): Card | undefined {
+  if (d.deck.length === 0) recycle(d);
+  return d.deck.shift();
+}
+
+/** A seat draws the head of its own queue, which only it can read, and the deck tops the queue back up, so the contract can open a drawn card to its owner before the draw is even mined. */
+function nextCard(d: Draft, seat: number): Card | undefined {
+  const queue = d.queues?.[seat];
+  if (!queue) return deckCard(d);
+  const card = queue.length > 0 ? queue.shift() : deckCard(d);
+  if (card === undefined) return undefined;
+  const fresh = deckCard(d);
+  if (fresh !== undefined) queue.push(fresh);
+  return card;
+}
+
 export function drawInto(d: Draft, seat: number, count: number): number[] {
   const drawn: number[] = [];
   const s = d.pub.seats[seat];
@@ -83,8 +100,7 @@ export function drawInto(d: Draft, seat: number, count: number): number[] {
   for (let i = 0; i < count; i++) {
     const slot = freeSlot(s.slots);
     if (slot < 0) break;
-    if (d.deck.length === 0) recycle(d);
-    const card = d.deck.shift();
+    const card = nextCard(d, seat);
     if (card === undefined) break;
     hand[slot] = card;
     s.slots[slot] = true;

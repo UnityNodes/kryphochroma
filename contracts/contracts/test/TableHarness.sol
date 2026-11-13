@@ -28,4 +28,11 @@ contract TableHarness is KryphoTable {
         _handColors[id][seat][slot] = FHE.shr(value, 4);
         FHE.allowThis(_handColors[id][seat][slot]);
     }
+
+    function setQueueCard(uint256 id, uint8 seat, uint8 k, uint8 card) external {
+        euint8 value = FHE.asEuint8(card);
+        _queue[id][seat][k] = value;
+        FHE.allowThis(value);
+        FHE.allow(value, _seats[id][seat].session);
+    }
 }

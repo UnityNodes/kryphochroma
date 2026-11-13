@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
   DECK_SIZE,
+  NEXT_CARDS,
   RuleError,
   applyDraw,
   applyPass,
@@ -45,7 +46,8 @@ describe("setup", () => {
     const { state, events } = initialState(config(seats), 42);
     expect(state.pub.seats.every((s) => s.handSize === 7)).toBe(true);
     expect(isNumber(state.pub.topCard)).toBe(true);
-    expect(state.pub.deckCount + state.pub.discard.length).toBe(DECK_SIZE - 7 * seats);
+    expect(state.pub.deckCount + state.pub.discard.length).toBe(DECK_SIZE - 7 * seats - NEXT_CARDS * seats);
+    expect(state.queues?.every((q) => q.length === NEXT_CARDS)).toBe(true);
     expect(state.pub.turn).toBe(0);
     expect(totalCards(state)).toBe(DECK_SIZE);
     expect(types({ state, events })).toEqual(["Dealt"]);
@@ -56,7 +58,7 @@ describe("setup", () => {
     expect(state.pub.topCard).toBe(G(5));
     expect(state.pub.color).toBe(2);
     expect(state.pub.discard).toEqual([WILD4, B(10), G(5)]);
-    expect(state.pub.deckCount).toBe(DECK_SIZE - 14 - 3);
+    expect(state.pub.deckCount).toBe(DECK_SIZE - 14 - 2 * NEXT_CARDS - 3);
     expect(totalCards(state)).toBe(DECK_SIZE);
   });
 
@@ -195,5 +197,38 @@ describe("round end", () => {
     expect(state.pub.seats.every((x) => x.handSize === 7)).toBe(true);
     const fixed = nextRound(over, deckWith([])).state;
     expect(fixed.pub.round).toBe(1);
+  });
+});
+
+describe("personal draw queue", () => {
+  it("deals each seat its next cards after the hands, in seat order", () => {
+    const deck = fullDeck();
+    const { state } = initialState(config(2), 1, deck);
+    expect(state.queues).toEqual([deck.slice(14, 16), deck.slice(16, 18)]);
+  });
+
+  it("draws the head of the seat's own queue and tops it up from the deck", () => {
+    const deck = fullDeck();
+    const { state } = initialState(config(2), 1, deck);
+    const head = state.queues?.[0]?.[0];
+    const second = state.queues?.[0]?.[1];
+    const top = state.deck[0];
+    const drawn = applyDraw(state, 0).state;
+    expect(drawn.hands[0]?.[7]).toBe(head);
+    expect(drawn.queues?.[0]).toEqual([second, top]);
+    expect(drawn.queues?.[1]).toEqual(state.queues?.[1]);
+    expect(drawn.pub.deckCount).toBe(state.pub.deckCount - 1);
+    expect(totalCards(drawn)).toBe(DECK_SIZE);
+  });
+
+  it("draws straight from the deck for a state without queues", () => {
+    const { state } = initialState(config(2), 1, fullDeck());
+    const bare = { ...state, queues: undefined };
+    const top = state.deck[0];
+    expect(applyDraw(bare, 0).state.hands[0]?.[7]).toBe(top);
+  });
+
+  it("keeps NEXT_CARDS at two so the contract and the engine agree", () => {
+    expect(NEXT_CARDS).toBe(2);
   });
 });

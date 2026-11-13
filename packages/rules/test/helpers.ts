@@ -55,7 +55,7 @@ export function game(
 
 export function totalCards(state: GameState): number {
   const inHands = state.hands.reduce((sum, hand) => sum + hand.filter((c) => c !== null).length, 0);
-  return state.deck.length + inHands + state.pub.discard.length;
+  return state.deck.length + inHands + state.pub.discard.length + (state.queues ?? []).reduce((sum, q) => sum + q.length, 0);
 }
 
 export function types(t: Transition): string[] {

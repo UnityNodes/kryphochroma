@@ -34,6 +34,38 @@ interface IKryphoTable {
         bool sonarUsed;
     }
 
+    struct Table {
+        address creator;
+        Config config;
+        Stage stage;
+        uint8 joined;
+        uint8 turn;
+        int8 dir;
+        uint8 topCard;
+        uint8 color;
+        uint64 turnDeadline;
+        uint16 round;
+        uint16 setupStep;
+        uint8 dealtMask;
+        uint8 deckPtr;
+        uint8 deckEnd;
+        uint8 refillAt;
+        uint8 refillSize;
+        uint8 refillStep;
+        uint16 refillFrom;
+        uint16 discardBase;
+        uint8 drawnSlot;
+        uint8 pendingDraw;
+        uint8 monoWindow;
+        uint8 drawFourBy;
+        uint8 veilBy;
+        uint8 veilJudge;
+        uint8 prevColor;
+        uint8 candidate;
+        uint8 revealPrepared;
+        uint64 monoBlock;
+    }
+
     struct Action {
         uint8 seat;
         uint8 kind;

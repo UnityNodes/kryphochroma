@@ -73,6 +73,7 @@ export interface GameState {
   readonly pub: PublicState;
   readonly deck: readonly Card[];
   readonly hands: readonly Hand[];
+  readonly queues?: readonly (readonly Card[])[];
   readonly honest: readonly boolean[];
   readonly hadColor: boolean | null;
   readonly veilTrue: boolean | null;

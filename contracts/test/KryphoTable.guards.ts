@@ -80,7 +80,7 @@ describe("KryphoTable guards", function () {
       await (await table.setStarter(id, checkSignaturesArgs.abiEncodedCleartexts, checkSignaturesArgs.decryptionProof)).wait();
     }
     const t = await table.getTable(id);
-    expect([Number(t.stage), Number(t.deckPtr)]).to.deep.equal([3, 14]);
+    expect([Number(t.stage), Number(t.deckPtr)], "seven cards to each of two seats, then two queued for each").to.deep.equal([3, 18]);
     await expect(table.setStarter(id, "0x", "0x")).to.be.revertedWithCustomError(table, "WrongStage");
   });
 
@@ -225,6 +225,47 @@ describe("KryphoTable guards", function () {
     await expect(table.prepareReveal(id)).to.be.revertedWithCustomError(table, "WrongStage");
   });
 
+  it("queues each seat's next cards open to that seat only", async function () {
+    const { table, id } = await ready([s[0]!, s[1]!]);
+    const address = await table.getAddress();
+    for (const seat of [0, 1]) {
+      const queue = await table.queueOf(id, seat);
+      expect(queue.every((h) => h !== ethers.ZeroHash), "two queued cards after the deal").to.equal(true);
+      for (const h of queue) {
+        expect(await fhevm.helpers.decryptUint8({ euint8: hex(h), contractAddress: address, userAddress: s[seat]!.address })).to.be.lessThan(0x5f);
+        let denied = false;
+        try {
+          await fhevm.helpers.decryptUint8({ euint8: hex(h), contractAddress: address, userAddress: s[1 - seat]!.address });
+        } catch {
+          denied = true;
+        }
+        expect(denied, "the other seat must not read a queued card").to.equal(true);
+      }
+    }
+  });
+
+  it("plays a freshly drawn card in the same relayed batch through its queued handle", async function () {
+    const { table, id } = await ready([s[0]!, s[1]!]);
+    while (Number((await table.getTable(id)).stage) === 2) {
+      const { checkSignaturesArgs } = await starter(table, id);
+      await (await table.setStarter(id, checkSignaturesArgs.abiEncodedCleartexts, checkSignaturesArgs.decryptionProof)).wait();
+    }
+    const turn = Number((await table.getTable(id)).turn);
+    const actor = s[turn]!;
+    await (await table.setQueueCard(id, turn, 0, 0x5d)).wait();
+    const queued = (await table.queueOf(id, turn))[0]!;
+    const slot = 7;
+    const draw = await signAction(table, actor, id, turn, 1, {}, 0);
+    const play = await signAction(table, actor, id, turn, 0, { slot, card: 0x5d, color: 2, seenHandle: queued }, 1);
+    const receipt = await (await table.relay(id, [draw, play])).wait();
+    const names = receipt!.logs.map((l) => { try { return table.interface.parseLog(l)?.name; } catch { return null; } });
+    expect(names).to.not.include("ActionRejected");
+    expect(names.filter((n) => n === "ActionRelayed")).to.have.length(2);
+    expect(names).to.include("Played");
+    const t = await table.getTable(id);
+    expect([Number(t.topCard), Number(t.color), Number(t.turn)]).to.deep.equal([0x5d, 2, 1 - turn]);
+  });
+
   it("relays only correctly signed, in-order actions and survives a bad one", async function () {
     const { table, id } = await ready([s[0]!, s[1]!]);
     while (Number((await table.getTable(id)).stage) === 2) {
@@ -302,7 +343,7 @@ describe("KryphoTable guards", function () {
     await (await table.join(id, s[0]!.address)).wait();
     await expect(table.connect(s[1]!).join(id, s[1]!.address)).to.emit(table, "Dealt");
     t = await table.getTable(id);
-    expect([Number(t.stage), Number(t.deckPtr), Number(t.turn)]).to.deep.equal([3, 14, 0]);
+    expect([Number(t.stage), Number(t.deckPtr), Number(t.turn)]).to.deep.equal([3, 18, 0]);
     expect(Number(t.deckEnd)).to.equal(138 - (await table.discardOf(id)).length);
     const hand = await table.handOf(id, 1);
     expect(await fhevm.helpers.decryptUint8({ euint8: hex(hand[0]!), contractAddress: await table.getAddress(), userAddress: s[1]!.address })).to.be.a("number");
@@ -330,13 +371,16 @@ describe("KryphoTable guards", function () {
     expect(card).to.be.lessThan(0x5f);
     const forced = await fhevm.helpers.decryptUint8({ euint8: hex(hand[9]!), contractAddress: address, userAddress: takeover.address });
     expect(forced).to.be.lessThan(0x5f);
+    const queue = await table.queueOf(id, first);
+    const queued = await fhevm.helpers.decryptUint8({ euint8: hex(queue[1]!), contractAddress: address, userAddress: takeover.address });
+    expect(queued).to.be.lessThan(0x5f);
     let denied = false;
     try {
-      await fhevm.helpers.decryptUint8({ euint8: hex(hand[9]!), contractAddress: address, userAddress: s[first]!.address });
+      await fhevm.helpers.decryptUint8({ euint8: hex(queue[1]!), contractAddress: address, userAddress: s[first]!.address });
     } catch {
       denied = true;
     }
-    expect(denied, "old session must not see the card drawn on the abandoning timeout").to.equal(true);
+    expect(denied, "old session must not see a card queued after the seat was handed over").to.equal(true);
     expect(Number((await table.getTable(id)).turn)).to.equal(1 - first);
     await (await table.connect(s[1 - first]!).draw(id)).wait();
     await (await table.connect(s[1 - first]!).pass(id)).wait();
@@ -373,12 +417,14 @@ describe("KryphoTable guards", function () {
     expect(Number(t.deckPtr)).to.equal(100);
     await (await table.stageDeck(id, 138, [])).wait();
     const turn = Number(t.turn);
+    const head = (await table.queueOf(id, turn))[0]!;
     await expect(table.connect(s[turn]!).draw(id)).to.emit(table, "Reshuffled").withArgs(id, size);
     t = await table.getTable(id);
     expect([Number(t.deckPtr), Number(t.deckEnd), Number(t.refillSize)]).to.deep.equal([1, size, 0]);
     const slot = Number(t.drawnSlot);
-    const drawn = await fhevm.cleartextDb.readUint8({ euint8: hex((await table.handOf(id, turn))[slot]!) });
-    expect(drawn).to.equal(refilled[0]);
+    expect((await table.handOf(id, turn))[slot], "the draw takes the head of the seat's queue").to.equal(head);
+    const queued = await fhevm.cleartextDb.readUint8({ euint8: hex((await table.queueOf(id, turn))[1]!) });
+    expect(queued, "the refilled deck tops the queue back up").to.equal(refilled[0]);
   });
   it("lets a spyglass read exactly one opponent card and keeps secret colours private", async function () {
     const { table, id } = await ready([s[0]!, s[1]!]);

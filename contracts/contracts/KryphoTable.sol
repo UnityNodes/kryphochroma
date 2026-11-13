@@ -9,12 +9,14 @@ import {CardLib} from "./CardLib.sol";
 import {KryphoScore} from "./KryphoScore.sol";
 import {KryphoRadio} from "./KryphoRadio.sol";
 import {KryphoLobby} from "./KryphoLobby.sol";
+import {KryphoHand} from "./KryphoHand.sol";
 
 contract KryphoTable is IKryphoTable, ZamaEthereumConfig {
     using CardLib for uint8;
 
     uint8 internal constant HAND_SLOTS = 24;
     uint8 internal constant HAND_START = 7;
+    uint8 internal constant NEXT_CARDS = 2;
     uint8 internal constant NONE = type(uint8).max;
     uint8 internal constant MAX_TIMEOUTS = 3;
     uint8 internal constant REFILL_AT = 48;
@@ -39,44 +41,11 @@ contract KryphoTable is IKryphoTable, ZamaEthereumConfig {
     uint8 internal constant KIND_VEIL = 8;
     uint8 internal constant KIND_DOUBT = 9;
     uint8 internal constant KIND_SONAR = 10;
-    uint8 internal constant SECRET_COLORS = 5;
     uint8 internal constant VEIL_TRUE_DRAW = 2;
     uint8 internal constant VEIL_LIE_DRAW = 4;
 
     bytes32 public immutable DOMAIN_SEPARATOR;
     address public immutable TAKEOVER;
-
-    struct Table {
-        address creator;
-        Config config;
-        Stage stage;
-        uint8 joined;
-        uint8 turn;
-        int8 dir;
-        uint8 topCard;
-        uint8 color;
-        uint64 turnDeadline;
-        uint16 round;
-        uint16 setupStep;
-        uint8 dealtMask;
-        uint8 deckPtr;
-        uint8 deckEnd;
-        uint8 refillAt;
-        uint8 refillSize;
-        uint8 refillStep;
-        uint16 refillFrom;
-        uint16 discardBase;
-        uint8 drawnSlot;
-        uint8 pendingDraw;
-        uint8 monoWindow;
-        uint8 drawFourBy;
-        uint8 veilBy;
-        uint8 veilJudge;
-        uint8 prevColor;
-        uint8 candidate;
-        uint8 revealPrepared;
-        uint64 monoBlock;
-    }
 
     uint256 public tableCount;
     mapping(uint256 => Table) internal _tables;
@@ -91,6 +60,7 @@ contract KryphoTable is IKryphoTable, ZamaEthereumConfig {
     mapping(uint256 => bytes32[]) internal _revealHandles;
     mapping(uint256 => uint32[4]) internal _nonces;
     mapping(uint256 => euint8[4]) internal _sonar;
+    mapping(uint256 => euint8[2][4]) internal _queue;
 
     constructor(address takeover) {
         TAKEOVER = takeover;
@@ -271,7 +241,7 @@ contract KryphoTable is IKryphoTable, ZamaEthereumConfig {
         }
         t.refillStep = step + 1;
         emit ShuffleProgress(id, step + 1, fills + KryphoDeck.SHUFFLE_STEPS);
-        if (t.deckPtr >= t.deckEnd) _swapRefill(id, t);
+        if (t.deckPtr >= t.deckEnd) KryphoHand.swapRefill(t, id);
     }
 
     function deal(uint256 id) external {
@@ -284,20 +254,18 @@ contract KryphoTable is IKryphoTable, ZamaEthereumConfig {
         uint8 n = t.joined;
         for (uint8 seat = 0; seat < n; seat++) {
             for (uint8 i = 0; i < HAND_START; i++) {
-                _giveCard(id, seat, i, _deck[id][i * n + seat]);
+                KryphoHand.give(_hands, _handColors, id, seat, i, _deck[id][i * n + seat], _seats[id][seat].session);
             }
             Seat storage s = _seats[id][seat];
             s.handSize = HAND_START;
             s.slots = (uint32(1) << HAND_START) - 1;
-            _honest[id][seat] = FHE.asEbool(true);
-            FHE.allowThis(_honest[id][seat]);
-            euint8 secret = FHE.rem(FHE.randEuint8(), SECRET_COLORS);
-            _secret[id][seat] = secret;
-            FHE.allowThis(secret);
-            FHE.allow(secret, s.session);
+            KryphoHand.seatUp(_honest, _secret, id, seat, s.session);
         }
         t.dealtMask = uint8((uint256(1) << n) - 1);
         t.deckPtr = HAND_START * n;
+        for (uint8 seat = 0; seat < n; seat++) {
+            for (uint8 k = 0; k < NEXT_CARDS; k++) KryphoHand.enqueue(_deck, _queue, t, id, seat, _seats[id][seat].session);
+        }
         _tryPlay(id, t);
     }
 
@@ -308,7 +276,7 @@ contract KryphoTable is IKryphoTable, ZamaEthereumConfig {
         if (!lobby && t.stage != Stage.Dealing) revert WrongStage(Stage.Dealing, t.stage);
         if (t.topCard != NONE) revert BadCard();
         bytes32[] memory handles = _starterHandles(id, t);
-        FHE.checkSignatures(handles, cleartexts, proof);
+        KryphoHand.verify(handles, cleartexts, proof);
         uint8 card = uint8(uint256(bytes32(cleartexts[0:32])));
         t.deckEnd--;
         _discard[id].push(card);
@@ -505,7 +473,7 @@ contract KryphoTable is IKryphoTable, ZamaEthereumConfig {
         Table storage t = _requireStage(id, Stage.AwaitChallenge);
         bytes32[] memory handles = new bytes32[](1);
         handles[0] = FHE.toBytes32(_hadColor[id]);
-        FHE.checkSignatures(handles, cleartexts, proof);
+        KryphoHand.verify(handles, cleartexts, proof);
         bool hadColor = uint256(bytes32(cleartexts[0:32])) != 0;
         t.stage = Stage.Playing;
         if (t.veilBy != NONE) {
@@ -562,7 +530,7 @@ contract KryphoTable is IKryphoTable, ZamaEthereumConfig {
     function finishReveal(uint256 id, bytes calldata cleartexts, bytes calldata proof) external {
         Table storage t = _requireStage(id, Stage.Revealing);
         if (t.revealPrepared != t.joined) revert RevealNotReady();
-        FHE.checkSignatures(_revealHandles[id], cleartexts, proof);
+        KryphoHand.verify(_revealHandles[id], cleartexts, proof);
         (int8 winner, bool over) = KryphoScore.settle(_seats, id, cleartexts, t.joined, t.candidate, t.topCard, t.config.singleRound, t.config.targetScore);
         t.stage = over ? Stage.MatchOver : Stage.RoundOver;
         if (over) emit MatchOver(id, winner);
@@ -584,6 +552,10 @@ contract KryphoTable is IKryphoTable, ZamaEthereumConfig {
 
     function handOf(uint256 id, uint8 seat) external view returns (euint8[24] memory) {
         return _hands[id][seat];
+    }
+
+    function queueOf(uint256 id, uint8 seat) external view returns (euint8[2] memory) {
+        return _queue[id][seat];
     }
 
     function secretOf(uint256 id, uint8 seat) external view returns (euint8) {
@@ -712,57 +684,17 @@ contract KryphoTable is IKryphoTable, ZamaEthereumConfig {
         return (t.deckPtr < t.deckEnd || _refillReady(t)) && _seats[id][seat].slots != (uint32(1) << HAND_SLOTS) - 1;
     }
 
+    function _drawInto(uint256 id, Table storage t, uint8 seat, uint8 count) internal returns (uint8) {
+        return KryphoHand.drawInto(_deck, _queue, _hands, _handColors, _seats[id][seat], t, id, seat, count);
+    }
+
     function _refillReady(Table storage t) internal view returns (bool) {
         return t.refillSize > 0 && t.refillStep == KryphoDeck.fillSteps(t.refillSize) + KryphoDeck.SHUFFLE_STEPS;
     }
 
-    function _swapRefill(uint256 id, Table storage t) internal returns (bool) {
-        if (!_refillReady(t)) return false;
-        t.deckPtr = t.refillAt;
-        t.deckEnd = t.refillAt + t.refillSize;
-        emit Reshuffled(id, t.refillSize);
-        t.refillSize = 0;
-        t.refillStep = 0;
-        return true;
-    }
-
     function _handOver(uint256 id, Seat storage s, uint8 seat) internal {
         s.session = TAKEOVER;
-        for (uint8 i = 0; i < HAND_SLOTS; i++) {
-            if (s.slots & (uint32(1) << i) != 0) FHE.allow(_hands[id][seat][i], TAKEOVER);
-        }
-    }
-
-    function _giveCard(uint256 id, uint8 seat, uint8 slot, euint8 card) internal {
-        _hands[id][seat][slot] = card;
-        FHE.allow(card, _seats[id][seat].session);
-        euint8 color = FHE.shr(card, 4);
-        _handColors[id][seat][slot] = color;
-        FHE.allowThis(color);
-    }
-
-    function _drawInto(uint256 id, Table storage t, uint8 seat, uint8 count) internal returns (uint8 lastSlot) {
-        Seat storage s = _seats[id][seat];
-        lastSlot = NONE;
-        for (uint8 k = 0; k < count; k++) {
-            if (t.deckPtr >= t.deckEnd && !_swapRefill(id, t)) break;
-            uint8 slot = _freeSlot(s.slots);
-            if (slot == NONE) break;
-            _giveCard(id, seat, slot, _deck[id][t.deckPtr]);
-            t.deckPtr++;
-            s.slots |= uint32(1) << slot;
-            s.handSize++;
-            s.saidMono = false;
-            lastSlot = slot;
-            emit Drew(id, seat, slot);
-        }
-    }
-
-    function _freeSlot(uint32 slots) internal pure returns (uint8) {
-        for (uint8 i = 0; i < HAND_SLOTS; i++) {
-            if (slots & (uint32(1) << i) == 0) return i;
-        }
-        return NONE;
+        KryphoHand.handOver(_hands, _queue, id, seat, s.slots, TAKEOVER);
     }
 
     function _recordHadColor(uint256 id, uint8 seat, uint8 slot, uint8 prevColor) internal {
@@ -824,6 +756,7 @@ contract KryphoTable is IKryphoTable, ZamaEthereumConfig {
         t.candidate = NONE;
         delete _discard[id];
         delete _revealHandles[id];
+        delete _queue[id];
         KryphoLobby.resetSeats(_seats, id, t.joined);
     }
 }

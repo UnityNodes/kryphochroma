@@ -18,6 +18,7 @@ import {
   type Draft,
   HAND_SLOTS,
   HAND_START,
+  NEXT_CARDS,
   MAX_SEATS,
   MAX_TIMEOUTS,
   MIN_SEATS,
@@ -96,6 +97,7 @@ function blankState(config: TableConfig, round: number, scores: readonly number[
     },
     deck: [],
     hands: Array.from({ length: config.seats }, () => Array.from({ length: HAND_SLOTS }, () => null)),
+    queues: Array.from({ length: config.seats }, () => []),
     honest: Array.from({ length: config.seats }, () => true),
     hadColor: null,
     veilTrue: null,
@@ -125,6 +127,7 @@ function deal(base: GameState, deck: readonly Card[]): Transition {
     skipped.push(top);
     top = d.deck.pop() as Card;
   }
+  d.queues = Array.from({ length: seats }, () => Array.from({ length: NEXT_CARDS }, () => d.deck.shift() as Card));
   d.pub.topCard = top;
   d.pub.color = colorOf(top) as Color;
   d.pub.discard = [...skipped, top];
