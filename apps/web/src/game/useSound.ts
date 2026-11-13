@@ -23,6 +23,8 @@ export function useSound(): SoundControls {
   const shoutBuffer = useRef<AudioBuffer | null>(null);
 
   useEffect(() => {
+    const clip = fetch(SHOUT_URL).then((res) => res.arrayBuffer());
+    clip.catch(() => undefined);
     const unlock = () => {
       if (ctx.current || typeof AudioContext === "undefined") return;
       try {
@@ -31,9 +33,8 @@ export function useSound(): SoundControls {
         out.gain.value = DEFAULT_VOLUME;
         out.connect(audio.destination);
         ctx.current = { audio, out };
-        void fetch(SHOUT_URL)
-          .then((res) => res.arrayBuffer())
-          .then((data) => audio.decodeAudioData(data))
+        void clip
+          .then((data) => audio.decodeAudioData(data.slice(0)))
           .then((buffer) => {
             shoutBuffer.current = buffer;
           })
