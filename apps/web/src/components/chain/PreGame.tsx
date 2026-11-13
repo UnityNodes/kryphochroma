@@ -11,6 +11,7 @@ import { AvatarGlyph, avatarColor } from "@/components/profile/Avatar";
 import { ProfileChip } from "@/components/profile/ProfileChip";
 import { useMyProfile } from "@/components/profile/useMyProfile";
 import { useProfiles } from "@/components/profile/useProfiles";
+import { WaitHint } from "@/components/table/ChainProgress";
 import { PageShell } from "@/components/site/PageShell";
 import { WalletBar } from "@/components/wallet/WalletBar";
 import { tableCode, tablePath } from "@/lib/invite";
@@ -92,6 +93,9 @@ export function PreGame({ id, snapshot, address, watching, onFill, onStart, onJo
                 </li>
               ))}
             </ol>
+            {pending && (
+              <WaitHint note={{ title: "Taking your seat on Sepolia", why: "You signed your seat and our relayer put it into a transaction, so you pay nothing. It counts once it is in a block, about 12 s, and the cards are dealt encrypted in that same block." }} />
+            )}
             {(snapshot.me >= 0 || pending) && (
               <div className="flex flex-wrap items-center gap-2 text-sm text-cream/70">
                 Your name at the table

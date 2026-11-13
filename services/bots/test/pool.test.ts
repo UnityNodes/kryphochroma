@@ -22,15 +22,15 @@ describe("quick tables with bots already seated", () => {
 
 describe("ready table pool", () => {
   it("keeps spare shuffled tables for every table size, the four seat ones first", () => {
-    expect(planPool([], 20).create).toEqual([4, 4, 4, 4, 4, 4, 3, 3, 3, 2, 2, 2, 2, 2]);
-    expect(planPool([t(1, 4), t(2, 3)], 20).create).toEqual([4, 4, 4, 4, 4, 3, 3, 2, 2, 2, 2, 2]);
-    const full = [...Array.from({ length: 6 }, (_, i) => t(i + 1, 4)), ...Array.from({ length: 3 }, (_, i) => t(i + 7, 3)), ...Array.from({ length: 5 }, (_, i) => t(i + 10, 2))];
+    expect(planPool([], 20).create).toEqual([4, 4, 3, 2]);
+    expect(planPool([t(1, 4), t(2, 3)], 20).create).toEqual([4, 2]);
+    const full = [t(1, 4), t(2, 4), t(3, 3), t(4, 2)];
     expect(planPool(full, 20).create).toEqual([]);
   });
 
   it("does not count reserved or occupied tables as spare, and respects the cap", () => {
-    expect(planPool([t(1, 4, 0, { reserved: true }), t(2, 4, 2)], 6).create).toEqual([4, 4, 4, 4]);
-    expect(planPool([t(1, 4, 1), t(2, 3, 1)], 4).create).toEqual([4, 4]);
+    expect(planPool([t(1, 4, 0, { reserved: true }), t(2, 4, 2)], 5).create).toEqual([4, 4, 3]);
+    expect(planPool([t(1, 4, 1), t(2, 3, 1)], 3).create).toEqual([4]);
   });
 
   it("fills every spare slot when the pool is empty and the cap allows", () => {

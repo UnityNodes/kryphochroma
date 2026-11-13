@@ -1,9 +1,10 @@
 import { CARD_COLORS } from "@kryphochroma/cards";
 import { cardLabel } from "@kryphochroma/rules";
-import { Loader2, Lock, RotateCw } from "lucide-react";
+import { Lock, RotateCw } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { pileTilt } from "@/game/flight";
 import { CardBack, CardFace } from "./CardSvg";
+import { type WaitNote, WaitHint } from "./ChainProgress";
 
 const PILE_SHOWN = 5;
 
@@ -13,7 +14,7 @@ export interface CenterProps {
   readonly deckCount: number;
   readonly dir: 1 | -1;
   readonly status: string;
-  readonly note?: string | null;
+  readonly note?: WaitNote | null;
   readonly canDraw: boolean;
   readonly next?: readonly number[];
   readonly colorBlind: boolean;
@@ -70,12 +71,7 @@ export function Center({ discard, color, deckCount, dir, status, note, canDraw, 
         </span>
         <span>{status}</span>
       </div>
-      {note && (
-        <p className="kc-note" role="status">
-          <Loader2 className="animate-spin" aria-hidden />
-          {note}
-        </p>
-      )}
+      {note && <WaitHint note={note} className="kc-note" />}
     </div>
   );
 }

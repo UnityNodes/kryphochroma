@@ -30,6 +30,8 @@ export interface ChainSync {
   readonly chainStage: number;
   readonly revealPrepared: number;
   readonly seats: number;
+  readonly refillStep: number;
+  readonly refillTotal: number;
 }
 
 export interface SonarReading {

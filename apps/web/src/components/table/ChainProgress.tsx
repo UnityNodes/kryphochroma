@@ -62,9 +62,56 @@ export function RoundEndProgress({ sync, winner }: { readonly sync: ChainSync; r
   );
 }
 
-export function sealedCardNote(sync: ChainSync | null | undefined, sealed: number, handSize: number): string | null {
+export interface WaitNote {
+  readonly title: string;
+  readonly why: string;
+  readonly phase?: string;
+}
+
+const BLOCK_WHY = "Sepolia makes one block about every 12 s, and your move counts once it is in a block.";
+const KMS_WHY = "Each card is a ciphertext on chain. Zama KMS re-encrypts it for your key alone, nobody else can read it, not even our server. Usually 3 to 8 s.";
+
+export function sealedCardNote(sync: ChainSync | null | undefined, sealed: number, handSize: number): WaitNote | null {
   if (!sync || sealed === 0) return null;
-  if (sealed === handSize) return "Your hand: Zama KMS is decrypting it for your key only";
-  const cards = sealed === 1 ? "Your new card" : `${sealed} new cards`;
-  return sync.pendingMoves > 0 ? `${cards}: writing your draw to Sepolia (${sync.pendingMoves} moves queued)` : `${cards}: Zama KMS is decrypting ${sealed === 1 ? "it" : "them"} for your key only`;
+  if (sealed === handSize) return { title: "Opening your hand", why: KMS_WHY, phase: "kms" };
+  if (sync.pendingMoves > 0) {
+    const cards = sealed === 1 ? "your new card" : `${sealed} new cards`;
+    return { title: `Writing ${cards} to Sepolia`, why: `${BLOCK_WHY} ${sync.pendingMoves} ${sync.pendingMoves === 1 ? "move is" : "moves are"} queued for it.`, phase: "block" };
+  }
+  return { title: `Opening your cards, ${sealed} still sealed`, why: KMS_WHY, phase: "kms" };
+}
+
+export function refillNote(sync: ChainSync | null | undefined, deckCount: number): WaitNote | null {
+  if (!sync || deckCount > 0) return null;
+  const progress = sync.refillTotal > 0 ? ` Step ${sync.refillStep} of ${sync.refillTotal}.` : "";
+  return { title: "Shuffling a fresh deck from the discard pile", why: `The deck ran out. The new one is shuffled on chain in encrypted swaps, a few blocks, so nobody learns its order; until then you can only pass or play from your hand.${progress}` };
+}
+
+export function WaitHint({ note, className }: { readonly note: WaitNote; readonly className?: string }) {
+  const elapsed = useElapsedFor(note.phase ?? note.title);
+  return (
+    <div className={cn("kc-wait-hint", className)} role="status" aria-live="polite">
+      <p>
+        <Loader2 className="animate-spin" aria-hidden />
+        <b>{note.title}</b>
+        <span className="kc-elapsed">{elapsed} s</span>
+      </p>
+      <small>{note.why}</small>
+    </div>
+  );
+}
+
+function useElapsedFor(key: string): number {
+  const [start, setStart] = useState(() => ({ key, at: Date.now() }));
+  const [now, setNow] = useState(start.at);
+  useEffect(() => {
+    const timer = setInterval(() => setNow(Date.now()), TICK_MS);
+    return () => clearInterval(timer);
+  }, []);
+  if (start.key !== key) {
+    const at = Date.now();
+    setStart({ key, at });
+    setNow(at);
+  }
+  return Math.max(0, Math.floor((now - start.at) / 1000));
 }

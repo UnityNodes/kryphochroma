@@ -14,6 +14,7 @@ import { useChainGame } from "@/chain/useChainGame";
 import { useFunder } from "@/components/wallet/useFunder";
 import { TableView, useColorBlind } from "@/components/table/Table";
 import { PageShell } from "@/components/site/PageShell";
+import { WaitHint } from "@/components/table/ChainProgress";
 import { PreGame } from "./PreGame";
 
 function seatDeps(funder: Funder): SeatDeps {
@@ -92,9 +93,17 @@ export function ChainTable({ id, watch }: { readonly id: string; readonly watch?
     return (
       <PageShell>
         <div className="grid flex-1 place-items-center px-4 py-14" aria-busy="true">
-          <p className="kc-status" role="status">
-            {game.error ? `Reconnecting to Sepolia. ${game.error}` : dealt ? "Reading the dealt cards from Sepolia…" : "Reading the table from Sepolia…"}
-          </p>
+          {game.error ? (
+            <p className="kc-status" role="status">{`Reconnecting to Sepolia. ${game.error}`}</p>
+          ) : (
+            <WaitHint
+              note={
+                dealt
+                  ? { title: "Reading the dealt cards", why: "Your cards are ciphertexts stored in the contract. The browser reads them from Sepolia, then Zama KMS opens them for your key only." }
+                  : { title: "Reading the table from Sepolia", why: "Everything about this table lives in the contract, so the page loads it straight from the chain." }
+              }
+            />
+          )}
         </div>
       </PageShell>
     );

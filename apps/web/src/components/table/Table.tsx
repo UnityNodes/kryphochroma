@@ -2,7 +2,7 @@
 
 import { CARD_COLORS, sharedDefs } from "@kryphochroma/cards";
 import { type Color, type Peek, canDraw, cardLabel, canSayMono, botCatchTarget, isPlayable, isSpyglass, isWild, legalMoves, veilClaims } from "@kryphochroma/rules";
-import { ArrowLeft, BadgeCheck, Eye, EyeOff, House, Layers, Loader2, Play, Radar, Shapes, Shuffle, Swords, Trophy, Volume2, VolumeX, WifiOff } from "lucide-react";
+import { ArrowLeft, BadgeCheck, Eye, EyeOff, House, Layers, Play, Radar, Shapes, Shuffle, Swords, Trophy, Volume2, VolumeX, WifiOff } from "lucide-react";
 import Link from "next/link";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { toast } from "sonner";
@@ -17,7 +17,7 @@ import { useSound } from "@/game/useSound";
 import { useOfflineGame } from "@/game/useOfflineGame";
 import { cn } from "@/lib/utils";
 import { Center } from "./Center";
-import { RoundEndProgress, sealedCardNote } from "./ChainProgress";
+import { RoundEndProgress, WaitHint, refillNote, sealedCardNote } from "./ChainProgress";
 import { Feed } from "./Feed";
 import { Hand } from "./Hand";
 import { HowToPlay } from "./HowToPlay";
@@ -248,7 +248,7 @@ export function TableView({ controller: game, colorBlind, onToggleShapes }: Tabl
           deckCount={pub.deckCount}
           dir={pub.dir}
           status={status}
-          note={game.watching ? null : sealedCardNote(game.sync, hand.filter((c) => c !== null && c < 0).length, hand.filter((c) => c !== null).length)}
+          note={game.watching ? null : (sealedCardNote(game.sync, hand.filter((c) => c !== null && c < 0).length, hand.filter((c) => c !== null).length) ?? (pub.stage === "Playing" ? refillNote(game.sync, pub.deckCount) : null))}
           canDraw={mine && drawLabel === "Draw" && pub.drawFour === null && pub.pendingDraw === 0}
           next={game.watching ? [] : (state.queues?.[HUMAN] ?? [])}
           colorBlind={colorBlind}
@@ -384,10 +384,14 @@ export function TableView({ controller: game, colorBlind, onToggleShapes }: Tabl
               : ""}
           </DialogDescription>
           {result && game.mode === "chain" && (
-            <p className="flex items-center gap-2 text-xs font-semibold text-muted" role="status">
-              {game.verifying ? <Loader2 className="size-3.5 animate-spin text-sun" aria-hidden /> : <BadgeCheck className="size-3.5 text-teal" aria-hidden />}
-              {game.verifying ? "Scored from the revealed hands, proof on Sepolia in a few seconds" : "Verified on Sepolia"}
-            </p>
+            game.verifying ? (
+              <WaitHint note={{ title: "Proving the score on Sepolia", why: "The hands are already open, so the score is shown at once. Zama KMS now decrypts them in public and the contract checks its signatures, usually 15 to 40 s. You can start a new game meanwhile." }} />
+            ) : (
+              <p className="flex items-center gap-2 text-xs font-semibold text-muted" role="status">
+                <BadgeCheck className="size-3.5 text-teal" aria-hidden />
+                Verified on Sepolia: every hand and honesty bit checked against the KMS proof
+              </p>
+            )
           )}
           {result && (
             <table className="w-full text-left text-sm">
