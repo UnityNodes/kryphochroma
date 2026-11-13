@@ -107,11 +107,6 @@ export const kryphoTableAbi = [
   },
   {
     "inputs": [],
-    "name": "InvalidKMSSignatures",
-    "type": "error"
-  },
-  {
-    "inputs": [],
     "name": "MustPlayDrawnCard",
     "type": "error"
   },
@@ -598,25 +593,6 @@ export const kryphoTableAbi = [
       }
     ],
     "name": "Played",
-    "type": "event"
-  },
-  {
-    "anonymous": false,
-    "inputs": [
-      {
-        "indexed": false,
-        "internalType": "bytes32[]",
-        "name": "handlesList",
-        "type": "bytes32[]"
-      },
-      {
-        "indexed": false,
-        "internalType": "bytes",
-        "name": "abiEncodedCleartexts",
-        "type": "bytes"
-      }
-    ],
-    "name": "PublicDecryptionVerified",
     "type": "event"
   },
   {
@@ -1419,7 +1395,7 @@ export const kryphoTableAbi = [
             "type": "uint64"
           }
         ],
-        "internalType": "struct KryphoTable.Table",
+        "internalType": "struct IKryphoTable.Table",
         "name": "",
         "type": "tuple"
       }
@@ -1641,6 +1617,30 @@ export const kryphoTableAbi = [
     "name": "prepareReveal",
     "outputs": [],
     "stateMutability": "nonpayable",
+    "type": "function"
+  },
+  {
+    "inputs": [
+      {
+        "internalType": "uint256",
+        "name": "id",
+        "type": "uint256"
+      },
+      {
+        "internalType": "uint8",
+        "name": "seat",
+        "type": "uint8"
+      }
+    ],
+    "name": "queueOf",
+    "outputs": [
+      {
+        "internalType": "euint8[2]",
+        "name": "",
+        "type": "bytes32[2]"
+      }
+    ],
+    "stateMutability": "view",
     "type": "function"
   },
   {

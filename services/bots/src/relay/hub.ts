@@ -8,7 +8,9 @@ import {
   decryptEach,
   fieldsFor,
   namesSlot,
-  slotSettled,
+  seatHandles,
+  slotReady,
+  ZERO_HANDLE,
   kryphoTableAbi,
   stepAction,
   project,
@@ -75,6 +77,8 @@ interface TableHub {
   monoSeat: number;
   catchableAt: bigint | null;
   block: bigint;
+  hands: (readonly Hex[])[];
+  queues: (readonly Hex[])[];
   subscribers: Set<(message: HubMessage) => void>;
 }
 
@@ -101,7 +105,7 @@ export function createRelay(deps: RelayDeps) {
     const key = id.toString();
     let hub = hubs.get(key);
     if (!hub) {
-      hub = { chain: null, chainNonces: [0, 0, 0, 0], sessions: [], log: [], signers: new Map(), abandoned: [], sending: false, pipes: 0, sent: new Set(), thinking: new Set(), monoSeat: 255, catchableAt: null, block: 0n, subscribers: new Set() };
+      hub = { chain: null, chainNonces: [0, 0, 0, 0], sessions: [], log: [], signers: new Map(), abandoned: [], sending: false, pipes: 0, sent: new Set(), thinking: new Set(), monoSeat: 255, catchableAt: null, block: 0n, hands: [], queues: [], subscribers: new Set() };
       hubs.set(key, hub);
     }
     return hub;
@@ -113,20 +117,18 @@ export function createRelay(deps: RelayDeps) {
 
   const projected = (hub: TableHub) => (hub.chain ? project(hub.chain, hub.chainNonces, hub.log) : null);
 
-  async function decryptBotHand(bot: Bot, id: bigint, seat: number, slots: number, blockNumber: bigint): Promise<(Card | null)[]> {
-    const handles = (await deps.publicClient.readContract({ address: deps.table, abi: kryphoTableAbi, functionName: "handOf", args: [id, seat], blockNumber } as never)) as readonly Hex[];
-    const missing = handles.filter((h, i) => (slots & (1 << i)) !== 0 && !bot.plain.has(h));
-    if (missing.length > 0) {
-      if (!bot.permitted) {
-        await bot.sdk.permits.grantPermit([deps.table]);
-        bot.permitted = true;
-      }
-      const { values, pending } = await decryptEach((batch) => bot.sdk.decryption.decryptValues(batch.map((encryptedValue) => ({ encryptedValue, contractAddress: deps.table }))), missing);
-      for (const [handle, value] of values) bot.plain.set(handle, value);
-      if (pending.length > 0) deps.log({ event: "bot-decrypt-pending", id, seat, pending: pending.length });
+  async function decryptFor(bot: Bot, id: bigint, seat: number, handles: readonly Hex[]): Promise<void> {
+    const missing = handles.filter((h) => h !== ZERO_HANDLE && !bot.plain.has(h));
+    if (missing.length === 0) return;
+    if (!bot.permitted) {
+      await bot.sdk.permits.grantPermit([deps.table]);
+      bot.permitted = true;
     }
-    return handles.map((h, i) => ((slots & (1 << i)) !== 0 ? (bot.plain.get(h) ?? null) : null));
+    const { values, pending } = await decryptEach((batch) => bot.sdk.decryption.decryptValues(batch.map((encryptedValue) => ({ encryptedValue, contractAddress: deps.table }))), missing);
+    for (const [handle, value] of values) bot.plain.set(handle, value);
+    if (pending.length > 0) deps.log({ event: "bot-decrypt-pending", id, seat, pending: pending.length });
   }
+
 
   /** Every read pins one block: a relay batch mined between two reads would pair an old table with new nonces and every later action would fail with BadNonce. */
   async function refresh(id: bigint, atLeast = 0n): Promise<void> {
@@ -141,15 +143,29 @@ export function createRelay(deps: RelayDeps) {
     const seats = (await Promise.all(Array.from({ length: Number(table.joined) }, (_, i) => read("getSeat", [id, i])))) as (ChainSeat & { session: Hex })[];
     const discard = ((await read("discardOf", [id])) as readonly number[]).map(Number);
     const nonces = ((await read("noncesOf", [id])) as readonly number[]).map(Number);
+    const dealt = Number(table.stage) >= 3;
+    const [hands, queues] = dealt
+      ? await Promise.all([Promise.all(seats.map((_, i) => read("handOf", [id, i]))), Promise.all(seats.map((_, i) => read("queueOf", [id, i])))]) as [Hex[][], Hex[][]]
+      : [[], []];
     const known = new Map<number, readonly (Card | null)[]>();
+    const queued: (Card | null)[][] = [];
     for (const [seat, s] of seats.entries()) {
       const session = s.session.toLowerCase();
       const bot = session === takeover && !s.abandoned ? undefined : bots.find((b) => b.account.address.toLowerCase() === session);
-      if (bot && Number(table.stage) >= 3) known.set(seat, await decryptBotHand(bot, id, seat, Number(s.slots), block));
+      const slots = Number(s.slots);
+      const hand = hands[seat] ?? [];
+      const queue = (queues[seat] ?? []).filter((h) => h !== ZERO_HANDLE);
+      if (bot && dealt) {
+        await decryptFor(bot, id, seat, [...hand.filter((_, i) => (slots & (1 << i)) !== 0), ...queue]);
+        known.set(seat, hand.map((h, i) => ((slots & (1 << i)) !== 0 ? (bot.plain.get(h) ?? null) : null)));
+      }
+      queued.push(queue.map((h) => (bot ? (bot.plain.get(h) ?? null) : null)));
     }
     if (block < hub.block) return;
     hub.block = block;
-    hub.chain = projectChain(table, seats, discard, known);
+    hub.chain = projectChain(table, seats, discard, known, dealt ? queued : undefined);
+    hub.hands = hands;
+    hub.queues = queues;
     hub.chainNonces = nonces;
     hub.sessions = seats.map((s) => s.session.toLowerCase());
     hub.monoSeat = Number(table.monoWindow);
@@ -206,10 +222,10 @@ export function createRelay(deps: RelayDeps) {
           if (!now || now.state.pub.stage !== "Playing") return;
           const again = decide(hub, now.state, seat);
           if (!again || !hub.chain) return;
-          if (namesSlot(again) && !slotSettled(hub.chain, now.state, seat, again.slot)) return;
+          const handles = seatHandles(hub.hands[seat] ?? [], hub.queues[seat] ?? [], now.events, seat);
+          if (namesSlot(again) && !slotReady(handles, again.slot)) return;
           const nonce = (hub.chainNonces[seat] ?? 0) + now.valid.filter((a) => a.seat === seat).length;
-          const handles = (await deps.publicClient.readContract({ address: deps.table, abi: kryphoTableAbi, functionName: "handOf", args: [id, seat], blockNumber: hub.block } as never)) as readonly Hex[];
-          const fields = fieldsFor(id, seat, again, nonce, handles);
+          const fields = fieldsFor(id, seat, again, nonce, handles.map((h) => h ?? ZERO_HANDLE));
           const signature = await bot.account.signTypedData({ domain, types: ACTION_TYPES, primaryType: "Action", message: { ...fields } });
           const result = await accept({ ...fields, signature });
           if (!result.ok) deps.log({ event: "bot-action-refused", id, seat, reason: result.reason });

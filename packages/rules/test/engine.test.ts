@@ -1,4 +1,5 @@
 import { describe, expect, it } from "vitest";
+import type { GameState } from "../src/index.js";
 import {
   DECK_SIZE,
   NEXT_CARDS,
@@ -223,7 +224,7 @@ describe("personal draw queue", () => {
 
   it("draws straight from the deck for a state without queues", () => {
     const { state } = initialState(config(2), 1, fullDeck());
-    const bare = { ...state, queues: undefined };
+    const bare: GameState = { pub: state.pub, deck: state.deck, hands: state.hands, honest: state.honest, hadColor: state.hadColor, veilTrue: state.veilTrue, secrets: state.secrets, rng: state.rng };
     const top = state.deck[0];
     expect(applyDraw(bare, 0).state.hands[0]?.[7]).toBe(top);
   });

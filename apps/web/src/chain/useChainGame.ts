@@ -9,11 +9,13 @@ import {
   decryptEach,
   fieldsFor,
   namesSlot,
-  slotSettled,
+  seatHandles,
+  slotReady,
   kryphoTableAbi,
   project,
   projectChain,
   stepAction,
+  ZERO_HANDLE,
 } from "@kryphochroma/abi";
 import { type Card, type GameState, type Move, initialState } from "@kryphochroma/rules";
 import { type FheChain, ZamaSDK } from "@zama-fhe/sdk";
@@ -107,9 +109,8 @@ export function useChainGame(id: bigint, colorBlind: boolean, watchOnly = false)
   const { enqueue, reset } = queue;
 
   const plain = useRef(new Map<Hex, number>());
-  const handles = useRef<readonly Hex[]>([]);
   const lastBlock = useRef<bigint | null>(null);
-  const chain = useRef<{ state: GameState; nonces: number[] } | null>(null);
+  const chain = useRef<{ state: GameState; nonces: number[]; hand: readonly Hex[]; queue: readonly Hex[] } | null>(null);
   const actions = useRef<SignedAction[]>([]);
   const projected = useRef<GameState | null>(null);
   const permit = useRef<Promise<void> | null>(null);
@@ -230,21 +231,23 @@ export function useChainGame(id: bigint, colorBlind: boolean, watchOnly = false)
     }
     const peekAt = pendingPeek.current;
     const zero = Promise.resolve(undefined);
-    const [discardRaw, noncesRaw, ownRaw, secretRaw, peekRaw, pingRaw] = await Promise.all([
+    const [discardRaw, noncesRaw, ownRaw, secretRaw, peekRaw, pingRaw, queuesRaw] = await Promise.all([
       read("discardOf", [id]),
       read("noncesOf", [id]),
       seat >= 0 ? read("handOf", [id, seat]) : zero,
       seat >= 0 ? read("secretOf", [id, seat]) : zero,
       seat >= 0 && peekAt ? read("handOf", [id, peekAt.seat]) : zero,
       seat >= 0 ? read("sonarOf", [id, seat]) : zero,
+      Promise.all(seats.map((_, i) => read("queueOf", [id, i]))),
     ]);
     const discard = (discardRaw as readonly number[]).map(Number);
     const nonces = (noncesRaw as readonly number[]).map(Number);
+    const queueHandles = (queuesRaw as Hex[][]).map((q) => q.filter((h) => !/^0x0+$/.test(h)));
+    const myQueue = seat >= 0 ? (queueHandles[seat] ?? []) : [];
     const known = new Map<number, readonly (Card | null)[]>();
     if (seat >= 0) {
       const slots = Number(seats[seat]?.slots ?? 0);
       const own = ownRaw as readonly Hex[];
-      handles.current = own;
       const secret = secretRaw as Hex;
       const peekHandle = peekAt ? (peekRaw as readonly Hex[])[peekAt.slot] : undefined;
       const ping = pingRaw as Hex;
@@ -252,7 +255,7 @@ export function useChainGame(id: bigint, colorBlind: boolean, watchOnly = false)
       const fresh = sonarAt && !/^0x0+$/.test(ping) && ping !== sonarAt.stale ? ping : undefined;
       if (!sonarAt) sonarHandle.current = ping;
       const extra = [secret, ...(peekHandle ? [peekHandle] : []), ...(fresh ? [fresh] : [])].filter((h) => !/^0x0+$/.test(h) && !plain.current.has(h));
-      const missing = [...own.filter((h, i) => (slots & (1 << i)) !== 0 && !plain.current.has(h)), ...extra];
+      const missing = [...own.filter((h, i) => (slots & (1 << i)) !== 0 && !plain.current.has(h)), ...myQueue.filter((h) => !plain.current.has(h)), ...extra];
       const queued = missing.filter((h) => !inflight.current.has(h));
       if (queued.length > 0) {
         for (const h of queued) inflight.current.add(h);
@@ -271,12 +274,13 @@ export function useChainGame(id: bigint, colorBlind: boolean, watchOnly = false)
         pendingPeek.current = null;
       }
     }
-    const state = projectChain(table, seats, discard, known);
+    const queues = queueHandles.map((q, i) => q.map((h) => (i === seat ? (plain.current.get(h) ?? null) : null)));
+    const state = projectChain(table, seats, discard, known, queues);
     if (!state) return;
     const from = lastBlock.current === null ? block : lastBlock.current + 1n;
     const logs = from <= block ? await publicClient.getLogs({ address: TABLE_ADDRESS, fromBlock: from, toBlock: block }) : [];
     lastBlock.current = block;
-    chain.current = { state, nonces };
+    chain.current = { state, nonces, hand: seat >= 0 ? (ownRaw as readonly Hex[]) : [], queue: myQueue };
     actions.current = actions.current.filter((a) => a.nonce >= (nonces[a.seat] ?? 0));
     reconcile(toGameEvents(keeperLogs(logs), id));
   }, [clients, burner, id, reconcile, watchOnly, ensurePermit, decryptOwn]);
@@ -367,12 +371,13 @@ export function useChainGame(id: bigint, colorBlind: boolean, watchOnly = false)
       try {
       const seat = meRef.current;
       const queued = project(base.state, base.nonces, actions.current);
-      if (namesSlot(move) && !slotSettled(base.state, queued.state, seat, move.slot)) {
+      const handles = seatHandles(base.hand, base.queue, queued.events, seat);
+      if (namesSlot(move) && !slotReady(handles, move.slot)) {
         wake.current();
         return "That card is still on its way to Sepolia, pick it again in a moment";
       }
       const mineQueued = queued.valid.filter((a) => a.seat === seat).length;
-      const fields = fieldsFor(id, seat, move, (base.nonces[seat] ?? 0) + mineQueued, handles.current);
+      const fields = fieldsFor(id, seat, move, (base.nonces[seat] ?? 0) + mineQueued, handles.map((h) => h ?? ZERO_HANDLE));
       const signature = await burner.signTypedData({ domain, types: ACTION_TYPES, primaryType: "Action", message: { ...fields } });
       const res = await fetch("/api/act", { method: "POST", body: JSON.stringify({ ...fields, table: fields.table.toString(), signature }) });
       if (res.ok) {

@@ -140,5 +140,9 @@
 .kc-progress .kc-ok{color:var(--g)}
 .kc-progress .kc-dot-wait{width:12px;height:12px;margin:4px 3px;border-radius:50%;border:2px solid #f4e6c84d}
 .kc-progress .kc-elapsed{position:absolute;top:18px;right:20px;font-size:12px;font-variant-numeric:tabular-nums;color:var(--muted)}
+.kc-next{isolation:isolate;display:flex;flex-direction:column;align-items:center;gap:6px;font-size:11px;font-weight:600;letter-spacing:.08em;text-transform:uppercase;color:var(--muted)}
+.kc-nx{position:relative;width:calc(var(--cw)*.46);aspect-ratio:2/3;filter:drop-shadow(0 3px 4px #0007)}
+.kc-nx svg{width:100%;height:100%;display:block}
+.kc-nx+.kc-nx{margin-top:calc(var(--cw)*-.3);z-index:-1}
 .kc-note{margin-top:-22px;display:flex;align-items:center;gap:8px;font-size:12.5px;color:var(--muted)}
 .kc-note svg{width:14px;height:14px}

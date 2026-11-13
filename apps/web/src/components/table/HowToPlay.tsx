@@ -15,6 +15,7 @@ const RULES = [
   "Veil, once per round: lay any card face down and name a number card that fits. The next player may doubt it. A lie draws 4, a wrong doubt draws 2.",
   "Secret colour: you get a hidden colour at the deal. Go out on a card of that colour and the round counts double.",
   "No card to play? Draw one. If it fits you may play it, otherwise pass. Down to one card? Press Mono! or get caught for 2.",
+  "Your next two draws wait face up beside the deck, for your eyes only, so a drawn card is in your hand the moment you take it.",
 ] as const;
 
 const KEYS = [

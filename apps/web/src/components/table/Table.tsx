@@ -250,6 +250,7 @@ export function TableView({ controller: game, colorBlind, onToggleShapes }: Tabl
           status={status}
           note={game.watching ? null : sealedCardNote(game.sync, hand.filter((c) => c !== null && c < 0).length, hand.filter((c) => c !== null).length)}
           canDraw={mine && drawLabel === "Draw" && pub.drawFour === null && pub.pendingDraw === 0}
+          next={game.watching ? [] : (state.queues?.[HUMAN] ?? [])}
           colorBlind={colorBlind}
           onDraw={onDraw}
           deckRef={anchor(anchorKey.deck)}

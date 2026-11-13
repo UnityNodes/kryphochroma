@@ -114,6 +114,7 @@ export function projectChain(
   seats: readonly ChainSeat[],
   discard: readonly number[],
   known: ReadonlyMap<number, readonly (Card | null)[]>,
+  queues?: readonly (readonly (Card | null)[])[],
 ): GameState | null {
   const pub = toPublicState(table, seats, discard);
   if (!pub) return null;
@@ -129,12 +130,14 @@ export function projectChain(
     veilTrue: null,
     secrets: pub.seats.map(() => UNKNOWN_CARD),
     rng: 1,
+    ...(queues ? { queues: pub.seats.map((_, i) => (queues[i] ?? []).map((card) => card ?? UNKNOWN_CARD)) } : {}),
   };
 }
 
-export function project(chain: GameState, chainNonces: readonly number[], log: readonly SignedAction[]): { state: GameState; valid: SignedAction[] } {
+export function project(chain: GameState, chainNonces: readonly number[], log: readonly SignedAction[]): { state: GameState; valid: SignedAction[]; events: GameEvent[] } {
   let state = chain;
   const valid: SignedAction[] = [];
+  const events: GameEvent[] = [];
   const expected = [...chainNonces];
   for (const action of log) {
     if (action.nonce < (chainNonces[action.seat] ?? 0)) continue;
@@ -144,8 +147,9 @@ export function project(chain: GameState, chainNonces: readonly number[], log: r
     state = next.state;
     expected[action.seat] = action.nonce + 1;
     valid.push(action);
+    events.push(...next.events);
   }
-  return { state, valid };
+  return { state, valid, events };
 }
 
 export function stepAction(state: GameState, action: ActionFields): { state: GameState; events: readonly GameEvent[] } | null {
@@ -163,10 +167,22 @@ export function fillMessage(table: bigint): string {
   return `Kryphochroma: seat bots at table ${table.toString()}`;
 }
 
-/** A play or a veil names the handle that sits in its slot on chain; a card that reached the hand only through moves still waiting for the relay has no such handle yet, so that move has to wait or the contract rejects it as StaleHand and every later move in the batch with it. */
-export function slotSettled(chain: GameState, projected: GameState, seat: number, slot: number): boolean {
-  const base = chain.hands[seat]?.[slot] ?? null;
-  return base !== null && base === (projected.hands[seat]?.[slot] ?? null);
+/** A play or a veil names the handle that sits in its slot on chain. A card drawn by a move still waiting for the relay is the head of the seat's queue, whose handle is already public, so the hand is replayed over the pending moves; a slot whose handle cannot be known yet comes back null and that move has to wait, or the contract rejects it as StaleHand. */
+export function seatHandles(chainHand: readonly `0x${string}`[], chainQueue: readonly `0x${string}`[], events: readonly GameEvent[], seat: number): (`0x${string}` | null)[] {
+  const hand: (`0x${string}` | null)[] = [...chainHand];
+  const queue = chainQueue.filter((h) => h !== ZERO_HANDLE);
+  let next = 0;
+  for (const event of events) {
+    if (!("seat" in event) || event.seat !== seat) continue;
+    if (event.type === "Played" || event.type === "Veiled") hand[event.slot] = null;
+    else if (event.type === "Drew") hand[event.slot] = queue[next++] ?? null;
+  }
+  return hand;
+}
+
+export function slotReady(handles: readonly (`0x${string}` | null)[], slot: number): boolean {
+  const handle = handles[slot] ?? null;
+  return handle !== null && handle !== ZERO_HANDLE;
 }
 
 export function namesSlot(move: Move | { readonly type: "catch"; readonly target: number }): move is Extract<Move, { readonly type: "play" | "veil" }> {
