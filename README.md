@@ -1,12 +1,12 @@
 # Kryphochroma
 
-A five colour shedding card game where hiding is the game. Bluff with a veiled card, spy on one sealed card with a spyglass, ping a rival hand with a sonar, chase a secret colour that doubles your round. Hands, the deck, veiled cards and secret colours live on Sepolia as Zama FHE ciphertexts: the contract shuffles, deals and checks every move without ever seeing a card.
+A five colour shedding card game where hiding is the game. Bluff with a veiled card, spy on one sealed card with a spyglass, ping a rival hand with a sonar, chase a secret colour that doubles your round. Hands, the deck, veiled cards and secret colours live on Sepolia as Zama FHE ciphertexts: the contract draws, deals and checks every move without ever seeing a card.
 
 ![A four seat table: sealed rival hands, the discard pile, your decrypted hand and the veil dialog](assets/table.gif)
 
 **[Play now](https://kryphochroma.unitynodes.com)** · **[Watch the 3 minute video](https://youtu.be/VIDEO_ID)** · **[Docs](https://kryphochroma.unitynodes.com/docs)** · **[How it stays secret](https://kryphochroma.unitynodes.com/secret)**
 
-- **Quick game**: no wallet needed. Your tab gets a session key and a little Sepolia ETH, and you sit down with three bots at a table that was already shuffled on chain.
+- **Quick game**: no wallet needed. Your tab gets a session key and a little Sepolia ETH, and you sit down with three bots at a table whose cards were already drawn on chain.
 - **With friends**: open a table for 2 to 4 players, send the invite link, start when everyone is in. Open tables are listed so anyone can join. A wallet is optional; it signs one `join` for the session key.
 - **Practice offline**: the same rules engine against local bots, no chain.
 - **Kryphochroma FM**: three radio stations composed live in your browser, no tracks. The beat speeds up when someone is down to one card.
@@ -50,24 +50,25 @@ flowchart LR
   SK -- "EIP-712 signed moves" --> HUB[relay hub]
   HUB -- "relay(id, actions) about once per block" --> T[KryphoTable on Sepolia]
   K[keeper] -- "deal, reveals, challenges, timeouts" --> T
-  S[shuffler] -- "encrypted shuffles in the background" --> T
+  S[shuffler] -- "encrypted card draws in the background" --> T
   T <-- "FHE ops, ACL" --> C[Zama coprocessor]
   SK -- "user decrypt of own cards" --> R[Zama relayer and KMS]
   K -- "public decrypt with proof" --> R
 ```
 
-- **Deck.** 138 cards, `id = colour * 16 + rank`. A shuffler fills the deck with `FHE.asEuint8` and runs a network of encrypted switches: for every pair, `swap = FHE.randEbool()` and two `FHE.select` calls ([`KryphoDeck.shuffleStep`](contracts/contracts/KryphoDeck.sol)). 32 layers, 70 transactions per deck, done in the background before anyone sits down.
+- **Deck.** `id = colour * 16 + rank`, with the odds of a 138 card deck. Nothing is shuffled: every card is its own encrypted draw. A 16 bit `FHE.randEuint16` is scaled to an index from 0 to 137 and turned into a card on ciphertexts ([`KryphoDeck.randomCard`](contracts/contracts/KryphoDeck.sol)). A table draws its 138 cards in 12 transactions in the background, about 30 s, before anyone sits down.
 - **Hands.** Dealing copies a deck handle into your hand slot and calls `FHE.allow(card, session)`. Only your session key can decrypt it, without a wallet popup.
 - **Moves and honesty.** You say which card you play. The contract checks the public rules in plain and folds the hidden part into `honest = FHE.and(honest, FHE.eq(hand[slot], card))`. All honesty bits are revealed once at the end of the round with `FHE.checkSignatures`; a liar can not win.
 - **Veil and Wild +4.** Both store one encrypted bit and share one challenge stage: a doubt or a challenge makes exactly that bit public and settles it with a KMS proof.
 - **One second moves.** Moves are EIP-712 signatures from the session key. A hub checks them with the rules engine, streams them to every client at once and submits a batch with `relay` about once per block. Seat nonces and the handle of the played slot make stale or replayed actions fail on chain; a relayed action that runs out of gas reverts the whole batch, so nobody can burn your move.
-- **Leaving and running out.** After three timeouts in a row a takeover bot plays the seat with its sealed hand. When the deck runs low, the shuffler encrypts the public discard into a free part of the deck and shuffles it while play goes on.
+- **Leaving and running out.** After three timeouts in a row a takeover bot plays the seat with its sealed hand. When the deck runs low, the shuffler draws up to 60 fresh cards into a free part of the deck while play goes on. Played cards never come back.
 - **Size.** Deck steps and scoring live in linked libraries (`KryphoDeck`, `KryphoScore`) so `KryphoTable` stays under the 24 KB limit.
 
 ## Verifiable randomness
 
-- All randomness comes from `FHE.randEbool()` and `FHE.randEuint8()` inside the contract. The keeper only decides when a step runs; it never sees a bit or the order.
-- A simulation of the switch network with 200,000 shuffles over the 108 card deck showed 28 layers indistinguishable from uniform (χ²/dof 1.02, mean total variation 0.0093 per card). The 138 card deck uses 32 layers.
+- All randomness comes from `FHE.randEuint16()` and `FHE.randEuint8()` inside the contract. The keeper only decides when a step runs; it never sees a card.
+- Scaling a 16 bit draw to 138 keeps every card within 0.2 percent of its share of a real deck. Cards are independent, so card counting tells you nothing about the next draw.
+- Why no shuffle: the first version ran a 32 layer network of encrypted switches, 70 transactions and about 600M gas per table, and stored every intermediate ciphertext on the shared Zama coprocessor. Drawing each card on its own stores 138 ciphertexts per table instead of about 9,000, at about 64M gas, and a table is ready in half a minute instead of four.
 - The first discard is revealed one card at a time, so no card that stays in the deck ever becomes public.
 - The secret colour uses `rem 5` over a byte: 0 has a 52/256 chance instead of 51/256.
 
@@ -83,12 +84,11 @@ flowchart LR
 | `KryphoHand` library (dealing, draw queues, proofs) | [`0xd80C66B15Dc454d030E4aB575a3A1D1770d05C8c`](https://sepolia.etherscan.io/address/0xd80C66B15Dc454d030E4aB575a3A1D1770d05C8c) |
 | Deployment | [`0xbbbac1…f44d0`](https://sepolia.etherscan.io/tx/0xbbbac16a1093e9ad7af0133a2fe166c079f00a1b0d3f536b31268026197f44d0), block 12127191 |
 
-A full round on chain on the previous deployment with the same rules, table 2: one human, three bots, three veils, one spyglass, Mono, a timeout and the reveal.
+A full round on chain on an earlier deployment that still shuffled the deck, table 2: one human, three bots, three veils, one spyglass, Mono, a timeout and the reveal.
 
 | Step | Transaction |
 |---|---|
 | Table created | [`0xfe794f…6017`](https://sepolia.etherscan.io/tx/0xfe794f0d5793844e681c74b80a56420a46ab8990d45256c06a9cd31417617276) |
-| First of 70 shuffle steps | [`0xbdadae…e727`](https://sepolia.etherscan.io/tx/0xbdadaeea60fffc3f23cbca68d57309ce98a3db666d494c1df89f11d895f1e727) |
 | Starter revealed, play begins | [`0x1382c5…931c`](https://sepolia.etherscan.io/tx/0x1382c5180113bc7bb9acece21e8bf23e618db927441e5b2efb2e4ec37119931c) |
 | Batch of signed moves with a veil | [`0x4f5ecc…1e98`](https://sepolia.etherscan.io/tx/0x4f5ecc974f70dba2d0a1f89790d9c3ffec64b89562b27fb5dbe4fdd913971e98) |
 | Batch with a spyglass peek | [`0xc1fcb0…4134`](https://sepolia.etherscan.io/tx/0xc1fcb0ae3e1012294523e0a5772b70c40ab404977455a47e3382fda539664134) |
@@ -103,7 +103,7 @@ HCU limits on Sepolia: 20M per transaction, 5M depth.
 
 | Action | HCU | Gas |
 |---|---:|---:|
-| Shuffle step (half a layer) | ~3.5M to 4.5M | 7M to 11M |
+| Draw step (12 cards, `randEuint16` + 13 ops each) | ~14M | 5.78M |
 | Deal 7 cards to a seat, with slot colours and a secret colour | ~0.3M | ~3.6M |
 | Join that fills a 4 seat table and deals every hand | ~1.2M | 15.73M |
 | One move check (`eq` + `and`) | 80k | 0.23M |
@@ -117,14 +117,14 @@ HCU limits on Sepolia: 20M per transaction, 5M depth.
 |---|---:|
 | A signed move reaches every client | under 1 s |
 | Own card decryptable after its transaction | ~3 s |
-| Quick game: click to your hand face up. Three bots already wait at a shuffled table, the guest signs its join and the relayer submits it, so the guest key needs no faucet top up; the join deals in the same block | 13 s to 18 s: one block, then ~5 s of decryption |
-| With friends: click to lobby, from a ready shuffled table | under 1 s, the seat lands one block later |
+| Quick game: click to your hand face up. Three bots already wait at a table with its cards drawn, the guest signs its join and the relayer submits it, so the guest key needs no faucet top up; the join deals in the same block | 13 s to 18 s: one block, then ~5 s of decryption |
+| With friends: click to lobby, from a ready table | under 1 s, the seat lands one block later |
 | Last seat taken to play, starter revealed in the lobby | same block (~12 s) |
 | Hand decrypted after play opens | ~4 s to 9 s |
 | A drawn card from your queue, face up in your hand | under 1 s; a draw that empties the queue faster than a block waits ~10 s for the refill |
 | Round over to scores on screen: the table server sends the bot hands once the round is over (at once when a bot goes out, after the block when a player does) and the browser scores them with the same rules | under 1 s when a bot goes out, one block when you do |
 | Round over to scores proven on chain: the relayed batch that ends the round also opens every hand, `finishReveal` follows once the KMS answers | 12 s to 45 s, mostly the public decryption; the table shows Verified on Sepolia when it lands |
-| Background shuffle of a fresh table | ~4 min |
+| Background draw of a fresh table | ~30 s |
 
 ## What still shows, on purpose
 
