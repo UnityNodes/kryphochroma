@@ -75,12 +75,13 @@ flowchart LR
 
 | | |
 |---|---|
-| `KryphoTable` | [`0x70fe82c1374F8C3c55aF03405F0533bC1680AdE6`](https://sepolia.etherscan.io/address/0x70fe82c1374F8C3c55aF03405F0533bC1680AdE6) |
-| `KryphoDeck` library | [`0xE11733838F85397dd7ADEc955Ee1342894b65327`](https://sepolia.etherscan.io/address/0xE11733838F85397dd7ADEc955Ee1342894b65327) |
-| `KryphoScore` library | [`0x24af2823a87c51918aB248F5ff2bc54cdedcd1Da`](https://sepolia.etherscan.io/address/0x24af2823a87c51918aB248F5ff2bc54cdedcd1Da) |
-| `KryphoRadio` library (sonar, signatures) | [`0xCc66a8250cDbaBF347616B8ffA2a4C25e893Fa7e`](https://sepolia.etherscan.io/address/0xCc66a8250cDbaBF347616B8ffA2a4C25e893Fa7e) |
-| `KryphoLobby` library (join, leave, host) | [`0xb1bec9E281c73B91b9448cda00413e9b9aC915bB`](https://sepolia.etherscan.io/address/0xb1bec9E281c73B91b9448cda00413e9b9aC915bB) |
-| Deployment | [`0xe0aa28…a482`](https://sepolia.etherscan.io/tx/0xe0aa28b588da5913081fbfb189889a2ff2b74887d76a4160ee490876b648a482), block 12117886 |
+| `KryphoTable` | [`0x118C8298257121403f40c1ca0b402C20106D0461`](https://sepolia.etherscan.io/address/0x118C8298257121403f40c1ca0b402C20106D0461) |
+| `KryphoDeck` library | [`0x919ff8160C8fF09a8cDAfe682e22A9bBD529Da50`](https://sepolia.etherscan.io/address/0x919ff8160C8fF09a8cDAfe682e22A9bBD529Da50) |
+| `KryphoScore` library | [`0x3999F0b1830c9E1fF232D1B10820974e89304830`](https://sepolia.etherscan.io/address/0x3999F0b1830c9E1fF232D1B10820974e89304830) |
+| `KryphoRadio` library (sonar, signatures) | [`0x0F8c85E2002c0fbD0E8ED4D57b8a918EDb160837`](https://sepolia.etherscan.io/address/0x0F8c85E2002c0fbD0E8ED4D57b8a918EDb160837) |
+| `KryphoLobby` library (join, leave, host) | [`0x59F0701221c34cE8e24c165d48989CF7634A57a3`](https://sepolia.etherscan.io/address/0x59F0701221c34cE8e24c165d48989CF7634A57a3) |
+| `KryphoHand` library (dealing, draw queues, proofs) | [`0x58FAB0c6a5288523DB25F162F3219f5Ac47713A3`](https://sepolia.etherscan.io/address/0x58FAB0c6a5288523DB25F162F3219f5Ac47713A3) |
+| Deployment | [`0xd19b49…c8bfa`](https://sepolia.etherscan.io/tx/0xd19b4992b77be736fe3ddbd403138afd68bf4d6e3f033b579c787647df6c8bfa), block 12123055 |
 
 A full round on chain on the previous deployment with the same rules, table 2: one human, three bots, three veils, one spyglass, Mono, a timeout and the reveal.
 
@@ -120,6 +121,7 @@ HCU limits on Sepolia: 20M per transaction, 5M depth.
 | With friends: click to lobby, from a ready shuffled table | under 1 s, the seat lands one block later |
 | Last seat taken to play, starter revealed in the lobby | same block (~12 s) |
 | Hand decrypted after play opens | ~4 s to 9 s |
+| A drawn card from your queue, face up in your hand | under 1 s; a draw that empties the queue faster than a block waits ~10 s for the refill |
 | Last move of a round to scores on chain: the relayed batch that ends the round also opens every hand, `finishReveal` follows once the KMS answers | 12 s to 40 s, mostly the public decryption |
 | Background shuffle of a fresh table | ~4 min |
 
