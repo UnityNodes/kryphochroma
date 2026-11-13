@@ -37,6 +37,7 @@ const RELAY_BASE_GAS = 300_000n;
 export const GAS_PRICE = 5_000_000n;
 const THINK_MS = [250, 600] as const;
 const CATCH_DELAY_BLOCKS = 2n;
+const DECRYPT_RETRY_MS = 3000;
 
 export type HubMessage =
   | { readonly type: "action"; readonly action: SignedAction; readonly events: readonly GameEvent[] }
@@ -126,9 +127,9 @@ export function createRelay(deps: RelayDeps) {
 
   const projected = (hub: TableHub) => (hub.chain ? project(hub.chain, hub.chainNonces, hub.log) : null);
 
-  async function decryptFor(bot: Bot, id: bigint, seat: number, handles: readonly Hex[]): Promise<void> {
+  async function decryptFor(bot: Bot, id: bigint, seat: number, handles: readonly Hex[]): Promise<number> {
     const missing = handles.filter((h) => h !== ZERO_HANDLE && !bot.plain.has(h));
-    if (missing.length === 0) return;
+    if (missing.length === 0) return 0;
     if (!bot.permitted) {
       await bot.sdk.permits.grantPermit([deps.table]);
       bot.permitted = true;
@@ -136,6 +137,7 @@ export function createRelay(deps: RelayDeps) {
     const { values, pending } = await decryptEach((batch) => bot.sdk.decryption.decryptValues(batch.map((encryptedValue) => ({ encryptedValue, contractAddress: deps.table }))), missing);
     for (const [handle, value] of values) bot.plain.set(handle, value);
     if (pending.length > 0) deps.log({ event: "bot-decrypt-pending", id, seat, pending: pending.length });
+    return values.size;
   }
 
 
@@ -194,17 +196,26 @@ export function createRelay(deps: RelayDeps) {
   }
 
   const decrypting = new Set<Hex>();
+  const retryAt = new Map<Hex, number>();
 
   /** A fresh card is not decryptable until the KMS sees its grant, which can take seconds; waiting for it inside the refresh held every relay batch back by a block, so bot hands decrypt beside the relay and the table refreshes when they land. */
   function decryptInBackground(bot: Bot, id: bigint, seat: number, handles: readonly Hex[]): void {
-    const missing = handles.filter((h) => h !== ZERO_HANDLE && !bot.plain.has(h) && !decrypting.has(h));
+    const now = Date.now();
+    const missing = handles.filter((h) => h !== ZERO_HANDLE && !bot.plain.has(h) && !decrypting.has(h) && (retryAt.get(h) ?? 0) <= now);
     if (missing.length === 0) return;
     for (const h of missing) decrypting.add(h);
     void decryptFor(bot, id, seat, missing)
-      .catch((error: Error) => deps.log({ event: "bot-decrypt-error", id, seat, message: error.message.slice(0, 160) }))
-      .finally(() => {
-        for (const h of missing) decrypting.delete(h);
-        void refresh(id).catch(() => undefined);
+      .catch((error: Error) => {
+        deps.log({ event: "bot-decrypt-error", id, seat, message: error.message.slice(0, 160) });
+        return 0;
+      })
+      .then((gained) => {
+        for (const h of missing) {
+          decrypting.delete(h);
+          if (bot.plain.has(h)) retryAt.delete(h);
+          else retryAt.set(h, Date.now() + DECRYPT_RETRY_MS);
+        }
+        if (gained > 0) void refresh(id).catch(() => undefined);
       });
   }
 
