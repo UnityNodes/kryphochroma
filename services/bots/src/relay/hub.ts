@@ -134,6 +134,7 @@ export function createRelay(deps: RelayDeps) {
     const latest = await deps.publicClient.getBlockNumber({ cacheTime: 0 });
     const block = latest > atLeast ? latest : atLeast;
     if (block < hub.block) return;
+    if (block > hub.block) broadcast(hub, { type: "chain", block: block.toString() });
     const read = (functionName: string, args: readonly unknown[]) =>
       deps.publicClient.readContract({ address: deps.table, abi: kryphoTableAbi, functionName, args, blockNumber: block } as never) as Promise<unknown>;
     const table = (await read("getTable", [id])) as ChainTable & { joined: number; monoBlock: bigint };
@@ -147,7 +148,6 @@ export function createRelay(deps: RelayDeps) {
       if (bot && Number(table.stage) >= 3) known.set(seat, await decryptBotHand(bot, id, seat, Number(s.slots), block));
     }
     if (block < hub.block) return;
-    const advanced = block > hub.block;
     hub.block = block;
     hub.chain = projectChain(table, seats, discard, known);
     hub.chainNonces = nonces;
@@ -158,7 +158,6 @@ export function createRelay(deps: RelayDeps) {
     hub.log = hub.log.filter((a) => a.nonce >= (nonces[a.seat] ?? 0) && hub.signers.get(actionKey(a)) === hub.sessions[a.seat]);
     const kept = new Set(hub.log.map(actionKey));
     for (const key of [...hub.signers.keys()]) if (!kept.has(key)) hub.signers.delete(key);
-    if (advanced) broadcast(hub, { type: "chain", block: block.toString() });
     driveBots(id, hub);
   }
 
