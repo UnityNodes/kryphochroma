@@ -169,6 +169,8 @@ export async function runKeeper(config: KeeperConfig, env: NodeJS.ProcessEnv, un
         return revealAndSend("finishReveal", id, (await read("revealHandles", [id])) as Hex[]);
       case "forceTimeout":
         return send("forceTimeout", [id]);
+      case "fillQueues":
+        return send("fillQueues", [id]);
       case "reshuffleStep":
         return pipelineSetup(id, action.remaining, "reshuffleStep");
       case "idle":

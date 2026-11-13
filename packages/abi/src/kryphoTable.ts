@@ -147,6 +147,11 @@ export const kryphoTableAbi = [
   },
   {
     "inputs": [],
+    "name": "QueuesFilled",
+    "type": "error"
+  },
+  {
+    "inputs": [],
     "name": "RevealNotReady",
     "type": "error"
   },
@@ -1104,6 +1109,19 @@ export const kryphoTableAbi = [
         "internalType": "uint256",
         "name": "id",
         "type": "uint256"
+      }
+    ],
+    "name": "fillQueues",
+    "outputs": [],
+    "stateMutability": "nonpayable",
+    "type": "function"
+  },
+  {
+    "inputs": [
+      {
+        "internalType": "uint256",
+        "name": "id",
+        "type": "uint256"
       },
       {
         "internalType": "bytes",
@@ -1393,6 +1411,11 @@ export const kryphoTableAbi = [
             "internalType": "uint64",
             "name": "monoBlock",
             "type": "uint64"
+          },
+          {
+            "internalType": "bool",
+            "name": "queuesFilled",
+            "type": "bool"
           }
         ],
         "internalType": "struct IKryphoTable.Table",

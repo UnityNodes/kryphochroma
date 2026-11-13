@@ -64,6 +64,7 @@ interface IKryphoTable {
         uint8 candidate;
         uint8 revealPrepared;
         uint64 monoBlock;
+        bool queuesFilled;
     }
 
     struct Action {
@@ -114,6 +115,7 @@ interface IKryphoTable {
     error NoVeil();
     error BadPeek();
     error BadSonar();
+    error QueuesFilled();
 
     event TableCreated(uint256 indexed id, address indexed creator, Config config);
     event Joined(uint256 indexed id, uint8 seat, address indexed player, address session);

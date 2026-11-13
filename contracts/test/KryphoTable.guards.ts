@@ -80,7 +80,10 @@ describe("KryphoTable guards", function () {
       await (await table.setStarter(id, checkSignaturesArgs.abiEncodedCleartexts, checkSignaturesArgs.decryptionProof)).wait();
     }
     const t = await table.getTable(id);
-    expect([Number(t.stage), Number(t.deckPtr)], "seven cards to each of two seats, then two queued for each").to.deep.equal([3, 18]);
+    expect([Number(t.stage), Number(t.deckPtr)]).to.deep.equal([3, 14]);
+    await (await table.fillQueues(id)).wait();
+    expect(Number((await table.getTable(id)).deckPtr), "two queued for each seat").to.equal(18);
+    await expect(table.fillQueues(id)).to.be.revertedWithCustomError(table, "QueuesFilled");
     await expect(table.setStarter(id, "0x", "0x")).to.be.revertedWithCustomError(table, "WrongStage");
   });
 
@@ -227,6 +230,13 @@ describe("KryphoTable guards", function () {
 
   it("queues each seat's next cards open to that seat only", async function () {
     const { table, id } = await ready([s[0]!, s[1]!]);
+    await expect(table.fillQueues(id), "the queues wait until play is open").to.be.revertedWithCustomError(table, "WrongStage");
+    while (Number((await table.getTable(id)).stage) === 2) {
+      const { checkSignaturesArgs } = await starter(table, id);
+      await (await table.setStarter(id, checkSignaturesArgs.abiEncodedCleartexts, checkSignaturesArgs.decryptionProof)).wait();
+    }
+    expect((await table.queueOf(id, 0)).every((h) => h === ethers.ZeroHash), "the deal leaves the queues empty").to.equal(true);
+    await (await table.fillQueues(id)).wait();
     const address = await table.getAddress();
     for (const seat of [0, 1]) {
       const queue = await table.queueOf(id, seat);
@@ -343,7 +353,7 @@ describe("KryphoTable guards", function () {
     await (await table.join(id, s[0]!.address)).wait();
     await expect(table.connect(s[1]!).join(id, s[1]!.address)).to.emit(table, "Dealt");
     t = await table.getTable(id);
-    expect([Number(t.stage), Number(t.deckPtr), Number(t.turn)]).to.deep.equal([3, 18, 0]);
+    expect([Number(t.stage), Number(t.deckPtr), Number(t.turn)]).to.deep.equal([3, 14, 0]);
     expect(Number(t.deckEnd)).to.equal(138 - (await table.discardOf(id)).length);
     const hand = await table.handOf(id, 1);
     expect(await fhevm.helpers.decryptUint8({ euint8: hex(hand[0]!), contractAddress: await table.getAddress(), userAddress: s[1]!.address })).to.be.a("number");
@@ -356,6 +366,7 @@ describe("KryphoTable guards", function () {
       const { checkSignaturesArgs } = await starter(table, id);
       await (await table.setStarter(id, checkSignaturesArgs.abiEncodedCleartexts, checkSignaturesArgs.decryptionProof)).wait();
     }
+    await (await table.fillQueues(id)).wait();
     const first = Number((await table.getTable(id)).turn);
     for (let k = 0; k < 5; k++) {
       await networkHelpers.time.increase(91);
@@ -398,6 +409,7 @@ describe("KryphoTable guards", function () {
       const { checkSignaturesArgs } = await starter(table, id);
       await (await table.setStarter(id, checkSignaturesArgs.abiEncodedCleartexts, checkSignaturesArgs.decryptionProof)).wait();
     }
+    await (await table.fillQueues(id)).wait();
     await expect(table.reshuffleStep(id)).to.be.revertedWithCustomError(table, "ShuffleNotDone");
     await (await table.stageDeck(id, 100, [0x01, 0x02, 0x03, 0x04, 0x05, 0x06, 0x07, 0x08])).wait();
     await expect(table.reshuffleStep(id)).to.be.revertedWithCustomError(table, "ShuffleNotDone");

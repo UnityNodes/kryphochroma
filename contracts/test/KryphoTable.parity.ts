@@ -91,6 +91,7 @@ async function openTable(table: Awaited<ReturnType<typeof deployTable>>, players
     const { checkSignaturesArgs } = await fhevm.client.decryptPublicValuesWithSignatures({ encryptedValues: handles });
     await (await table.setStarter(id, checkSignaturesArgs.abiEncodedCleartexts, checkSignaturesArgs.decryptionProof)).wait();
   }
+  await (await table.fillQueues(id)).wait();
   return { id, deck };
 }
 

@@ -57,7 +57,8 @@ library KryphoHand {
     }
 
     /** Each seat holds its next cards already open to it, so a draw lands in a hand its owner can read at once instead of waiting a block and a decryption; the deck order stays hidden from everyone else. */
-    function enqueue(
+
+    function fill(
         mapping(uint256 => euint8[138]) storage deck,
         mapping(uint256 => euint8[2][4]) storage queues,
         IKryphoTable.Table storage t,
@@ -65,7 +66,9 @@ library KryphoHand {
         uint8 seat,
         address session
     ) public {
-        _enqueue(deck, queues, t, id, seat, session);
+        for (uint8 k = 0; k < NEXT_CARDS; k++) {
+            if (!FHE.isInitialized(queues[id][seat][NEXT_CARDS - 1])) _enqueue(deck, queues, t, id, seat, session);
+        }
     }
 
     function drawInto(

@@ -28,6 +28,12 @@ describe("keeper plan", () => {
     expect(nextKeeperAction({ ...base, stage: 5 }, 0n)).toEqual({ kind: "idle" });
   });
 
+  it("fills the draw queues first once play opens, even past a deadline", () => {
+    expect(nextKeeperAction({ ...base, queuesFilled: false }, 50n)).toEqual({ kind: "fillQueues" });
+    expect(nextKeeperAction({ ...base, queuesFilled: false }, 500n)).toEqual({ kind: "fillQueues" });
+    expect(nextKeeperAction({ ...base, queuesFilled: true }, 500n)).toEqual({ kind: "forceTimeout" });
+  });
+
   it("pushes a timed out turn only after the deadline", () => {
     expect(nextKeeperAction(base, 100n)).toEqual({ kind: "idle" });
     expect(nextKeeperAction(base, 101n)).toEqual({ kind: "forceTimeout" });

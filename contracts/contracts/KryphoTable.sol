@@ -16,7 +16,6 @@ contract KryphoTable is IKryphoTable, ZamaEthereumConfig {
 
     uint8 internal constant HAND_SLOTS = 24;
     uint8 internal constant HAND_START = 7;
-    uint8 internal constant NEXT_CARDS = 2;
     uint8 internal constant NONE = type(uint8).max;
     uint8 internal constant MAX_TIMEOUTS = 3;
     uint8 internal constant REFILL_AT = 48;
@@ -244,6 +243,14 @@ contract KryphoTable is IKryphoTable, ZamaEthereumConfig {
         if (t.deckPtr >= t.deckEnd) KryphoHand.swapRefill(t, id);
     }
 
+    /** Filling every queue inside the deal pushes a four seat deal past the per transaction gas cap, so the queues are filled by a separate call once play is open; until then a draw comes straight from the deck. */
+    function fillQueues(uint256 id) external {
+        Table storage t = _requireStage(id, Stage.Playing);
+        if (t.queuesFilled) revert QueuesFilled();
+        t.queuesFilled = true;
+        for (uint8 seat = 0; seat < t.joined; seat++) KryphoHand.fill(_deck, _queue, t, id, seat, _seats[id][seat].session);
+    }
+
     function deal(uint256 id) external {
         Table storage t = _requireStage(id, Stage.Dealing);
         if (t.dealtMask != 0) revert BadSlot();
@@ -263,9 +270,6 @@ contract KryphoTable is IKryphoTable, ZamaEthereumConfig {
         }
         t.dealtMask = uint8((uint256(1) << n) - 1);
         t.deckPtr = HAND_START * n;
-        for (uint8 seat = 0; seat < n; seat++) {
-            for (uint8 k = 0; k < NEXT_CARDS; k++) KryphoHand.enqueue(_deck, _queue, t, id, seat, _seats[id][seat].session);
-        }
         _tryPlay(id, t);
     }
 
@@ -754,6 +758,7 @@ contract KryphoTable is IKryphoTable, ZamaEthereumConfig {
         t.drawFourBy = NONE;
         _closeVeil(t);
         t.candidate = NONE;
+        t.queuesFilled = false;
         delete _discard[id];
         delete _revealHandles[id];
         delete _queue[id];

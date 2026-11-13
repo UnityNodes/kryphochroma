@@ -15,6 +15,7 @@ export interface TableView {
   readonly refillSize?: number;
   readonly refillStep?: number;
   readonly spare?: number;
+  readonly queuesFilled?: boolean;
 }
 
 export type KeeperAction =
@@ -25,6 +26,7 @@ export type KeeperAction =
   | { readonly kind: "prepareReveal"; readonly remaining: number }
   | { readonly kind: "finishReveal" }
   | { readonly kind: "forceTimeout" }
+  | { readonly kind: "fillQueues" }
   | { readonly kind: "reshuffleStep"; readonly remaining: number }
   | { readonly kind: "idle" };
 
@@ -66,6 +68,7 @@ export function nextKeeperAction(table: TableView, nowSeconds: bigint, poolOwner
       if (table.candidate === NO_SEAT) return { kind: "idle" };
       return table.revealPrepared < table.joined ? { kind: "prepareReveal", remaining: table.joined - table.revealPrepared } : { kind: "finishReveal" };
     case "Playing":
+      if (table.queuesFilled === false) return { kind: "fillQueues" };
       return nowSeconds > table.turnDeadline ? { kind: "forceTimeout" } : refillAction(table);
     default:
       return { kind: "idle" };
