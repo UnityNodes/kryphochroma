@@ -85,7 +85,8 @@ interface TableHub {
   catchableAt: bigint | null;
   block: bigint;
   hands: (readonly Hex[])[];
-  reveal: HubMessage | null;
+  reveal: (HubMessage & { readonly type: "reveal" }) | null;
+  botSecrets: Map<number, number>;
   queues: (readonly Hex[])[];
   subscribers: Set<(message: HubMessage) => void>;
 }
@@ -113,7 +114,7 @@ export function createRelay(deps: RelayDeps) {
     const key = id.toString();
     let hub = hubs.get(key);
     if (!hub) {
-      hub = { chain: null, chainNonces: [0, 0, 0, 0], sessions: [], log: [], signers: new Map(), abandoned: [], sending: false, pipes: 0, sent: new Set(), thinking: new Set(), monoSeat: 255, catchableAt: null, block: 0n, hands: [], queues: [], reveal: null, subscribers: new Set() };
+      hub = { chain: null, chainNonces: [0, 0, 0, 0], sessions: [], log: [], signers: new Map(), abandoned: [], sending: false, pipes: 0, sent: new Set(), thinking: new Set(), monoSeat: 255, catchableAt: null, block: 0n, hands: [], queues: [], reveal: null, botSecrets: new Map(), subscribers: new Set() };
       hubs.set(key, hub);
     }
     return hub;
@@ -166,7 +167,7 @@ export function createRelay(deps: RelayDeps) {
       const queue = (queues[seat] ?? []).filter((h) => h !== ZERO_HANDLE);
       if (bot && dealt) {
         const secret = (await read("secretOf", [id, seat])) as Hex;
-        await decryptFor(bot, id, seat, [...hand.filter((_, i) => (slots & (1 << i)) !== 0), ...queue, secret]);
+        decryptInBackground(bot, id, seat, [...hand.filter((_, i) => (slots & (1 << i)) !== 0), ...queue, secret]);
         const value = bot.plain.get(secret);
         if (value !== undefined) secrets.set(seat, value);
         known.set(seat, hand.map((h, i) => ((slots & (1 << i)) !== 0 ? (bot.plain.get(h) ?? null) : null)));
@@ -178,9 +179,11 @@ export function createRelay(deps: RelayDeps) {
     hub.chain = projectChain(table, seats, discard, known, dealt ? queued : undefined);
     hub.hands = hands;
     hub.queues = queues;
-    revealBots(hub, secrets);
     hub.chainNonces = nonces;
     hub.sessions = seats.map((s) => s.session.toLowerCase());
+    hub.botSecrets = secrets;
+    if (hub.reveal && hub.reveal.round !== hub.chain?.pub.round) hub.reveal = null;
+    if (hub.chain) revealBots(hub, hub.chain);
     hub.monoSeat = Number(table.monoWindow);
     hub.catchableAt = hub.monoSeat === 255 ? null : BigInt(table.monoBlock) + CATCH_DELAY_BLOCKS;
     hub.abandoned = seats.map((s) => Boolean(s.abandoned));
@@ -190,23 +193,33 @@ export function createRelay(deps: RelayDeps) {
     driveBots(id, hub);
   }
 
-  /** Once the chain itself has reached the reveal, every hand is about to become public, so the bot hands go to the table at once and players see the scores without waiting for the KMS proof; a round that only the pending moves end stays sealed. */
-  function revealBots(hub: TableHub, secrets: ReadonlyMap<number, number>): void {
-    const chain = hub.chain;
-    if (!chain || chain.pub.stage !== "Revealing") {
-      if (chain && chain.pub.stage === "Playing") hub.reveal = null;
-      return;
-    }
-    if (hub.reveal) return;
+  const decrypting = new Set<Hex>();
+
+  /** A fresh card is not decryptable until the KMS sees its grant, which can take seconds; waiting for it inside the refresh held every relay batch back by a block, so bot hands decrypt beside the relay and the table refreshes when they land. */
+  function decryptInBackground(bot: Bot, id: bigint, seat: number, handles: readonly Hex[]): void {
+    const missing = handles.filter((h) => h !== ZERO_HANDLE && !bot.plain.has(h) && !decrypting.has(h));
+    if (missing.length === 0) return;
+    for (const h of missing) decrypting.add(h);
+    void decryptFor(bot, id, seat, missing)
+      .catch((error: Error) => deps.log({ event: "bot-decrypt-error", id, seat, message: error.message.slice(0, 160) }))
+      .finally(() => {
+        for (const h of missing) decrypting.delete(h);
+        void refresh(id).catch(() => undefined);
+      });
+  }
+
+  /** Every hand becomes public at the reveal, so the bot hands go to the table as soon as a round is over and players see the scores before the KMS proof. A round a bot ends is over the moment the hub signs that move; a round a player ends waits for the chain, or a forged last move could open the bots' hands and let the round go on. */
+  function revealBots(hub: TableHub, state: GameState): void {
+    if (state.pub.stage !== "Revealing" || hub.reveal) return;
     const seats: RevealedSeat[] = [];
     for (const seat of hub.sessions.keys()) {
       if (!botFor(hub, seat)) continue;
-      const hand = chain.hands[seat] ?? [];
-      const secret = secrets.get(seat);
+      const hand = state.hands[seat] ?? [];
+      const secret = hub.botSecrets.get(seat);
       if (secret === undefined || hand.some((card) => card !== null && card < 0)) return;
       seats.push({ seat, hand, secret });
     }
-    hub.reveal = { type: "reveal", round: chain.pub.round, seats };
+    hub.reveal = { type: "reveal", round: state.pub.round, seats };
     broadcast(hub, hub.reveal);
   }
 
@@ -224,6 +237,7 @@ export function createRelay(deps: RelayDeps) {
     hub.log.push(action);
     hub.signers.set(actionKey(action), signer.toLowerCase());
     broadcast(hub, { type: "action", action, events: next.events });
+    if (botFor(hub, action.seat)) revealBots(hub, next.state);
     driveBots(action.table, hub);
     if (!botFor(hub, action.seat)) void submit(action.table);
     return { ok: true };
@@ -321,8 +335,10 @@ export function createRelay(deps: RelayDeps) {
     const batch = nextBatch(pending, hub.sent, hub.pipes, MAX_BATCH);
     if (batch.length === 0) return null;
     if (hub.pipes === 0) return sizedBatch(id, batch);
-    const last = batch[batch.length - 1] as SignedAction;
-    return { batch, gas: pipelinedGas(batch.length, endsRound(id, pending.slice(0, pending.indexOf(last) + 1)), RELAY_GAS) };
+    const first = pending.indexOf(batch[0] as SignedAction);
+    const end = first + batch.length;
+    const dealt = (upTo: number) => project(hub.chain as GameState, hub.chainNonces, pending.slice(0, upTo)).events.filter((e) => e.type === "Drew").length;
+    return { batch, gas: pipelinedGas(batch.length, dealt(end) - dealt(first), endsRound(id, pending.slice(0, end)), RELAY_GAS) };
   }
 
   async function settle(id: bigint, hash: Hex, batch: readonly SignedAction[]): Promise<void> {

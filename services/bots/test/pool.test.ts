@@ -1,7 +1,24 @@
 import { describe, expect, it } from "vitest";
-import { type PoolTable, SPARE_BY_SEATS, pickBots, pickReady, planPool } from "../src/service/pool.js";
+import { type PoolTable, PRESEATED_QUICK, SPARE_BY_SEATS, pickBots, pickQuick, pickReady, planPool } from "../src/service/pool.js";
 
 const t = (id: number, seats: number, joined = 0, over: Partial<PoolTable> = {}): PoolTable => ({ id: BigInt(id), seats, joined, reserved: false, setupStep: 0, starter: false, ...over });
+
+describe("quick tables with bots already seated", () => {
+  const ready = { setupStep: 70, starter: true };
+  it("seats bots at shuffled four seat tables until two wait for a player", () => {
+    const tables = [t(1, 4, 0, ready), t(2, 4, 0, ready), t(3, 4, 0, ready), t(4, 4, 0, { setupStep: 20 }), t(5, 3, 0, ready)];
+    expect(planPool(tables, 20).preseat).toEqual([1n, 2n]);
+    expect(planPool([...tables, t(9, 4, 3, { ...ready, bots: 3 })], 20).preseat).toEqual([1n]);
+    expect(PRESEATED_QUICK).toBe(2);
+  });
+
+  it("hands a quick game the table where three bots wait, never a friends lobby", () => {
+    const tables = [t(1, 4, 0, ready), t(2, 4, 3, { ...ready, bots: 2 }), t(3, 4, 3, { ...ready, bots: 3 }), t(4, 4, 3, { ...ready, bots: 3, reserved: true })];
+    expect(pickQuick(tables)?.id).toBe(3n);
+    expect(pickQuick([t(1, 4, 3, { setupStep: 60, starter: false, bots: 3 })])).toBeNull();
+    expect(pickReady(tables, 4)?.id).toBe(1n);
+  });
+});
 
 describe("ready table pool", () => {
   it("keeps spare shuffled tables for every table size, the four seat ones first", () => {

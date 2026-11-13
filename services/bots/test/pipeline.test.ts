@@ -34,12 +34,14 @@ describe("relay pipeline", () => {
     expect(nextBatch(pending, new Set(["1:2"]), 1, 64)).toEqual([a(2, 3)]);
   });
 
-  it("gives a pipelined batch gas per move under the cap", () => {
-    expect(pipelinedGas(2, false, 16_000_000n)).toBe(2_300_000n);
-    expect(pipelinedGas(40, false, 16_000_000n)).toBe(16_000_000n);
+  it("gives a pipelined batch gas per move and per dealt card under the cap", () => {
+    expect(pipelinedGas(2, 0, false, 16_000_000n)).toBe(1_300_000n);
+    expect(pipelinedGas(2, 2, false, 16_000_000n)).toBe(2_900_000n);
+    expect(pipelinedGas(1, 6, false, 16_000_000n)).toBe(5_600_000n);
+    expect(pipelinedGas(10, 20, false, 16_000_000n)).toBe(16_000_000n);
   });
 
   it("gives the batch that ends a round the full limit", () => {
-    expect(pipelinedGas(1, true, 16_000_000n)).toBe(16_000_000n);
+    expect(pipelinedGas(1, 0, true, 16_000_000n)).toBe(16_000_000n);
   });
 });

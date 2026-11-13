@@ -28,6 +28,13 @@ describe("keeper plan", () => {
     expect(nextKeeperAction({ ...base, stage: 5 }, 0n)).toEqual({ kind: "idle" });
   });
 
+  it("refills the deck of a running game before the pool shuffles", () => {
+    const refill = { id: 9n, stage: 3, action: { kind: "reshuffleStep" as const, remaining: 60 } };
+    const lobby = { id: 2n, stage: 0, joined: 1, action: { kind: "setupStep" as const, remaining: 5 } };
+    const pool = { id: 3n, stage: 0, joined: 0, action: { kind: "setupStep" as const, remaining: 2 } };
+    expect(scheduleKeeper([pool, lobby, refill]).background.map((p) => p.id)).toEqual([2n, 9n]);
+  });
+
   it("fills the draw queues first once play opens, even past a deadline", () => {
     expect(nextKeeperAction({ ...base, queuesFilled: false }, 50n)).toEqual({ kind: "fillQueues" });
     expect(nextKeeperAction({ ...base, queuesFilled: false }, 500n)).toEqual({ kind: "fillQueues" });
@@ -67,7 +74,7 @@ describe("keeper plan", () => {
     expect(nextKeeperAction({ ...base, stage: 0, setupStep: 10, joined: 1, creator: "0xdef" }, 0n)).toEqual({ kind: "idle" });
   });
 
-  it("runs urgent steps first and gives every background shuffle a batch, started tables and the pool before refills", () => {
+  it("runs urgent steps first and gives every background shuffle a batch, started tables and refills before the pool", () => {
     const planned: PlannedAction[] = [
       { id: 5n, stage: 0, action: { kind: "setupStep", remaining: 52 } },
       { id: 4n, stage: 2, action: { kind: "revealStarter" } },
@@ -78,8 +85,8 @@ describe("keeper plan", () => {
     ];
     const { urgent, background } = scheduleKeeper(planned);
     expect(urgent.map((p) => p.id)).toEqual([4n, 2n]);
-    expect(background.map((p) => p.id)).toEqual([6n, 5n, 7n]);
-    expect(scheduleKeeper([planned[5]!, planned[0]!]).background.map((p) => p.id)).toEqual([5n, 7n]);
+    expect(background.map((p) => p.id)).toEqual([7n, 6n, 5n]);
+    expect(scheduleKeeper([planned[5]!, planned[0]!]).background.map((p) => p.id)).toEqual([7n, 5n]);
     expect(scheduleKeeper([planned[2]!])).toEqual({ urgent: [], background: [] });
   });
 

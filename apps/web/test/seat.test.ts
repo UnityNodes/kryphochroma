@@ -186,6 +186,13 @@ describe("seating in the background", () => {
     vi.unstubAllGlobals();
   });
 
+  it("falls back to its own funded join when the relayer can not send", async () => {
+    vi.stubGlobal("fetch", vi.fn(async (url: string) => (url === "/api/seat" ? Response.json({ error: "relayer out of gas" }, { status: 500 }) : Response.json({ ok: true }))));
+    const publicClient = { ...client(MIN_BURNER_BALANCE), readContract: async () => ({ joined: 0 }) } as unknown as PublicClient;
+    await expect(seatWithRetry({ publicClient, burner, funder: { kind: "guest" }, drip: async () => true }, 7n)).resolves.toBeUndefined();
+    vi.unstubAllGlobals();
+  });
+
   it("passes the table server refusal to the guest", async () => {
     vi.stubGlobal("fetch", vi.fn(async () => Response.json({ ok: false, error: "This table is already full" })));
     await expect(seatWithRetry({ publicClient: seatedClient(null), burner, funder: { kind: "guest" }, drip: async () => true }, 7n)).rejects.toThrow("already full");

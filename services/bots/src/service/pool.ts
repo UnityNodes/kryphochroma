@@ -1,3 +1,5 @@
+import { SETUP_STEPS } from "@kryphochroma/abi";
+
 export interface PoolTable {
   readonly id: bigint;
   readonly seats: number;
@@ -5,15 +7,26 @@ export interface PoolTable {
   readonly reserved: boolean;
   readonly setupStep: number;
   readonly starter: boolean;
+  readonly bots?: number;
 }
 
 export interface PoolPlan {
   readonly create: readonly number[];
+  readonly preseat: readonly bigint[];
 }
 
 export const SPARE_BY_SEATS: Readonly<Record<number, number>> = { 4: 6, 3: 3, 2: 5 };
+export const QUICK_SEATS = 4;
+export const PRESEATED_QUICK = 2;
 
 const isSpare = (p: PoolTable): boolean => p.joined === 0 && !p.reserved;
+const dealsOnJoin = (p: PoolTable): boolean => p.setupStep >= SETUP_STEPS && p.starter;
+const isQuick = (p: PoolTable): boolean => p.seats === QUICK_SEATS && !p.reserved && p.joined === QUICK_SEATS - 1 && (p.bots ?? 0) === QUICK_SEATS - 1 && dealsOnJoin(p);
+
+/** A quick game table waits with its three bots already seated and its deck shuffled, so the player's own join fills it and deals in the same block. */
+export function pickQuick(tables: readonly PoolTable[]): PoolTable | null {
+  return [...tables].filter(isQuick).sort((a, b) => Number(a.id - b.id))[0] ?? null;
+}
 
 export function planPool(tables: readonly PoolTable[], maxTables: number): PoolPlan {
   const create: number[] = [];
@@ -22,7 +35,10 @@ export function planPool(tables: readonly PoolTable[], maxTables: number): PoolP
     const have = tables.filter((p) => p.seats === Number(seats) && isSpare(p)).length;
     for (let k = have; k < want && total < maxTables; k++, total++) create.push(Number(seats));
   }
-  return { create };
+  const quick = tables.filter(isQuick).length;
+  const candidates = tables.filter((p) => p.seats === QUICK_SEATS && isSpare(p) && dealsOnJoin(p)).sort((a, b) => Number(a.id - b.id));
+  const preseat = candidates.slice(0, Math.max(0, PRESEATED_QUICK - quick)).map((p) => p.id);
+  return { create, preseat };
 }
 
 export function pickReady(tables: readonly PoolTable[], seats: number): PoolTable | null {

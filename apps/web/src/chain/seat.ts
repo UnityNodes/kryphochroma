@@ -129,7 +129,14 @@ const SEAT_RETRY_MS = 3000;
 
 /** Public nodes drop requests under load, so a seat taken in the background tries again, and first checks the chain in case the earlier join did land. */
 export async function seatWithRetry(deps: SeatDeps, id: bigint): Promise<void> {
-  if (deps.funder.kind === "guest") return relaySeat(deps, id);
+  if (deps.funder.kind === "guest") {
+    try {
+      return await relaySeat(deps, id);
+    } catch (error) {
+      if (await sitsAt(deps.publicClient, id, deps.burner.address).catch(() => false)) return;
+      if (/already full/.test((error as Error).message)) throw error;
+    }
+  }
   for (let attempt = 1; ; attempt++) {
     try {
       await fundBurner(deps);

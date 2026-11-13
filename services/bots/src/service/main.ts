@@ -13,7 +13,7 @@ import { type SignedAction } from "@kryphochroma/abi";
 import { GAS_PRICE, createRelay, encodeMessage } from "../relay/hub.js";
 import { type DripLedger, decideDrip, releaseDrip } from "./drip.js";
 import { createTableScan } from "../keeper/scan.js";
-import { type PoolTable, SPARE_BY_SEATS, pickBots, pickReady, planPool } from "./pool.js";
+import { type PoolTable, SPARE_BY_SEATS, pickBots, pickReady, planPool, pickQuick } from "./pool.js";
 import { type ProfileStore, fromDisk, lookup, parseAddresses, putProfile, toDisk } from "./profiles.js";
 
 const ACTIVE_STAGES = new Set([3, 4]);
@@ -205,13 +205,24 @@ async function ensurePool(): Promise<void> {
   try {
     const plan = planPool(await poolView(), MAX_POOL_TABLES);
     for (const seats of plan.create) await createPoolTable(seats);
+    if (plan.preseat.length > 0) await topUpBots();
+    for (const id of plan.preseat) {
+      const count = await seatBots(id, POOL_SEATS - 1);
+      log({ event: "pool-preseated", id, bots: count });
+    }
   } finally {
     poolCreating = false;
   }
 }
 
 async function poolView(): Promise<PoolTable[]> {
-  return (await poolTables()).map((p) => ({ id: p.id, seats: Number(p.view.config.seats), joined: Number(p.view.joined), reserved: isReserved(p.id), setupStep: Number(p.view.setupStep), starter: Number(p.view.topCard) !== NO_CARD }));
+  return Promise.all(
+    (await poolTables()).map(async (p) => {
+      const joined = Number(p.view.joined);
+      const bots = joined > 0 ? (await seatedPlayers(p.id, joined)).filter((a) => botAddresses.has(a.toLowerCase())).length : 0;
+      return { id: p.id, seats: Number(p.view.config.seats), joined, bots, reserved: isReserved(p.id), setupStep: Number(p.view.setupStep), starter: Number(p.view.topCard) !== NO_CARD };
+    }),
+  );
 }
 
 async function reserveReady(seats: number): Promise<{ id?: string; warming?: number }> {
@@ -224,6 +235,13 @@ async function reserveReady(seats: number): Promise<{ id?: string; warming?: num
 }
 
 async function quick(): Promise<{ id?: string; warming?: number }> {
+  const waiting = pickQuick(await poolView());
+  if (waiting) {
+    reserved.set(waiting.id.toString(), Date.now() + RESERVE_MS);
+    void ensurePool().catch(() => undefined);
+    log({ event: "quick-preseated", id: waiting.id });
+    return { id: waiting.id.toString() };
+  }
   const result = await reserveReady(POOL_SEATS);
   if (result.id) {
     const id = BigInt(result.id);

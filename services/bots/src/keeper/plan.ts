@@ -85,9 +85,10 @@ export interface PlannedAction {
 const BACKGROUND_KINDS = new Set<KeeperAction["kind"]>(["setupStep", "reshuffleStep"]);
 
 /** A lobby someone already sat at is a player watching the shuffle bar, so it goes before every spare table and every refill. */
+/** A game in progress whose deck runs low stalls every player at the table once it empties, so its refill ranks with a started table and goes before the pool. */
 function backgroundRank(entry: PlannedAction): number {
   if (stageName(entry.stage) === "Lobby" && (entry.joined ?? 0) > 0) return -1;
-  if (stageName(entry.stage) === "Shuffling") return 0;
+  if (stageName(entry.stage) === "Shuffling" || stageName(entry.stage) === "Playing") return 0;
   if (stageName(entry.stage) === "Lobby") return 1;
   return 2;
 }
