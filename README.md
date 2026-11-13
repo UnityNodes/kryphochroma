@@ -76,13 +76,13 @@ flowchart LR
 
 | | |
 |---|---|
-| `KryphoTable` | [`0x61807751609B48B555954F9F6B5677107b61cA1f`](https://sepolia.etherscan.io/address/0x61807751609B48B555954F9F6B5677107b61cA1f) |
-| `KryphoDeck` library | [`0xFEf6117FeF21cC24803F3cC584dA6232b4f01d64`](https://sepolia.etherscan.io/address/0xFEf6117FeF21cC24803F3cC584dA6232b4f01d64) |
-| `KryphoScore` library | [`0x8EDbb27c2a05Ad04828338A9846BD412AF70F6FF`](https://sepolia.etherscan.io/address/0x8EDbb27c2a05Ad04828338A9846BD412AF70F6FF) |
-| `KryphoRadio` library (sonar, signatures) | [`0xfdC3fd43C5eF0425487a9d3f0F8E7b48Fb0D7e62`](https://sepolia.etherscan.io/address/0xfdC3fd43C5eF0425487a9d3f0F8E7b48Fb0D7e62) |
-| `KryphoLobby` library (join, leave, host) | [`0x5f85469A7f7852c6960D4593f8355b6c052BD344`](https://sepolia.etherscan.io/address/0x5f85469A7f7852c6960D4593f8355b6c052BD344) |
-| `KryphoHand` library (dealing, draw queues, proofs) | [`0xd80C66B15Dc454d030E4aB575a3A1D1770d05C8c`](https://sepolia.etherscan.io/address/0xd80C66B15Dc454d030E4aB575a3A1D1770d05C8c) |
-| Deployment | [`0xbbbac1…f44d0`](https://sepolia.etherscan.io/tx/0xbbbac16a1093e9ad7af0133a2fe166c079f00a1b0d3f536b31268026197f44d0), block 12127191 |
+| `KryphoTable` | [`0x48A3d82cC5580A68E9E3D9D28Af41B39c9C76CE4`](https://sepolia.etherscan.io/address/0x48A3d82cC5580A68E9E3D9D28Af41B39c9C76CE4) |
+| `KryphoDeck` library | [`0x262A74457DF22e779C525437edbC4790C348136d`](https://sepolia.etherscan.io/address/0x262A74457DF22e779C525437edbC4790C348136d) |
+| `KryphoScore` library | [`0xf851c240829A588c2d00476d6AB03Ef789C3Eb75`](https://sepolia.etherscan.io/address/0xf851c240829A588c2d00476d6AB03Ef789C3Eb75) |
+| `KryphoRadio` library (sonar, signatures) | [`0x3eB56Da5E72710A769CB618e38BA70a86411235a`](https://sepolia.etherscan.io/address/0x3eB56Da5E72710A769CB618e38BA70a86411235a) |
+| `KryphoLobby` library (join, leave, host) | [`0xc3c962db6835d3726268646fE1c2f8Eeafe9B6e8`](https://sepolia.etherscan.io/address/0xc3c962db6835d3726268646fE1c2f8Eeafe9B6e8) |
+| `KryphoHand` library (dealing, draw queues, proofs) | [`0x3f430ac7c2Ab14F15F034546Db34Fb024D30795E`](https://sepolia.etherscan.io/address/0x3f430ac7c2Ab14F15F034546Db34Fb024D30795E) |
+| Deployment | [`0xf8aa03…c0e12`](https://sepolia.etherscan.io/tx/0xf8aa03a66a6cf3cf98aac29071b28976951bc792662e488ea633117e4cac0e12), block 12127945 |
 
 A full round on chain on an earlier deployment that still shuffled the deck, table 2: one human, three bots, three veils, one spyglass, Mono, a timeout and the reveal.
 
