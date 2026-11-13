@@ -180,6 +180,19 @@ export async function runKeeper(config: KeeperConfig, env: NodeJS.ProcessEnv, un
     }
   }
 
+  const busy = new Set<bigint>();
+
+  /** Urgent steps of different tables run side by side: waiting a block for one table's timeout used to hold every other table's reveal and queue fill behind it. */
+  async function run(entry: PlannedAction): Promise<void> {
+    try {
+      await act(entry.id, entry.action);
+      backoff.clear(entry.id);
+    } catch (error) {
+      const wait = backoff.fail(entry.id, Date.now());
+      log({ event: "error", id: entry.id, action: entry.action.kind, retryInMs: wait, message: (error as Error).message.slice(0, 300) });
+    }
+  }
+
   log({ event: "start", keeper: account.address, lane: config.lane, table: address });
   for (;;) {
     if (stopRequested(env, config.stopFile) || (await until())) {
@@ -209,13 +222,13 @@ export async function runKeeper(config: KeeperConfig, env: NodeJS.ProcessEnv, un
       const { urgent, background } = scheduleKeeper(planned);
       const lanes = { urgent, background, both: [...urgent, ...background.slice(0, 1)] };
       for (const entry of lanes[config.lane]) {
-        if (!backoff.ready(entry.id, Date.now())) continue;
-        try {
-          await act(entry.id, entry.action);
-          backoff.clear(entry.id);
-        } catch (error) {
-          const wait = backoff.fail(entry.id, Date.now());
-          log({ event: "error", id: entry.id, action: entry.action.kind, retryInMs: wait, message: (error as Error).message.slice(0, 300) });
+        if (!backoff.ready(entry.id, Date.now()) || busy.has(entry.id)) continue;
+        const task = run(entry);
+        if (config.lane === "urgent") {
+          busy.add(entry.id);
+          void task.finally(() => busy.delete(entry.id));
+        } else {
+          await task;
         }
       }
     } catch (error) {
