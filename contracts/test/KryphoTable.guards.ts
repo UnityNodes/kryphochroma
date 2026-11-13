@@ -11,6 +11,7 @@ let fhevm: Connection["fhevm"];
 let networkHelpers: Connection["networkHelpers"];
 const hex = (value: string): `0x${string}` => value as `0x${string}`;
 const config = { seats: 2, turnTimeout: 90, targetScore: 500, singleRound: true, stackDrawTwo: false };
+const SETUP_STEPS = 12;
 
 async function ready(players: Signer[], takeover = ethers.ZeroAddress) {
   const table = await deployHarness(ethers, takeover);
@@ -19,7 +20,7 @@ async function ready(players: Signer[], takeover = ethers.ZeroAddress) {
   await (await table.connect(creator).createTable({ ...config, seats: players.length })).wait();
   const id = await table.tableCount();
   for (const p of players) await (await table.connect(p).join(id, p.address)).wait();
-  for (let step = 0; step < 70; step++) await (await table.setupStep(id, { gasLimit: 16_700_000 })).wait();
+  for (let step = 0; step < SETUP_STEPS; step++) await (await table.setupStep(id, { gasLimit: 16_700_000 })).wait();
   await (await table.deal(id)).wait();
   return { table, id };
 }
@@ -70,7 +71,7 @@ describe("KryphoTable guards", function () {
     await (await table.join(id, s[0]!.address)).wait();
     await (await table.connect(s[1]!).join(id, s[1]!.address)).wait();
     await expect(table.deal(id)).to.be.revertedWithCustomError(table, "WrongStage");
-    for (let step = 0; step < 70; step++) await (await table.setupStep(id, { gasLimit: 16_700_000 })).wait();
+    for (let step = 0; step < SETUP_STEPS; step++) await (await table.setupStep(id, { gasLimit: 16_700_000 })).wait();
     await expect(table.setupStep(id)).to.be.revertedWithCustomError(table, "WrongStage");
     await (await table.deal(id)).wait();
     await expect(table.deal(id)).to.be.revertedWithCustomError(table, "BadSlot");
@@ -341,14 +342,14 @@ describe("KryphoTable guards", function () {
     const table = await deployTable(ethers, ethers.ZeroAddress);
     await (await table.createTable(config)).wait();
     const id = await table.tableCount();
-    for (let step = 0; step < 10; step++) await (await table.setupStep(id, { gasLimit: 16_700_000 })).wait();
+    for (let step = 0; step < 5; step++) await (await table.setupStep(id, { gasLimit: 16_700_000 })).wait();
     await (await table.join(id, s[0]!.address)).wait();
     await (await table.connect(s[1]!).join(id, s[1]!.address)).wait();
     let t = await table.getTable(id);
-    expect([Number(t.stage), Number(t.setupStep)]).to.deep.equal([1, 10]);
-    for (let step = 10; step < 70; step++) await (await table.setupStep(id, { gasLimit: 16_700_000 })).wait();
+    expect([Number(t.stage), Number(t.setupStep)]).to.deep.equal([1, 5]);
+    for (let step = 5; step < SETUP_STEPS; step++) await (await table.setupStep(id, { gasLimit: 16_700_000 })).wait();
     t = await table.getTable(id);
-    expect([Number(t.stage), Number(t.setupStep)]).to.deep.equal([2, 70]);
+    expect([Number(t.stage), Number(t.setupStep)]).to.deep.equal([2, SETUP_STEPS]);
     await (await table.deal(id)).wait();
     expect(Number((await table.getSeat(id, 1)).handSize)).to.equal(7);
   });
@@ -357,7 +358,7 @@ describe("KryphoTable guards", function () {
     const table = await deployTable(ethers, ethers.ZeroAddress);
     await (await table.connect(s[3]!).createTable(config)).wait();
     const id = await table.tableCount();
-    for (let step = 0; step < 70; step++) await (await table.setupStep(id, { gasLimit: 16_700_000 })).wait();
+    for (let step = 0; step < SETUP_STEPS; step++) await (await table.setupStep(id, { gasLimit: 16_700_000 })).wait();
     await expect(table.setupStep(id)).to.be.revertedWithCustomError(table, "ShuffleNotDone");
     while (Number((await table.getTable(id)).topCard) === 255) {
       const { checkSignaturesArgs } = await starter(table, id);
@@ -421,28 +422,25 @@ describe("KryphoTable guards", function () {
     await expect(table.connect(s[first]!).draw(id)).to.be.revertedWithCustomError(table, "NotYourTurn");
   });
 
-  it("refills the deck from the discard in the background and swaps it in when the deck runs out", async function () {
+  it("refills a running deck with fresh draws in the background and swaps them in when the deck runs out", async function () {
     const { table, id } = await ready([s[0]!, s[1]!]);
     while (Number((await table.getTable(id)).stage) === 2) {
       const { checkSignaturesArgs } = await starter(table, id);
       await (await table.setStarter(id, checkSignaturesArgs.abiEncodedCleartexts, checkSignaturesArgs.decryptionProof)).wait();
     }
     await (await table.fillQueues(id)).wait();
-    await expect(table.reshuffleStep(id)).to.be.revertedWithCustomError(table, "ShuffleNotDone");
-    await (await table.stageDeck(id, 100, [0x01, 0x02, 0x03, 0x04, 0x05, 0x06, 0x07, 0x08])).wait();
-    await expect(table.reshuffleStep(id)).to.be.revertedWithCustomError(table, "ShuffleNotDone");
-    const below = [0x01, 0x02, 0x13, 0x24, 0x35, 0x0a, 0x1b, 0x2c, 0x5d, 0x5e, 0x07, 0x18, 0x29, 0x31, 0x05, 0x16, 0x27, 0x38, 0x09, 0x33];
-    const top = Number((await table.getTable(id)).topCard);
-    await (await table.stageDeck(id, 100, below)).wait();
-    await (await table.reshuffleStep(id)).wait();
-    const size = 16;
-    expect((await table.discardOf(id)).map(Number)).to.deep.equal([...below.slice(size), top]);
-    for (let step = 1; step < 65; step++) await (await table.reshuffleStep(id, { gasLimit: 16_700_000 })).wait();
-    await expect(table.reshuffleStep(id)).to.be.revertedWithCustomError(table, "ShuffleNotDone");
+    await expect(table.refillStep(id), "a deck with plenty left needs no refill").to.be.revertedWithCustomError(table, "ShuffleNotDone");
+    await (await table.stageDeck(id, 100, [0x01, 0x02])).wait();
+    const discard = (await table.discardOf(id)).map(Number);
+    await (await table.refillStep(id, { gasLimit: 16_700_000 })).wait();
+    const size = 60;
+    expect(Number((await table.getTable(id)).refillSize)).to.equal(size);
+    for (let step = 1; step < 5; step++) await (await table.refillStep(id, { gasLimit: 16_700_000 })).wait();
+    await expect(table.refillStep(id)).to.be.revertedWithCustomError(table, "ShuffleNotDone");
+    expect((await table.discardOf(id)).map(Number), "the discard pile never comes back").to.deep.equal(discard);
     const refilled: number[] = [];
     for (let i = 0; i < size; i++) refilled.push(await fhevm.cleartextDb.readUint8({ euint8: hex(await table.deckCardAt(id, i)) }));
-    expect([...refilled].sort()).to.deep.equal(below.slice(0, size).sort());
-    expect(refilled).to.not.deep.equal(below.slice(0, size));
+    expect(refilled.every((c) => c < 0x5f)).to.equal(true);
     let t = await table.getTable(id);
     expect(Number(t.deckPtr)).to.equal(100);
     await (await table.stageDeck(id, 138, [])).wait();
@@ -456,6 +454,7 @@ describe("KryphoTable guards", function () {
     const queued = await fhevm.cleartextDb.readUint8({ euint8: hex((await table.queueOf(id, turn))[1]!) });
     expect(queued, "the refilled deck tops the queue back up").to.equal(refilled[0]);
   });
+
   it("lets a spyglass read exactly one opponent card and keeps secret colours private", async function () {
     const { table, id } = await ready([s[0]!, s[1]!]);
     while (Number((await table.getTable(id)).stage) === 2) {

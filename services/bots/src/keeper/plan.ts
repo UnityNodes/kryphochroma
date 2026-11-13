@@ -27,7 +27,7 @@ export type KeeperAction =
   | { readonly kind: "finishReveal" }
   | { readonly kind: "forceTimeout" }
   | { readonly kind: "fillQueues" }
-  | { readonly kind: "reshuffleStep"; readonly remaining: number }
+  | { readonly kind: "refillStep"; readonly remaining: number }
   | { readonly kind: "idle" };
 
 function refillAction(table: TableView): KeeperAction {
@@ -36,14 +36,14 @@ function refillAction(table: TableView): KeeperAction {
   const size = Number(table.refillSize ?? 0);
   if (size > 0) {
     const remaining = Math.ceil(size / FILL_CHUNK) + SHUFFLE_STEPS - Number(table.refillStep ?? 0);
-    return remaining > 0 ? { kind: "reshuffleStep", remaining } : { kind: "idle" };
+    return remaining > 0 ? { kind: "refillStep", remaining } : { kind: "idle" };
   }
   const room = Math.max(deckPtr, DECK_SIZE - deckEnd);
   const startable = Number(table.spare ?? 0) > 0 && room > 0 && deckEnd - deckPtr <= REFILL_AT;
   if (!startable) return { kind: "idle" };
   const fresh = 2 ** Math.floor(Math.log2(Math.min(Number(table.spare), room)));
   if (fresh < MIN_REFILL && deckEnd > deckPtr) return { kind: "idle" };
-  return { kind: "reshuffleStep", remaining: Math.ceil(fresh / FILL_CHUNK) + SHUFFLE_STEPS };
+  return { kind: "refillStep", remaining: Math.ceil(fresh / FILL_CHUNK) + SHUFFLE_STEPS };
 }
 
 const stageName = (stage: number): string => STAGE[stage] ?? "Unknown";
@@ -82,7 +82,7 @@ export interface PlannedAction {
   readonly joined?: number;
 }
 
-const BACKGROUND_KINDS = new Set<KeeperAction["kind"]>(["setupStep", "reshuffleStep"]);
+const BACKGROUND_KINDS = new Set<KeeperAction["kind"]>(["setupStep", "refillStep"]);
 
 /** A lobby someone already sat at is a player watching the shuffle bar, so it goes before every spare table and every refill. */
 /** A game in progress whose deck runs low stalls every player at the table once it empties, so its refill ranks with a started table and goes before the pool. */

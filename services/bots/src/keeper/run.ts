@@ -173,8 +173,8 @@ export async function runKeeper(config: KeeperConfig, env: NodeJS.ProcessEnv, un
         return send("forceTimeout", [id]);
       case "fillQueues":
         return send("fillQueues", [id]);
-      case "reshuffleStep":
-        return pipelineSetup(id, action.remaining, "reshuffleStep");
+      case "refillStep":
+        return pipelineSetup(id, action.remaining, "refillStep");
       case "idle":
         return;
     }

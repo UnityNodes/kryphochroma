@@ -37,7 +37,7 @@ interface GameSetup {
 }
 
 const KIND: Record<Move["type"], number> = { play: 0, draw: 1, pass: 2, take: 3, mono: 4, accept: 5, challenge: 6, veil: 8, doubt: 9, sonar: 10 };
-const SETUP_STEPS = 70;
+const SETUP_STEPS = 12;
 const ACTION_TYPES = {
   Action: [
     { name: "table", type: "uint256" },

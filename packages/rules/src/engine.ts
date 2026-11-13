@@ -26,6 +26,7 @@ import {
   canDraw,
   drawInto,
   finish,
+  freshCards,
   hasColorExcept,
   removeFromHand,
   requireSeat,
@@ -54,11 +55,10 @@ export function validateConfig(config: TableConfig): void {
   if (typeof config.stackDrawTwo !== "boolean") throw new RuleError("BadConfig", "stackDrawTwo must be a boolean");
 }
 
+/** Cards are drawn on their own from the make up of a full deck, as the contract does, so a deck is any 138 valid cards rather than one fixed set. */
 export function validateDeck(deck: readonly Card[]): void {
   if (deck.length !== DECK_SIZE) throw new RuleError("BadCard", `deck must have ${DECK_SIZE} cards`);
-  const expected = [...fullDeck()].sort((a, b) => a - b);
-  const actual = [...deck].sort((a, b) => a - b);
-  if (expected.some((card, i) => card !== actual[i])) throw new RuleError("BadCard", "deck composition mismatch");
+  if (!deck.every(isValidCard)) throw new RuleError("BadCard", "deck holds an invalid card");
 }
 
 function emptySeat(score: number): PublicSeat {
@@ -147,8 +147,8 @@ export function initialState(config: TableConfig, seed = 1, deck?: readonly Card
   validateConfig(config);
   const scores = Array.from({ length: config.seats }, () => 0);
   if (deck) return deal(blankState(config, 0, scores, seed >>> 0), deck);
-  const shuffled = shuffle(fullDeck(), seed >>> 0);
-  return deal(blankState(config, 0, scores, shuffled.next), shuffled.items);
+  const drawn = freshCards(seed >>> 0, DECK_SIZE);
+  return deal(blankState(config, 0, scores, drawn.next), drawn.items);
 }
 
 export function nextRound(state: GameState, deck?: readonly Card[]): Transition {
@@ -156,8 +156,8 @@ export function nextRound(state: GameState, deck?: readonly Card[]): Transition 
   const scores = state.pub.seats.map((s) => s.score);
   const round = state.pub.round + 1;
   if (deck) return deal(blankState(state.pub.config, round, scores, state.rng), deck);
-  const shuffled = shuffle(fullDeck(), state.rng);
-  return deal(blankState(state.pub.config, round, scores, shuffled.next), shuffled.items);
+  const drawn = freshCards(state.rng, DECK_SIZE);
+  return deal(blankState(state.pub.config, round, scores, drawn.next), drawn.items);
 }
 
 function seatOf(d: Draft, seat: number): Draft["pub"]["seats"][number] {

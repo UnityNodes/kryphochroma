@@ -149,7 +149,7 @@ library KryphoHand {
     }
 
     function _swapRefill(IKryphoTable.Table storage t, uint256 id) private returns (bool) {
-        if (t.refillSize == 0 || t.refillStep != KryphoDeck.fillSteps(t.refillSize) + KryphoDeck.SHUFFLE_STEPS) return false;
+        if (t.refillSize == 0 || t.refillStep != KryphoDeck.fillSteps(t.refillSize)) return false;
         t.deckPtr = t.refillAt;
         t.deckEnd = t.refillAt + t.refillSize;
         emit IKryphoTable.Reshuffled(id, t.refillSize);

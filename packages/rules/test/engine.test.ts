@@ -3,6 +3,8 @@ import type { GameState } from "../src/index.js";
 import {
   DECK_SIZE,
   NEXT_CARDS,
+  REFILL_CARDS,
+  freshCards,
   RuleError,
   applyDraw,
   applyPass,
@@ -36,11 +38,21 @@ describe("setup", () => {
     expectRule(() => validateConfig({ seats: 2, mode: "match", targetScore: 10_001, stackDrawTwo: false }), "BadConfig");
   });
 
-  it("rejects decks with the wrong composition", () => {
+  it("rejects a deck of the wrong size or with an invalid card, and takes any valid draws", () => {
     expectRule(() => initialState(config(2), 1, fullDeck().slice(1)), "BadCard");
     const bad = fullDeck();
-    bad[0] = bad[1] as number;
+    bad[0] = 0xff;
     expectRule(() => initialState(config(2), 1, bad), "BadCard");
+    const repeated = fullDeck().map(() => fullDeck()[3] as number);
+    expect(() => initialState(config(2), 1, repeated)).not.toThrow();
+  });
+
+  it("draws every card on its own from the make up of a full deck", () => {
+    const { items } = freshCards(7, 20_000);
+    const wilds = items.filter((c) => c >= 0x5d).length / items.length;
+    expect(wilds).toBeGreaterThan(0.045);
+    expect(wilds).toBeLessThan(0.07);
+    expect(items.every((c) => fullDeck().includes(c))).toBe(true);
   });
 
   it.each([2, 3, 4])("deals 7 cards each to %i seats and opens with a number card", (seats) => {
@@ -162,13 +174,13 @@ describe("draw and pass", () => {
     expect(state.pub.drawnSlot).toBeNull();
   });
 
-  it("recycles the discard pile when the deck runs out", () => {
+  it("draws fresh cards when the deck runs out and leaves the discard pile alone", () => {
     let s = initialState(config(2), 3).state;
     s = { ...s, deck: [], pub: { ...s.pub, deckCount: 0, discard: [R(1), R(2), s.pub.topCard] } };
     const { state, events } = applyDraw(s, 0);
     expect(types({ state, events })).toEqual(["Reshuffled", "Drew"]);
-    expect(state.pub.discard).toHaveLength(1);
-    expect(state.deck).toHaveLength(1);
+    expect(state.pub.discard).toHaveLength(3);
+    expect(state.deck).toHaveLength(REFILL_CARDS - 1);
   });
 
   it("waits for the chain reshuffle instead of recycling when recycles is off", () => {
@@ -180,7 +192,7 @@ describe("draw and pass", () => {
 
   it("allows pass without drawing when nothing can be drawn", () => {
     let s = initialState(config(2), 3).state;
-    s = { ...s, deck: [], pub: { ...s.pub, deckCount: 0, discard: [s.pub.topCard] } };
+    s = { ...s, deck: [], pub: { ...s.pub, deckCount: 0, discard: [s.pub.topCard], recycles: false } };
     expectRule(() => applyDraw(s, 0), "CannotDraw");
     expect(applyPass(s, 0).state.pub.turn).toBe(1);
   });

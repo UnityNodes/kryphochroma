@@ -21,13 +21,13 @@ contract KryphoTable is IKryphoTable, ZamaEthereumConfig {
     uint8 internal constant REFILL_AT = 48;
     uint32 internal constant MIN_TURN_TIMEOUT = 30;
     uint32 internal constant MAX_TURN_TIMEOUT = 1 days;
-    uint8 internal constant MIN_REFILL = 16;
+    uint8 internal constant REFILL_MAX = 60;
     uint256 internal constant SESSION_STIPEND = 10_000;
     uint256 internal constant REVEAL_HANDLE_GAS = 300_000;
     uint256 internal constant REVEAL_RESERVE_GAS = 300_000;
     uint16 internal constant MAX_TARGET_SCORE = 10_000;
     uint64 internal constant CATCH_DELAY_BLOCKS = 2;
-    uint16 internal constant SETUP_STEPS = uint16(KryphoDeck.FILL_STEPS) + KryphoDeck.SHUFFLE_STEPS;
+    uint16 internal constant SETUP_STEPS = KryphoDeck.FILL_STEPS;
     bytes32 internal constant RELAY_SEAT_SLOT = keccak256("kryphochroma.relay.seat");
     uint8 internal constant KIND_PLAY = 0;
     uint8 internal constant KIND_DRAW = 1;
@@ -216,11 +216,7 @@ contract KryphoTable is IKryphoTable, ZamaEthereumConfig {
         if (!early && t.stage != Stage.Shuffling) revert WrongStage(Stage.Shuffling, t.stage);
         uint16 step = t.setupStep;
         if (step >= SETUP_STEPS) revert ShuffleNotDone();
-        if (step < KryphoDeck.FILL_STEPS) {
-            KryphoDeck.fillStep(_deck, id, uint8(step));
-        } else {
-            KryphoDeck.shuffleStep(_deck, id, step - KryphoDeck.FILL_STEPS, 0, KryphoDeck.DECK_SIZE);
-        }
+        KryphoDeck.fillStep(_deck, id, uint8(step), 0, KryphoDeck.DECK_SIZE);
         t.setupStep = step + 1;
         emit ShuffleProgress(id, step + 1, SETUP_STEPS);
         if (step + 1 < SETUP_STEPS) return;
@@ -228,31 +224,24 @@ contract KryphoTable is IKryphoTable, ZamaEthereumConfig {
         if (!early) t.stage = Stage.Dealing;
     }
 
-    function reshuffleStep(uint256 id) external {
+    /** A running deck is topped up with freshly drawn cards, never with the discard pile: cards are independent draws, so nothing has to be shuffled and no played card comes back in a known order. */
+    function refillStep(uint256 id) external {
         Table storage t = _requireStage(id, Stage.Playing);
         uint8 size = t.refillSize;
         if (size == 0) {
-            uint256 spare = _discard[id].length - t.discardBase - 1;
             bool front = t.deckPtr >= KryphoDeck.DECK_SIZE - t.deckEnd;
             uint8 room = front ? t.deckPtr : KryphoDeck.DECK_SIZE - t.deckEnd;
-            size = uint8(spare < room ? spare : room);
-            if (size == 0 || t.deckEnd - t.deckPtr > REFILL_AT || (size < MIN_REFILL && t.deckPtr < t.deckEnd)) revert ShuffleNotDone();
-            while (size & (size - 1) != 0) size &= size - 1;
+            size = room < REFILL_MAX ? room : REFILL_MAX;
+            if (size == 0 || t.deckEnd - t.deckPtr > REFILL_AT) revert ShuffleNotDone();
             t.refillSize = size;
             t.refillAt = front ? 0 : t.deckEnd;
-            t.refillFrom = t.discardBase;
-            t.discardBase += size;
         }
         uint8 step = t.refillStep;
         uint8 fills = KryphoDeck.fillSteps(size);
-        if (step >= fills + KryphoDeck.SHUFFLE_STEPS) revert ShuffleNotDone();
-        if (step < fills) {
-            KryphoDeck.refillStep(_deck, _discard, id, step, t.refillFrom, t.refillAt, size);
-        } else {
-            KryphoDeck.shuffleStep(_deck, id, step - fills, t.refillAt, size);
-        }
+        if (step >= fills) revert ShuffleNotDone();
+        KryphoDeck.fillStep(_deck, id, step, t.refillAt, size);
         t.refillStep = step + 1;
-        emit ShuffleProgress(id, step + 1, fills + KryphoDeck.SHUFFLE_STEPS);
+        emit ShuffleProgress(id, step + 1, fills);
         if (t.deckPtr >= t.deckEnd) KryphoHand.swapRefill(t, id);
     }
 
@@ -588,10 +577,7 @@ contract KryphoTable is IKryphoTable, ZamaEthereumConfig {
     }
 
     function discardOf(uint256 id) external view returns (uint8[] memory cards) {
-        uint8[] storage all = _discard[id];
-        uint256 base = _tables[id].discardBase;
-        cards = new uint8[](all.length - base);
-        for (uint256 i = 0; i < cards.length; i++) cards[i] = all[base + i];
+        return _discard[id];
     }
 
     function revealHandles(uint256 id) external view returns (bytes32[] memory) {
@@ -706,7 +692,7 @@ contract KryphoTable is IKryphoTable, ZamaEthereumConfig {
     }
 
     function _refillReady(Table storage t) internal view returns (bool) {
-        return t.refillSize > 0 && t.refillStep == KryphoDeck.fillSteps(t.refillSize) + KryphoDeck.SHUFFLE_STEPS;
+        return t.refillSize > 0 && t.refillStep == KryphoDeck.fillSteps(t.refillSize);
     }
 
     function _handOver(uint256 id, Seat storage s, uint8 seat) internal {
@@ -762,7 +748,6 @@ contract KryphoTable is IKryphoTable, ZamaEthereumConfig {
         t.deckEnd = KryphoDeck.DECK_SIZE;
         t.refillSize = 0;
         t.refillStep = 0;
-        t.discardBase = 0;
         t.dir = 1;
         t.drawnSlot = NONE;
         t.topCard = NONE;

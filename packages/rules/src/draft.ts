@@ -1,5 +1,5 @@
-import { type Card, colorOf } from "./cards.js";
-import { shuffle } from "./rng.js";
+import { type Card, colorOf, fullDeck } from "./cards.js";
+import { randomInt } from "./rng.js";
 import {
   type GameEvent,
   type GameState,
@@ -62,18 +62,30 @@ export function freeSlot(slots: readonly boolean[]): number {
 export function canDraw(pub: PublicState, seat: number): boolean {
   const s = pub.seats[seat];
   if (!s || freeSlot(s.slots) < 0) return false;
-  return pub.deckCount > 0 || (pub.recycles !== false && pub.discard.length > 1);
+  return pub.deckCount > 0 || pub.recycles !== false;
 }
 
+export const REFILL_CARDS = 60;
+
+export function freshCards(seed: number, count: number): { readonly items: Card[]; readonly next: number } {
+  const layout = fullDeck();
+  const items: Card[] = [];
+  let rng = seed >>> 0;
+  for (let i = 0; i < count; i++) {
+    const step = randomInt(rng, layout.length);
+    rng = step.next;
+    items.push(layout[step.value] as Card);
+  }
+  return { items, next: rng };
+}
+
+/** An empty deck is topped up with fresh draws, never with the discard pile, so a played card does not come back. */
 function recycle(d: Draft): void {
-  if (d.pub.recycles === false || d.pub.discard.length <= 1) return;
-  const top = d.pub.discard[d.pub.discard.length - 1] as Card;
-  const rest = d.pub.discard.slice(0, -1);
-  const shuffled = shuffle(rest, d.rng);
-  d.rng = shuffled.next;
-  d.deck = [...d.deck, ...shuffled.items];
-  d.pub.discard = [top];
-  d.events.push({ type: "Reshuffled", count: rest.length });
+  if (d.pub.recycles === false) return;
+  const fresh = freshCards(d.rng, REFILL_CARDS);
+  d.rng = fresh.next;
+  d.deck = [...d.deck, ...fresh.items];
+  d.events.push({ type: "Reshuffled", count: fresh.items.length });
 }
 
 function deckCard(d: Draft): Card | undefined {

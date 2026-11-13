@@ -1,6 +1,6 @@
 import { expect } from "chai";
 import { network } from "hardhat";
-import { DECK_SIZE, fullDeck } from "@kryphochroma/rules";
+import { DECK_SIZE, fullDeck, isValidCard } from "@kryphochroma/rules";
 
 type Connection = Awaited<ReturnType<typeof network.connect>>;
 let ethers: Connection["ethers"];
@@ -25,20 +25,21 @@ describe("KryphoDeck", function () {
     expect(onChain).to.deep.equal(fullDeck());
   });
 
-  it("counts the switch pairs of every layer", async function () {
+  it("maps an encrypted index to the same card as the plaintext layout", async function () {
     const harness = await deployHarness();
-    const pairs: number[] = [];
-    for (let l = 0; l < 8; l++) pairs.push(Number(await harness.pairsIn(1 << l)));
-    expect(pairs).to.deep.equal([69, 68, 68, 66, 64, 64, 64, 10]);
+    for (let i = 0; i < DECK_SIZE; i++) {
+      await (await harness.encode(i)).wait();
+      expect(await fhevm.cleartextDb.readUint8({ euint8: hex(await harness.lastCard()) }), `index ${i}`).to.equal(Number(await harness.cardAt(i)));
+    }
   });
 
-  it("stays a permutation after a full pass of half layer steps", async function () {
+  it("fills a deck with valid cards drawn on their own", async function () {
     const harness = await deployHarness();
-    await (await harness.fill()).wait();
-    for (let step = 0; step < 16; step++) await (await harness.shuffleStep(step, { gasLimit: 16_700_000 })).wait();
+    const steps = Number(await harness.fillSteps());
+    for (let step = 0; step < steps; step++) await (await harness.fill(step, { gasLimit: 16_700_000 })).wait();
     const cards: number[] = [];
     for (let i = 0; i < DECK_SIZE; i++) cards.push(await fhevm.cleartextDb.readUint8({ euint8: hex(await harness.deckAt(i)) }));
-    expect([...cards].sort((a, b) => a - b)).to.deep.equal([...fullDeck()].sort((a, b) => a - b));
-    expect(cards).to.not.deep.equal(fullDeck());
+    expect(cards.every(isValidCard)).to.equal(true);
+    expect(new Set(cards).size).to.be.greaterThan(20);
   });
 });

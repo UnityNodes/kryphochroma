@@ -52,8 +52,6 @@ interface IKryphoTable {
         uint8 refillAt;
         uint8 refillSize;
         uint8 refillStep;
-        uint16 refillFrom;
-        uint16 discardBase;
         uint8 drawnSlot;
         uint8 pendingDraw;
         uint8 monoWindow;

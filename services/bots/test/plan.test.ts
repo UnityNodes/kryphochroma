@@ -29,7 +29,7 @@ describe("keeper plan", () => {
   });
 
   it("refills the deck of a running game before the pool shuffles", () => {
-    const refill = { id: 9n, stage: 3, action: { kind: "reshuffleStep" as const, remaining: 60 } };
+    const refill = { id: 9n, stage: 3, action: { kind: "refillStep" as const, remaining: 60 } };
     const lobby = { id: 2n, stage: 0, joined: 1, action: { kind: "setupStep" as const, remaining: 5 } };
     const pool = { id: 3n, stage: 0, joined: 0, action: { kind: "setupStep" as const, remaining: 2 } };
     expect(scheduleKeeper([pool, lobby, refill]).background.map((p) => p.id)).toEqual([2n, 9n]);
@@ -49,12 +49,12 @@ describe("keeper plan", () => {
   it("starts the discard refill only when the deck runs low and continues it to the end", () => {
     const playing = { ...base, turnDeadline: 1000n, deckPtr: 50, deckEnd: 108, spare: 30 };
     expect(nextKeeperAction(playing, 0n)).toEqual({ kind: "idle" });
-    expect(nextKeeperAction({ ...playing, deckPtr: 84 }, 0n)).toEqual({ kind: "reshuffleStep", remaining: 65 });
-    expect(nextKeeperAction({ ...playing, deckPtr: 84, spare: 70 }, 0n)).toEqual({ kind: "reshuffleStep", remaining: 67 });
+    expect(nextKeeperAction({ ...playing, deckPtr: 84 }, 0n)).toEqual({ kind: "refillStep", remaining: 65 });
+    expect(nextKeeperAction({ ...playing, deckPtr: 84, spare: 70 }, 0n)).toEqual({ kind: "refillStep", remaining: 67 });
     expect(nextKeeperAction({ ...playing, deckPtr: 84, spare: 0 }, 0n)).toEqual({ kind: "idle" });
     expect(nextKeeperAction({ ...playing, deckPtr: 84, spare: 9 }, 0n)).toEqual({ kind: "idle" });
-    expect(nextKeeperAction({ ...playing, deckPtr: 108, spare: 9 }, 0n)).toEqual({ kind: "reshuffleStep", remaining: 65 });
-    expect(nextKeeperAction({ ...playing, refillSize: 30, refillStep: 50 }, 0n)).toEqual({ kind: "reshuffleStep", remaining: 16 });
+    expect(nextKeeperAction({ ...playing, deckPtr: 108, spare: 9 }, 0n)).toEqual({ kind: "refillStep", remaining: 65 });
+    expect(nextKeeperAction({ ...playing, refillSize: 30, refillStep: 50 }, 0n)).toEqual({ kind: "refillStep", remaining: 16 });
     expect(nextKeeperAction({ ...playing, refillSize: 30, refillStep: 66 }, 0n)).toEqual({ kind: "idle" });
     expect(nextKeeperAction({ ...playing, deckPtr: 108 }, 2000n)).toEqual({ kind: "forceTimeout" });
   });
@@ -81,7 +81,7 @@ describe("keeper plan", () => {
       { id: 3n, stage: 3, action: { kind: "idle" } },
       { id: 6n, stage: 1, action: { kind: "setupStep", remaining: 30 } },
       { id: 2n, stage: 3, action: { kind: "forceTimeout" } },
-      { id: 7n, stage: 3, action: { kind: "reshuffleStep", remaining: 20 } },
+      { id: 7n, stage: 3, action: { kind: "refillStep", remaining: 20 } },
     ];
     const { urgent, background } = scheduleKeeper(planned);
     expect(urgent.map((p) => p.id)).toEqual([4n, 2n]);

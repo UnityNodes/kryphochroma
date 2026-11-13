@@ -15,13 +15,15 @@ import {
   legalMoves,
   nextRound,
   randomInt,
+  REFILL_CARDS,
 } from "../src/index.js";
 import { config, totalCards } from "./helpers.js";
 
 const STEP_CAP = 3000;
 
 function invariantError(state: GameState): string | null {
-  if (totalCards(state) !== DECK_SIZE) return `card count ${totalCards(state)}`;
+  const extra = totalCards(state) - DECK_SIZE;
+  if (extra < 0 || extra % REFILL_CARDS !== 0) return `card count ${totalCards(state)}`;
   if (state.pub.deckCount !== state.deck.length) return "deck count drift";
   for (const [i, seat] of state.pub.seats.entries()) {
     const hand = state.hands[i] ?? [];
