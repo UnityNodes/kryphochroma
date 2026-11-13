@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState } from "react";
-import { DEFAULT_VOLUME, SHOUT_TEXT, type SoundName, VOICES, loadMuted, saveMuted } from "./sound";
+import { DEFAULT_VOLUME, HORN_AFTER_SHOUT, SHOUT_URL, type SoundName, VOICES, loadMuted, saveMuted } from "./sound";
 
 const storage = (): Storage | null => {
   try {
@@ -17,27 +17,10 @@ export interface SoundControls {
   readonly play: (name: SoundName) => void;
 }
 
-const SHOUT_RATE = 0.75;
-const SHOUT_PITCH = 1.4;
-
-/** The call is spoken by the browser's own speech engine, so there is no recorded voice to license; browsers without it just play the horn. */
-function shout(text: string): void {
-  try {
-    if (typeof window === "undefined" || !("speechSynthesis" in window)) return;
-    const line = new SpeechSynthesisUtterance(text);
-    line.rate = SHOUT_RATE;
-    line.pitch = SHOUT_PITCH;
-    line.volume = 1;
-    window.speechSynthesis.cancel();
-    window.speechSynthesis.speak(line);
-  } catch {
-    return;
-  }
-}
-
 export function useSound(): SoundControls {
   const [muted, setMuted] = useState(() => (typeof window === "undefined" ? false : loadMuted(storage())));
   const ctx = useRef<{ audio: AudioContext; out: GainNode } | null>(null);
+  const shoutBuffer = useRef<AudioBuffer | null>(null);
 
   useEffect(() => {
     const unlock = () => {
@@ -48,6 +31,13 @@ export function useSound(): SoundControls {
         out.gain.value = DEFAULT_VOLUME;
         out.connect(audio.destination);
         ctx.current = { audio, out };
+        void fetch(SHOUT_URL)
+          .then((res) => res.arrayBuffer())
+          .then((data) => audio.decodeAudioData(data))
+          .then((buffer) => {
+            shoutBuffer.current = buffer;
+          })
+          .catch(() => undefined);
       } catch {
         ctx.current = null;
       }
@@ -65,11 +55,18 @@ export function useSound(): SoundControls {
   const play = useCallback(
     (name: SoundName) => {
       if (muted) return;
-      if (name === "mono") shout(SHOUT_TEXT);
       const current = ctx.current;
       if (!current) return;
       try {
-        VOICES[name](current.audio, current.out, current.audio.currentTime + 0.01);
+        const at = current.audio.currentTime + 0.01;
+        const buffer = name === "mono" ? shoutBuffer.current : null;
+        if (buffer) {
+          const voice = current.audio.createBufferSource();
+          voice.buffer = buffer;
+          voice.connect(current.out);
+          voice.start(at);
+        }
+        VOICES[name](current.audio, current.out, buffer ? at + buffer.duration * HORN_AFTER_SHOUT : at);
       } catch {
         return;
       }

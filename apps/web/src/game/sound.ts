@@ -65,7 +65,9 @@ function horn(ctx: AudioContext, out: AudioNode, at: number, freq: number, peak:
   vibrato.stop(at + decay + 0.1);
 }
 
-export const SHOUT_TEXT = "Monooo!";
+/** A recorded call instead of the browser speech engine, which reads the word flat and differently on every system; the voice comes from a public domain dataset so it needs no notice. */
+export const SHOUT_URL = "/sounds/mono.mp3";
+export const HORN_AFTER_SHOUT = 0.85;
 
 export const VOICES: Record<SoundName, Voice> = {
   deal: (ctx, out, at) => filteredNoise(ctx, out, at, "highpass", 3500, 0.35, 0.06),

@@ -1,5 +1,7 @@
+import { statSync } from "node:fs";
+import { join } from "node:path";
 import { describe, expect, it } from "vitest";
-import { SOUND_FOR_ICON, VOICES, loadMuted, saveMuted } from "@/game/sound";
+import { HORN_AFTER_SHOUT, SHOUT_URL, SOUND_FOR_ICON, VOICES, loadMuted, saveMuted } from "@/game/sound";
 
 describe("sound settings", () => {
   it("remembers mute and survives broken storage", () => {
@@ -27,5 +29,18 @@ describe("sound settings", () => {
     expect(SOUND_FOR_ICON.trophy).toBe("win");
     expect(SOUND_FOR_ICON.mono).toBe("mono");
     expect(SOUND_FOR_ICON.caught).toBe("caught");
+  });
+});
+
+describe("mono call", () => {
+  it("ships the recorded call as a small file under public", () => {
+    const size = statSync(join(__dirname, "..", "public", SHOUT_URL)).size;
+    expect(size).toBeGreaterThan(1000);
+    expect(size).toBeLessThan(50_000);
+  });
+
+  it("starts the horn before the call ends so they read as one sound", () => {
+    expect(HORN_AFTER_SHOUT).toBeGreaterThan(0);
+    expect(HORN_AFTER_SHOUT).toBeLessThan(1);
   });
 });
