@@ -1,4 +1,4 @@
-import { DECK_SIZE, FILL_CHUNK, NO_SEAT, SHUFFLE_STEPS } from "./constants.js";
+import { DECK_SIZE, FILL_CHUNK, NO_SEAT } from "./constants.js";
 import { type Color, HAND_SLOTS, type PublicSeat, type PublicState, type Stage } from "@kryphochroma/rules";
 
 export interface ChainTable {
@@ -39,7 +39,7 @@ const STAGES: Record<number, Stage> = { 3: "Playing", 4: "AwaitChallenge", 5: "R
 export function chainDeckCount(table: Pick<ChainTable, "deckPtr" | "deckEnd" | "refillSize" | "refillStep">): number {
   const live = Number(table.deckEnd ?? DECK_SIZE) - Number(table.deckPtr);
   const size = Number(table.refillSize ?? 0);
-  const ready = size > 0 && Number(table.refillStep ?? 0) === Math.ceil(size / FILL_CHUNK) + SHUFFLE_STEPS;
+  const ready = size > 0 && Number(table.refillStep ?? 0) === Math.ceil(size / FILL_CHUNK);
   return live + (ready ? size : 0);
 }
 

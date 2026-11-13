@@ -215,7 +215,7 @@ export async function runKeeper(config: KeeperConfig, env: NodeJS.ProcessEnv, un
         scan.ids(count).map(async (id) => {
           const table = (await read("getTable", [id])) as TableView;
           scan.settle(id, Number(table.stage));
-          const view = table.stage === 3 ? { ...table, spare: ((await read("discardOf", [id])) as readonly number[]).length - 1 } : table;
+          const view = table;
           return { id, stage: Number(table.stage), joined: Number(table.joined), action: nextKeeperAction(view, now, config.poolOwner ?? account.address) };
         }),
       );

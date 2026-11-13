@@ -138,12 +138,12 @@ await fetch("/api/act", {
   body: JSON.stringify({ ...fields, table: fields.table.toString(), signature }),
 });`;
 
-const SHUFFLE = `for each pair (i, i | distance) inside the deck:
-  swap = FHE.randEbool()
-  a = FHE.select(swap, deck[j], deck[i])
-  b = FHE.select(swap, deck[i], deck[j])
-  deck[i] = a; deck[j] = b
-  FHE.allowThis(a); FHE.allowThis(b)`;
+const DRAW = `index  = FHE.shr(FHE.mul(FHE.asEuint32(FHE.randEuint16()), 138), 16)  // 0..137
+color  = FHE.div(index, 26)
+offset = index - color * 26
+card   = index >= 130 ? 0x5D + (offset & 1)              // FHE.select
+                      : (color << 4) + ((offset + 1) >> 1)
+FHE.allowThis(card)                                       // one stored ciphertext per card`;
 
 export const DOCS: readonly DocPage[] = [
   {
@@ -162,7 +162,7 @@ export const DOCS: readonly DocPage[] = [
         <P>
           Kryphochroma (from the Greek for hidden colour) is a shedding card game for 2 to 4 players. Match the top card by colour or number, empty your hand first, and use four mechanics that only work because every card is encrypted: a veiled bluff, a spyglass that reads one rival card, a sonar that counts a colour inside a rival hand, and a secret colour that doubles your round.
         </P>
-        <P>Hands, the deck, veiled cards and secret colours live on Sepolia as Zama FHE ciphertexts. The contract shuffles, deals and checks every move without seeing a card. Each player decrypts only their own cards with a session key in the browser tab.</P>
+        <P>Hands, the deck, veiled cards and secret colours live on Sepolia as Zama FHE ciphertexts. The contract draws, deals and checks every move without seeing a card. Each player decrypts only their own cards with a session key in the browser tab.</P>
         <H2 id="why-fhe">Why it needs FHE</H2>
         <P>A card game on a public chain normally has two bad options: trust a server with the deck, or put the deck in public storage where anyone with an RPC can read every hand. FHE gives a third option: the contract computes on encrypted cards and reveals only what the rules say should be revealed, with a KMS proof.</P>
         <Callout title="One bit at a time">A doubted veil or a challenged Wild +4 reveals exactly one encrypted bit. The rest of the hand stays sealed.</Callout>
@@ -195,7 +195,7 @@ export const DOCS: readonly DocPage[] = [
       <>
         <H2 id="guest">Play as a guest</H2>
         <P>
-          Open <a href="/new" className="text-sun underline underline-offset-4">Play on Sepolia</a> and press <b>Quick game vs bots</b>. Your tab creates a session key, the faucet sends it a little Sepolia ETH, and you sit down at a table that was already shuffled on chain. Your hand decrypts in about a minute.
+          Open <a href="/new" className="text-sun underline underline-offset-4">Play on Sepolia</a> and press <b>Quick game vs bots</b>. Your tab creates a session key and signs its seat, our relayer puts it on chain, and you sit down with three bots at a table whose cards were already drawn. Your hand opens about 15 s after the click.
         </P>
         <H2 id="wallet">Play with a wallet</H2>
         <P>Connect an injected wallet and switch to Sepolia. The wallet signs one <C>join</C> for the tab session key and sends it a little gas in the same transaction. After that the session key plays every move, so there are no more popups. It can never move your funds.</P>
@@ -344,7 +344,7 @@ KryphoTable <── FHE ops, ACL ──> Zama coprocessor
 browser <── user decrypt of own cards ── Zama relayer and KMS`}</Code>
         <P>Clients render the projected state at once and the chain stays the source of truth. Each action carries its seat nonce and the handle of the slot it plays, so a stale or replayed action is refused on chain.</P>
         <H2 id="keeper">Keeper and shuffler</H2>
-        <P>Two keys drive the table. The keeper does the urgent work on every table first: dealing, revealing the first card, settling challenges and veils, reveals at round end and timeouts. The shuffler runs the long encrypted shuffles in parallel: pre-shuffled tables for quick games and the background refill of the deck from the discard.</P>
+        <P>Two keys drive the table. The keeper does the urgent work on every table first: dealing, revealing the first card, settling challenges and veils, reveals at round end and timeouts. The shuffler draws cards in the background: twelve transactions of encrypted draws for each ready table, and fresh cards for a running deck that runs low.</P>
         <H2 id="reveal">Reveals</H2>
         <P>Every reveal uses a handle the contract stored, <C>FHE.makePubliclyDecryptable</C>, a KMS proof checked with <C>FHE.checkSignatures</C>, and a forward stage change. A caller never supplies the handle, and a proof can not be replayed.</P>
       </>
@@ -353,22 +353,25 @@ browser <── user decrypt of own cards ── Zama relayer and KMS`}</Code>
   {
     slug: "randomness",
     group: "Protocol",
-    title: "Encrypted shuffle",
-    summary: "How the deck is shuffled on chain and how good the shuffle is.",
+    title: "Encrypted draws",
+    summary: "How every card is drawn on chain, why there is no shuffle, and how close the odds are to a real deck.",
     headings: [
-      { id: "network", text: "Switch network" },
-      { id: "quality", text: "Quality" },
+      { id: "draw", text: "One draw per card" },
+      { id: "why", text: "Why not a shuffle" },
+      { id: "quality", text: "Odds" },
       { id: "refill", text: "Background refill" },
     ],
     body: () => (
       <>
-        <H2 id="network">Switch network</H2>
-        <P>The deck is filled with public plaintext cards, then shuffled by layers of encrypted switches. Each layer pairs positions at a distance 1, 2, 4 and so on up to 128; four passes make 32 layers, each split into two transactions.</P>
-        <Code title="KryphoDeck.shuffleStep">{SHUFFLE}</Code>
-        <H2 id="quality">Quality</H2>
-        <P>A simulation of the same network on the 108 card deck with 200,000 shuffles showed 28 layers indistinguishable from uniform (chi squared per degree of freedom 1.02, mean total variation 0.0093). The 138 card deck uses 32 layers. The first discard is revealed one card at a time, so no card that stays in the deck becomes public.</P>
+        <H2 id="draw">One draw per card</H2>
+        <P>Every card is its own encrypted random draw with the odds of a full 138 card deck: a 16 bit random number is scaled to an index from 0 to 137, and the index is turned into a card with the same layout as a real deck, all on ciphertexts. A table draws its 138 cards in twelve transactions of twelve cards.</P>
+        <Code title="KryphoDeck.randomCard">{DRAW}</Code>
+        <H2 id="why">Why not a shuffle</H2>
+        <P>The first version shuffled a plaintext deck through 32 layers of encrypted switches, 70 transactions per table, and stored every intermediate ciphertext on the shared Zama coprocessor. Drawing each card on its own stores one ciphertext per card and needs no switch network: about 30 times fewer stored values and 9 times less gas per table, with no change to the game.</P>
+        <H2 id="quality">Odds</H2>
+        <P>Scaling a 16 bit draw to 138 keeps every card within 0.2 percent of its share of a real deck. Cards are independent, so a table can hold more copies of a card than a paper deck would, and nobody can count cards to predict the next one. The first discard is revealed one card at a time from the far end, so no card that stays in play becomes public.</P>
         <H2 id="refill">Background refill</H2>
-        <P>When the live deck runs low, the shuffler encrypts the public discard into a free part of the deck and shuffles it with the same network while play goes on. A refill needs at least 16 cards unless the deck is already empty.</P>
+        <P>When a running deck has 48 cards or fewer left, the shuffler draws up to 60 fresh cards into a free part of the deck while play goes on, and the deck switches over when it runs out. Played cards never come back.</P>
       </>
     ),
   },
@@ -403,7 +406,7 @@ browser <── user decrypt of own cards ── Zama relayer and KMS`}</Code>
           rows={[
             [<C key="1">createTable(config)</C>, "anyone", "Open a table for 2 to 4 seats"],
             [<C key="2">join(id, session)</C>, "player", "Take a seat for a session key, forwards any ETH sent to it"],
-            [<C key="3">start(id)</C>, "host", "Start the shuffle, or deal at once if the table was pre-shuffled"],
+            [<C key="3">start(id)</C>, "host", "Start drawing the cards, or deal at once if the table already has them"],
             [<C key="4">play(id, slot, card, color, seenHandle)</C>, "seat on turn", "Play a card; color carries the wild colour or the spyglass target"],
             [<C key="5">veil(id, slot, claim, seenHandle)</C>, "seat on turn", "Lay a card face down as a named number card"],
             [<C key="6">doubtVeil(id)</C>, "next seat", "Doubt the veil; the keeper settles it with a proof"],
@@ -484,7 +487,7 @@ browser <── user decrypt of own cards ── Zama relayer and KMS`}</Code>
     body: () => (
       <>
         <H2 id="slow">How long until my first move?</H2>
-        <P>The server shuffles tables ahead of time and reveals their first discard while they wait in the lobby. The join that fills the last seat deals every hand and opens play in one Sepolia block. Your browser then decrypts your hand in a few seconds. After that, moves reach every player in under a second.</P>
+        <P>The server draws the cards of a few tables ahead of time and reveals their first discard while they wait in the lobby. The join that fills the last seat deals every hand and opens play in one Sepolia block. Your browser then decrypts your hand in a few seconds. After that, moves reach every player in under a second.</P>
         <H2 id="cheat">Can someone cheat by naming a card they do not hold?</H2>
         <P>They can try. Every play updates an encrypted honesty bit, and all bits are revealed at the end of the round. A liar can not win and forfeits points. The veil is the only legal bluff, and it can be doubted.</P>
         <H2 id="wallet">Do I need a wallet?</H2>

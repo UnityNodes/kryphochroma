@@ -1,4 +1,4 @@
-import { BookOpen, EyeOff, Lock, Palette, Play, ScanEye, Shuffle } from "lucide-react";
+import { BookOpen, Dices, EyeOff, Lock, Palette, Play, ScanEye } from "lucide-react";
 import type { Metadata } from "next";
 import Link from "next/link";
 import { LeakDemo } from "@/components/secret/LeakDemo";
@@ -23,7 +23,7 @@ const MECHANICS = [
   { icon: EyeOff, title: "Veil", text: "Lay any card face down and name a number card. The contract stores FHE.eq(real card, named card). If the next player doubts, only that bit is decrypted with a KMS proof.", ops: "FHE.eq · makePubliclyDecryptable · checkSignatures" },
   { icon: ScanEye, title: "Spyglass", text: "Play it and pick one sealed card of a rival. The contract grants your session key access to that one ciphertext. Nobody else learns what you saw.", ops: "FHE.allow" },
   { icon: Palette, title: "Secret colour", text: "Each seat gets an encrypted random colour at the deal. Go out on that colour and the round counts double. It is revealed with the hands.", ops: "FHE.randEuint8 · FHE.rem · FHE.allow" },
-  { icon: Shuffle, title: "Encrypted shuffle", text: "138 cards are shuffled by a network of encrypted switches, 32 layers deep. Every switch flips on a random encrypted bit nobody sees.", ops: "FHE.randEbool · FHE.select" },
+  { icon: Dices, title: "Encrypted draws", text: "Each card is an encrypted random number scaled to the odds of a full 138 card deck. It is a ciphertext from the moment it exists, so the contract never holds a readable deck and no shuffle is needed.", ops: "FHE.randEuint16 · FHE.mul · FHE.select" },
 ] as const;
 
 const LEAKS = [
@@ -40,7 +40,7 @@ export default function SecretPage() {
       <main className="mx-auto grid w-full max-w-[1200px] gap-12 px-4 py-8 sm:px-6 lg:py-14">
         <header className="grid gap-4">
           <h1 className="font-display text-5xl leading-[0.95] text-sun [text-shadow:3px_3px_0_var(--r)] sm:text-7xl">How it stays secret</h1>
-          <p className="max-w-3xl text-lg text-muted">Hands, the deck, veiled cards and secret colours live on Sepolia as Zama FHE ciphertexts. The contract shuffles, deals and checks every move without ever seeing a card.</p>
+          <p className="max-w-3xl text-lg text-muted">Hands, the deck, veiled cards and secret colours live on Sepolia as Zama FHE ciphertexts. The contract draws, deals and checks every move without ever seeing a card.</p>
         </header>
 
         <LeakDemo />

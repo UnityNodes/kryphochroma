@@ -42,9 +42,9 @@ describe("chain view", () => {
 
   it("counts a finished background refill as drawable cards", () => {
     expect(chainDeckCount({ deckPtr: 100 })).toBe(38);
-    expect(chainDeckCount({ deckPtr: 100, deckEnd: 108, refillSize: 30, refillStep: 57 })).toBe(8);
-    expect(chainDeckCount({ deckPtr: 108, deckEnd: 108, refillSize: 30, refillStep: 58 })).toBe(0);
-    expect(chainDeckCount({ deckPtr: 108, deckEnd: 108, refillSize: 30, refillStep: 66 })).toBe(30);
+    expect(chainDeckCount({ deckPtr: 100, deckEnd: 108, refillSize: 30, refillStep: 2 })).toBe(8);
+    expect(chainDeckCount({ deckPtr: 108, deckEnd: 108, refillSize: 30, refillStep: 2 })).toBe(0);
+    expect(chainDeckCount({ deckPtr: 108, deckEnd: 108, refillSize: 30, refillStep: 3 })).toBe(30);
     expect(chainDeckCount({ deckPtr: 3, deckEnd: 30 })).toBe(27);
   });
 

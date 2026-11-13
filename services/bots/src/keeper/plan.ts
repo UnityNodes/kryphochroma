@@ -1,4 +1,4 @@
-import { DECK_SIZE, FILL_CHUNK, MIN_REFILL, NO_CARD, NO_SEAT, REFILL_AT, SETUP_STEPS, SHUFFLE_STEPS, STAGE } from "@kryphochroma/abi";
+import { DECK_SIZE, FILL_CHUNK, NO_CARD, NO_SEAT, REFILL_AT, REFILL_MAX, SETUP_STEPS, STAGE } from "@kryphochroma/abi";
 
 export interface TableView {
   readonly stage: number;
@@ -14,7 +14,6 @@ export interface TableView {
   readonly deckEnd?: number;
   readonly refillSize?: number;
   readonly refillStep?: number;
-  readonly spare?: number;
   readonly queuesFilled?: boolean;
 }
 
@@ -35,15 +34,12 @@ function refillAction(table: TableView): KeeperAction {
   const deckEnd = Number(table.deckEnd ?? DECK_SIZE);
   const size = Number(table.refillSize ?? 0);
   if (size > 0) {
-    const remaining = Math.ceil(size / FILL_CHUNK) + SHUFFLE_STEPS - Number(table.refillStep ?? 0);
+    const remaining = Math.ceil(size / FILL_CHUNK) - Number(table.refillStep ?? 0);
     return remaining > 0 ? { kind: "refillStep", remaining } : { kind: "idle" };
   }
   const room = Math.max(deckPtr, DECK_SIZE - deckEnd);
-  const startable = Number(table.spare ?? 0) > 0 && room > 0 && deckEnd - deckPtr <= REFILL_AT;
-  if (!startable) return { kind: "idle" };
-  const fresh = 2 ** Math.floor(Math.log2(Math.min(Number(table.spare), room)));
-  if (fresh < MIN_REFILL && deckEnd > deckPtr) return { kind: "idle" };
-  return { kind: "refillStep", remaining: Math.ceil(fresh / FILL_CHUNK) + SHUFFLE_STEPS };
+  if (room === 0 || deckEnd - deckPtr > REFILL_AT) return { kind: "idle" };
+  return { kind: "refillStep", remaining: Math.ceil(Math.min(room, REFILL_MAX) / FILL_CHUNK) };
 }
 
 const stageName = (stage: number): string => STAGE[stage] ?? "Unknown";

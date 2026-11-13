@@ -1,6 +1,6 @@
 import { CARD_COLORS, cardBack, cardFace } from "@kryphochroma/cards";
 import { cardOf } from "@kryphochroma/rules";
-import { ArrowRight, ArrowUpRight, Bot, EyeOff, Lock, Play, Radar, ScanEye, ShieldCheck, Shuffle, Sparkles, Users, Wallet } from "lucide-react";
+import { ArrowRight, ArrowUpRight, Bot, Dices, EyeOff, Lock, Play, Radar, ScanEye, ShieldCheck, Sparkles, Users, Wallet } from "lucide-react";
 import Link from "next/link";
 import { CardFan } from "@/components/site/CardFan";
 import { SiteHeader } from "@/components/site/SiteHeader";
@@ -22,13 +22,13 @@ const MOVES = [
 ] as const;
 
 const STEPS = [
-  { icon: Shuffle, title: "Shuffled by the contract", text: "138 cards pass 70 encrypted steps of FHE.randEbool and FHE.select. Nobody knows the order, not even the server." },
+  { icon: Dices, title: "Drawn by the contract", text: "Every card is an encrypted random draw with the odds of a full 138 card deck. Nobody sees a card before its owner decrypts it, not even the server." },
   { icon: Lock, title: "Dealt with FHE.allow", text: "Each card handle is granted to one session key. Your tab decrypts your hand through the Zama relayer, no wallet popup." },
   { icon: ShieldCheck, title: "Revealed only by the rules", text: "The first discard, a doubted veil, the hands at the end of a round: each one opens with a KMS proof the contract checks." },
 ] as const;
 
 const MODES = [
-  { icon: Bot, title: "Quick game", text: "You and three bots at a table that was shuffled before you clicked.", href: "/new" },
+  { icon: Bot, title: "Quick game", text: "You and three bots at a table whose cards were drawn before you clicked.", href: "/new" },
   { icon: Users, title: "With friends", text: "Share a link like /j/teal-otter. Play opens the moment the last seat is taken.", href: "/new" },
   { icon: Play, title: "Practice offline", text: "Learn the rules against bots in your browser. Nothing goes on chain.", href: "/play" },
 ] as const;
@@ -47,7 +47,7 @@ export default function Home() {
             <h1 className="font-display text-[56px] leading-[.9] text-sun [text-shadow:3px_3px_0_var(--color-red),6px_6px_0_var(--color-ink)] sm:text-8xl lg:text-[104px]">Kryphochroma</h1>
             <p className="text-2xl font-semibold text-cream sm:text-3xl">The card game nobody can peek at.</p>
             <p className="mx-auto max-w-[52ch] text-base leading-relaxed text-cream/75 sm:text-lg lg:mx-0">
-              Hands, the deck and every bluff are FHE ciphertexts. The contract shuffles, deals and checks each move without seeing a card. Only you can decrypt yours.
+              Hands, the deck and every bluff are FHE ciphertexts. The contract draws, deals and checks each move without seeing a card. Only you can decrypt yours.
             </p>
             <div className="flex flex-wrap items-center justify-center gap-4 lg:justify-start">
               <Link href="/new" className="kc-btn kc-mono">

@@ -56,7 +56,7 @@ describe("refill note", () => {
 
   it("explains the on chain reshuffle and its progress once the deck is empty", () => {
     const note = refillNote({ ...base, refillStep: 20, refillTotal: 65 }, 0);
-    expect(note?.title).toMatch(/fresh deck/);
+    expect(note?.title).toMatch(/fresh cards/);
     expect(note?.why).toMatch(/Step 20 of 65/);
   });
 });

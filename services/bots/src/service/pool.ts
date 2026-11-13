@@ -15,7 +15,7 @@ export interface PoolPlan {
   readonly preseat: readonly bigint[];
 }
 
-/** Every spare table costs seventy shuffle transactions of encrypted swaps on the shared testnet, so the pool keeps only what covers a few players arriving at once. */
+/** Every spare table costs twelve transactions of encrypted draws on the shared testnet, so the pool keeps only what covers a few players arriving at once. */
 export const SPARE_BY_SEATS: Readonly<Record<number, number>> = { 4: 2, 3: 1, 2: 1 };
 export const QUICK_SEATS = 4;
 export const PRESEATED_QUICK = 2;

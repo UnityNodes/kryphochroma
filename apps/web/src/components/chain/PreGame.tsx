@@ -68,7 +68,7 @@ export function PreGame({ id, snapshot, address, watching, onFill, onStart, onJo
             </span>
             <span className="flex items-center gap-1.5">
               <Shuffle className="size-4 text-teal" aria-hidden />
-              {Number(table.setupStep) >= SETUP_STEPS ? "Deck already shuffled on chain" : `Deck shuffling on chain, step ${Number(table.setupStep)} of ${SETUP_STEPS}`}
+              {Number(table.setupStep) >= SETUP_STEPS ? "Cards already drawn on chain" : `Drawing cards on chain, step ${Number(table.setupStep)} of ${SETUP_STEPS}`}
             </span>
           </p>
         </div>
@@ -222,16 +222,16 @@ function SetupScreen({ id, stage, step, progress }: { readonly id: string; reado
               />
             ))}
           </div>
-          <h1 className="font-display text-5xl leading-none text-cream">{shuffling ? "Shuffling on chain" : "Dealing sealed cards"}</h1>
+          <h1 className="font-display text-5xl leading-none text-cream">{shuffling ? "Drawing cards on chain" : "Dealing sealed cards"}</h1>
           <p className="text-sm text-cream/60">{tableCode(id)}</p>
           {shuffling ? (
             <>
-              <div className="h-3 w-full overflow-hidden rounded-full bg-black/40" role="progressbar" aria-label="Shuffle progress" aria-valuenow={progress} aria-valuemin={0} aria-valuemax={100}>
+              <div className="h-3 w-full overflow-hidden rounded-full bg-black/40" role="progressbar" aria-label="Draw progress" aria-valuenow={progress} aria-valuemin={0} aria-valuemax={100}>
                 <div className="h-full origin-left bg-sun transition-transform duration-500" style={{ transform: `scaleX(${progress / 100})` }} />
               </div>
               <p className="flex items-center gap-2 text-sm text-cream/80">
                 <Shuffle className="size-4 text-sun" aria-hidden />
-                Step {step} of {SETUP_STEPS} · FHE.randEbool and FHE.select
+                Step {step} of {SETUP_STEPS} · FHE.randEuint16 scaled to a full deck
               </p>
               <p className="max-w-[44ch] text-sm leading-relaxed text-cream/65">Nobody, not even the contract, knows the order of the {DECK_SIZE} cards.</p>
             </>

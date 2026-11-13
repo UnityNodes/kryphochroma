@@ -84,7 +84,7 @@ export function sealedCardNote(sync: ChainSync | null | undefined, sealed: numbe
 export function refillNote(sync: ChainSync | null | undefined, deckCount: number): WaitNote | null {
   if (!sync || deckCount > 0) return null;
   const progress = sync.refillTotal > 0 ? ` Step ${sync.refillStep} of ${sync.refillTotal}.` : "";
-  return { title: "Shuffling a fresh deck from the discard pile", why: `The deck ran out. The new one is shuffled on chain in encrypted swaps, a few blocks, so nobody learns its order; until then you can only pass or play from your hand.${progress}` };
+  return { title: "Drawing fresh cards for the deck", why: `The deck ran out. New cards are drawn on chain as encrypted random numbers, a few blocks, and played cards never come back; until then you can only pass or play from your hand.${progress}` };
 }
 
 export function WaitHint({ note, className }: { readonly note: WaitNote; readonly className?: string }) {

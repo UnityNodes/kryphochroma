@@ -1353,16 +1353,6 @@ export const kryphoTableAbi = [
             "type": "uint8"
           },
           {
-            "internalType": "uint16",
-            "name": "refillFrom",
-            "type": "uint16"
-          },
-          {
-            "internalType": "uint16",
-            "name": "discardBase",
-            "type": "uint16"
-          },
-          {
             "internalType": "uint8",
             "name": "drawnSlot",
             "type": "uint8"
@@ -1672,6 +1662,19 @@ export const kryphoTableAbi = [
         "internalType": "uint256",
         "name": "id",
         "type": "uint256"
+      }
+    ],
+    "name": "refillStep",
+    "outputs": [],
+    "stateMutability": "nonpayable",
+    "type": "function"
+  },
+  {
+    "inputs": [
+      {
+        "internalType": "uint256",
+        "name": "id",
+        "type": "uint256"
       },
       {
         "components": [
@@ -1872,19 +1875,6 @@ export const kryphoTableAbi = [
       }
     ],
     "name": "relayOne",
-    "outputs": [],
-    "stateMutability": "nonpayable",
-    "type": "function"
-  },
-  {
-    "inputs": [
-      {
-        "internalType": "uint256",
-        "name": "id",
-        "type": "uint256"
-      }
-    ],
-    "name": "reshuffleStep",
     "outputs": [],
     "stateMutability": "nonpayable",
     "type": "function"

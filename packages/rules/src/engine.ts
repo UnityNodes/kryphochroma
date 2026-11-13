@@ -4,7 +4,6 @@ import {
   DECK_SIZE,
   RANK,
   colorOf,
-  fullDeck,
   isColor,
   isDrawFour,
   isNumber,
@@ -35,7 +34,7 @@ import {
   seatAt,
   toDraft,
 } from "./draft.js";
-import { randomInt, shuffle } from "./rng.js";
+import { randomInt } from "./rng.js";
 import { CHEAT_PENALTY, type RevealedHand, scoreRound } from "./score.js";
 
 export const MAX_TARGET_SCORE = 10_000;

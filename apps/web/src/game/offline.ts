@@ -93,7 +93,7 @@ export function describe(event: GameEvent, names: readonly string[] = SEAT_NAMES
     case "Sonared":
       return { icon: "play", text: `${name(event.seat)} pinged ${name(event.target)} with the sonar`, sub: "FHE.eq · FHE.add · answer for one key" };
     case "Reshuffled":
-      return { icon: "shuffle", text: `${event.count} discards reshuffled into the deck`, sub: "new encrypted order · FHE.randEbool" };
+      return { icon: "shuffle", text: `${event.count} fresh cards drawn into the deck`, sub: "new encrypted draws · FHE.randEuint16" };
     case "TimedOut":
       return { icon: "pass", text: `${name(event.seat)} ran out of time`, sub: "forceTimeout · drew for them" };
     case "SeatAbandoned":

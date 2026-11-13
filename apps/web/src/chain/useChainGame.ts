@@ -3,7 +3,6 @@
 import {
   ACTION_TYPES,
   FILL_CHUNK,
-  SHUFFLE_STEPS,
   type ChainSeat,
   type ChainTable,
   type SignedAction,
@@ -62,7 +61,7 @@ function withTimeout<T>(task: Promise<T>, ms: number): Promise<T> {
 
 function refillProgress(table: { readonly refillSize?: number | bigint; readonly refillStep?: number | bigint }): { refillStep: number; refillTotal: number } {
   const size = Number(table.refillSize ?? 0);
-  return { refillStep: Number(table.refillStep ?? 0), refillTotal: size > 0 ? Math.ceil(size / FILL_CHUNK) + SHUFFLE_STEPS : 0 };
+  return { refillStep: Number(table.refillStep ?? 0), refillTotal: size > 0 ? Math.ceil(size / FILL_CHUNK) : 0 };
 }
 
 function placeholder(seats: number): GameState {

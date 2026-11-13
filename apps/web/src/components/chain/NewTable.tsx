@@ -21,9 +21,9 @@ import { FlowProgress, type OpenTable, OpenTablesPanel, OwnTablePanel, QuickPane
 type Flow = "quick" | "friends" | "bots";
 
 const FLOW_STEPS: Record<Flow, readonly string[]> = {
-  quick: ["Session key created in this tab", "Gas for the session key", "You took a seat at a shuffled table", "Bots seated"],
-  friends: ["Session key created in this tab", "Gas for the session key", "A shuffled table is ready", "You took a seat", "Invite link ready"],
-  bots: ["Session key created in this tab", "Gas for the session key", "A shuffled table is ready", "You took a seat", "Bots seated", "Game starting"],
+  quick: ["Session key created in this tab", "Gas for the session key", "You took a seat at a ready table", "Bots seated"],
+  friends: ["Session key created in this tab", "Gas for the session key", "A ready table is waiting", "You took a seat", "Invite link ready"],
+  bots: ["Session key created in this tab", "Gas for the session key", "A ready table is waiting", "You took a seat", "Bots seated", "Game starting"],
 };
 const TURN_TIMEOUT_S = 120;
 const OPEN_REFRESH_MS = 8000;
@@ -83,7 +83,7 @@ export function NewTable() {
     }
   }
 
-  /** A reserved pool table is already shuffled, so the lobby opens at once and the seat, the bots and the start follow in the background. */
+  /** A reserved pool table already has its cards drawn, so the lobby opens at once and the seat, the bots and the start follow in the background. */
   function seatInBackground(d: SeatDeps, id: bigint, after?: () => Promise<void>) {
     trackSeat(id.toString(), seatWithRetry(d, id))
       .then(async () => after?.())

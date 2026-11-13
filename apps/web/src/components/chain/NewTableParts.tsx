@@ -53,7 +53,7 @@ export function FlowProgress({ status }: { readonly status: FlowStatus }) {
       )}
       {warming !== null && (
         <p role="status" className="rounded-2xl bg-black/25 px-4 py-3 text-sm text-cream/85">
-          Every ready table is taken, a new one is shuffling on chain: step {warming} of {SETUP_STEPS}. Try again in a minute, or open your own table below.
+          Every ready table is taken, a new one is drawing its cards on chain: step {warming} of {SETUP_STEPS}. Try again in half a minute, or open your own table below.
         </p>
       )}
     </div>
@@ -68,7 +68,7 @@ export function QuickPanel({ onPlay, disabled, children }: { readonly onPlay: ()
           <h2 id="quick-title" className="font-display text-5xl leading-[.9] text-cream sm:text-6xl">
             Quick game
           </h2>
-          <p className="max-w-[40ch] text-base leading-relaxed text-cream/80">You and three bots at a table whose deck was shuffled on chain before you clicked. No waiting for a shuffle.</p>
+          <p className="max-w-[40ch] text-base leading-relaxed text-cream/80">You and three bots at a table whose cards were drawn on chain before you clicked. No waiting for a shuffle.</p>
           <div className="flex flex-wrap items-center gap-x-5 gap-y-3 pt-1">
             <button type="button" className="kc-btn kc-mono h-14 px-7 text-2xl" onClick={onPlay} disabled={disabled}>
               <Zap aria-hidden />
@@ -131,7 +131,7 @@ export function OwnTablePanel({ seats, onSeats, stack, onStack, onFriends, onBot
         <input type="checkbox" checked={stack} onChange={(e) => onStack(e.target.checked)} disabled={locked} className="kc-switch mt-0.5" />
         <span className="grid gap-1">
           <span className="font-semibold text-cream">Stack draw two cards</span>
-          <span className="text-sm text-cream/65">A +2 can answer a +2. Ready tables use the standard rule, so a stacking table is shuffled after you open it, about 3 minutes.</span>
+          <span className="text-sm text-cream/65">A +2 can answer a +2. Ready tables use the standard rule, so a stacking table draws its cards after you open it, about half a minute.</span>
         </span>
       </label>
       <div className="grid gap-3 sm:grid-cols-2">
