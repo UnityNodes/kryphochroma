@@ -12,6 +12,12 @@ describe("quick tables with bots already seated", () => {
     expect(PRESEATED_QUICK).toBe(2);
   });
 
+  it("finishes seating a quick table where a bot join failed", () => {
+    const tables = [t(1, 4, 2, { ...ready, bots: 2 }), t(2, 4, 0, ready), t(3, 4, 0, ready)];
+    expect(planPool(tables, 20).preseat).toEqual([1n, 2n]);
+    expect(planPool([t(1, 4, 2, { ...ready, bots: 1 })], 20).preseat, "a lobby a player sits at is not the pool's to fill").toEqual([]);
+  });
+
   it("hands a quick game the table where three bots wait, never a friends lobby", () => {
     const tables = [t(1, 4, 0, ready), t(2, 4, 3, { ...ready, bots: 2 }), t(3, 4, 3, { ...ready, bots: 3 }), t(4, 4, 3, { ...ready, bots: 3, reserved: true })];
     expect(pickQuick(tables)?.id).toBe(3n);

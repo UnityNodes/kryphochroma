@@ -204,11 +204,12 @@ async function ensurePool(): Promise<void> {
   if (poolCreating) return;
   poolCreating = true;
   try {
-    const plan = planPool(await poolView(), MAX_POOL_TABLES);
+    const view = await poolView();
+    const plan = planPool(view, MAX_POOL_TABLES);
     for (const seats of plan.create) await createPoolTable(seats);
     if (plan.preseat.length > 0) await topUpBots();
     for (const id of plan.preseat) {
-      const count = await seatBots(id, POOL_SEATS - 1);
+      const count = await seatBots(id, POOL_SEATS - 1 - (view.find((p) => p.id === id)?.joined ?? 0));
       log({ event: "pool-preseated", id, bots: count });
     }
   } finally {

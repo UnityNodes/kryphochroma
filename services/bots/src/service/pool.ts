@@ -37,8 +37,9 @@ export function planPool(tables: readonly PoolTable[], maxTables: number): PoolP
     for (let k = have; k < want && total < maxTables; k++, total++) create.push(Number(seats));
   }
   const quick = tables.filter(isQuick).length;
+  const partial = tables.filter((p) => p.seats === QUICK_SEATS && !p.reserved && p.joined > 0 && p.joined < QUICK_SEATS - 1 && (p.bots ?? 0) === p.joined && dealsOnJoin(p));
   const candidates = tables.filter((p) => p.seats === QUICK_SEATS && isSpare(p) && dealsOnJoin(p)).sort((a, b) => Number(a.id - b.id));
-  const preseat = candidates.slice(0, Math.max(0, PRESEATED_QUICK - quick)).map((p) => p.id);
+  const preseat = [...partial.map((p) => p.id), ...candidates.slice(0, Math.max(0, PRESEATED_QUICK - quick - partial.length)).map((p) => p.id)];
   return { create, preseat };
 }
 
