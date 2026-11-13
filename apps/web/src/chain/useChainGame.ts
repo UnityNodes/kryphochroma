@@ -153,7 +153,7 @@ export function useChainGame(id: bigint, colorBlind: boolean, watchOnly = false)
         reset(target);
         setReady(true);
       }
-      else if (events.length > 0 || JSON.stringify(previous.pub) !== JSON.stringify(target.pub) || JSON.stringify(previous.hands[meRef.current]) !== JSON.stringify(target.hands[meRef.current])) {
+      else if (events.length > 0 || JSON.stringify(previous.pub) !== JSON.stringify(target.pub) || JSON.stringify(previous.hands[meRef.current]) !== JSON.stringify(target.hands[meRef.current]) || JSON.stringify(previous.queues?.[meRef.current]) !== JSON.stringify(target.queues?.[meRef.current])) {
         enqueue({ state: target, events });
       }
     },
