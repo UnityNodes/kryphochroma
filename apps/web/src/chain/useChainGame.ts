@@ -159,8 +159,60 @@ export function useChainGame(id: bigint, colorBlind: boolean, watchOnly = false)
     [enqueue, reset, startSonar],
   );
 
+  const ensurePermit = useCallback((): Promise<void> => {
+    if (!permit.current) {
+      permit.current = clients.sdk.permits.grantPermit([TABLE_ADDRESS]).catch((e: unknown) => {
+        permit.current = null;
+        throw e;
+      });
+      permit.current.catch(() => undefined);
+    }
+    return permit.current;
+  }, [clients]);
+
+  /** The relayer answers per handle and one slow answer used to hold the whole hand sealed, so each card is decrypted on its own and shown as soon as it lands. */
+  const decryptOwn = useCallback(
+    async (queued: readonly Hex[]) => {
+      const { sdk } = clients;
+      try {
+        await withTimeout(ensurePermit(), PERMIT_TIMEOUT_MS);
+      } catch (e) {
+        setHandError(`Could not decrypt your cards, retrying: ${friendlyError(e)}`);
+        for (const h of queued) inflight.current.delete(h);
+        wake.current();
+        return;
+      }
+      const results = await Promise.all(
+        queued.map(async (handle) => {
+          try {
+            const { values } = await withTimeout(
+              decryptEach((batch) => sdk.decryption.decryptValues(batch.map((encryptedValue) => ({ encryptedValue, contractAddress: TABLE_ADDRESS })), { timeout: DECRYPT_TIMEOUT_MS }), [handle]),
+              DECRYPT_ROUND_MS,
+            );
+            for (const [h, value] of values) plain.current.set(h, value);
+            return null;
+          } catch (e) {
+            return e;
+          } finally {
+            inflight.current.delete(handle);
+            wake.current();
+          }
+        }),
+      );
+      const failed = results.filter((e) => e !== null);
+      if (failed.length === 0) setHandError(null);
+      else setHandError(`Could not decrypt your cards, retrying: ${friendlyError(failed[0])}`);
+      if (failed.length === queued.length) permit.current = null;
+    },
+    [clients, ensurePermit],
+  );
+
+  useEffect(() => {
+    if (!watchOnly) void ensurePermit().catch(() => undefined);
+  }, [ensurePermit, watchOnly]);
+
   const poll = useCallback(async () => {
-    const { publicClient, sdk } = clients;
+    const { publicClient } = clients;
     const block = await publicClient.getBlockNumber({ cacheTime: 0 });
     if (lastBlock.current !== null && block < lastBlock.current) return;
     const read = (functionName: string, args: readonly unknown[]) =>
@@ -171,13 +223,7 @@ export function useChainGame(id: bigint, colorBlind: boolean, watchOnly = false)
     const seat = watchOnly ? -1 : seats.findIndex((s) => s.session.toLowerCase() === mine || (s.player.toLowerCase() === mine && !s.abandoned));
     meRef.current = Math.max(seat, 0);
     setSnapshot({ table, seats, me: seat });
-    if (seat >= 0 && !permit.current) {
-      permit.current = sdk.permits.grantPermit([TABLE_ADDRESS]).catch((e: unknown) => {
-        permit.current = null;
-        throw e;
-      });
-      permit.current.catch(() => undefined);
-    }
+    if (seat >= 0) ensurePermit();
     if (Number(table.stage) < 3) {
       lastBlock.current = block;
       return;
@@ -210,23 +256,7 @@ export function useChainGame(id: bigint, colorBlind: boolean, watchOnly = false)
       const queued = missing.filter((h) => !inflight.current.has(h));
       if (queued.length > 0) {
         for (const h of queued) inflight.current.add(h);
-        void (async () => {
-          try {
-            await withTimeout(permit.current ?? sdk.permits.grantPermit([TABLE_ADDRESS]), PERMIT_TIMEOUT_MS);
-            const { values } = await withTimeout(
-              decryptEach((batch) => sdk.decryption.decryptValues(batch.map((encryptedValue) => ({ encryptedValue, contractAddress: TABLE_ADDRESS })), { timeout: DECRYPT_TIMEOUT_MS }), queued),
-              DECRYPT_ROUND_MS,
-            );
-            for (const [handle, value] of values) plain.current.set(handle, value);
-            setHandError(null);
-          } catch (e) {
-            permit.current = null;
-            setHandError(`Could not decrypt your cards, retrying: ${friendlyError(e)}`);
-          }
-        })().finally(() => {
-          for (const h of queued) inflight.current.delete(h);
-          wake.current();
-        });
+        void decryptOwn(queued);
       }
       if (missing.length === 0) setHandError(null);
       known.set(seat, own.map((h, i) => ((slots & (1 << i)) !== 0 ? (plain.current.get(h) ?? null) : null)));
@@ -249,15 +279,17 @@ export function useChainGame(id: bigint, colorBlind: boolean, watchOnly = false)
     chain.current = { state, nonces };
     actions.current = actions.current.filter((a) => a.nonce >= (nonces[a.seat] ?? 0));
     reconcile(toGameEvents(keeperLogs(logs), id));
-  }, [clients, burner, id, reconcile, watchOnly]);
+  }, [clients, burner, id, reconcile, watchOnly, ensurePermit, decryptOwn]);
 
   useEffect(() => {
     let stopped = false;
     let timer: ReturnType<typeof setTimeout> | undefined;
     let failures = 0;
     let running = false;
+    let again = false;
     const loop = async () => {
       running = true;
+      again = false;
       try {
         await poll();
         failures = 0;
@@ -267,10 +299,14 @@ export function useChainGame(id: bigint, colorBlind: boolean, watchOnly = false)
         if (failures >= POLL_FAILURES_SHOWN) setError(friendlyError(e));
       }
       running = false;
-      if (!stopped) timer = setTimeout(loop, POLL_MS);
+      if (!stopped) timer = setTimeout(loop, again ? 0 : POLL_MS);
     };
     wake.current = () => {
-      if (running || stopped) return;
+      if (stopped) return;
+      if (running) {
+        again = true;
+        return;
+      }
       if (timer) clearTimeout(timer);
       void loop();
     };
