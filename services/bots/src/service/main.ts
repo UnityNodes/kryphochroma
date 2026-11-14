@@ -130,7 +130,7 @@ interface LobbyView {
 const POOL_SEATS = 4;
 const POOL_TURN_TIMEOUT = 120;
 const RESERVE_MS = 45_000;
-/** Each pool table costs about 0.7 billion gas to shuffle, so the shuffler budget is sized for a hundred tables a day; the wallet balance stays the real ceiling. */
+/** Drawing the cards of a pool table costs about 64 million gas and a refill about 30 million, so this budget is far above normal use and only stops a runaway loop; the wallet balance stays the real ceiling. */
 const SHUFFLER_DAILY_GAS = "80000000000";
 const MAX_POOL_TABLES = 8;
 const FILL_SEAT_TRIES = 5;

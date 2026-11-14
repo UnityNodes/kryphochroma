@@ -80,7 +80,7 @@ export interface PlannedAction {
 
 const BACKGROUND_KINDS = new Set<KeeperAction["kind"]>(["setupStep", "refillStep"]);
 
-/** A lobby someone already sat at is a player watching the shuffle bar, so it goes before every spare table and every refill. */
+/** A lobby someone already sat at is a player watching the draw bar, so it goes before every spare table and every refill. */
 /** A game in progress whose deck runs low stalls every player at the table once it empties, so its refill ranks with a started table and goes before the pool. */
 function backgroundRank(entry: PlannedAction): number {
   if (stageName(entry.stage) === "Lobby" && (entry.joined ?? 0) > 0) return -1;
@@ -91,7 +91,7 @@ function backgroundRank(entry: PlannedAction): number {
 
 const remainingOf = (p: PlannedAction): number => ("remaining" in p.action ? p.action.remaining : 0);
 
-/** Block gas only fits a few shuffle steps, so lobbies are finished one at a time, most advanced first, instead of all crawling forward together. */
+/** Block gas only fits a few draw steps, so lobbies are finished one at a time, most advanced first, instead of all crawling forward together. */
 export function scheduleKeeper(planned: readonly PlannedAction[]): { readonly urgent: readonly PlannedAction[]; readonly background: readonly PlannedAction[] } {
   const active = planned.filter((p) => p.action.kind !== "idle");
   const urgent = active.filter((p) => !BACKGROUND_KINDS.has(p.action.kind));

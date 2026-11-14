@@ -68,7 +68,7 @@ export function QuickPanel({ onPlay, disabled, children }: { readonly onPlay: ()
           <h2 id="quick-title" className="font-display text-5xl leading-[.9] text-cream sm:text-6xl">
             Quick game
           </h2>
-          <p className="max-w-[40ch] text-base leading-relaxed text-cream/80">You and three bots at a table whose cards were drawn on chain before you clicked. No waiting for a shuffle.</p>
+          <p className="max-w-[40ch] text-base leading-relaxed text-cream/80">You and three bots at a table whose cards were drawn on chain before you clicked. No waiting for the draw.</p>
           <div className="flex flex-wrap items-center gap-x-5 gap-y-3 pt-1">
             <button type="button" className="kc-btn kc-mono h-14 px-7 text-2xl" onClick={onPlay} disabled={disabled}>
               <Zap aria-hidden />

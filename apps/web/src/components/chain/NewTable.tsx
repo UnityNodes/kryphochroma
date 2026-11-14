@@ -171,7 +171,7 @@ export function NewTable() {
             <p className="max-w-[58ch] text-base leading-relaxed text-cream/75">
               {wallet
                 ? "Your wallet signs one join for a session key that lives only in this tab. The session key plays the moves and can never touch your funds."
-                : "You play with a key that lives only in this tab. We send it a little Sepolia test ETH, no wallet needed."}
+                : "You play with a key that lives only in this tab. No wallet needed: our relayer pays for your seat, and a table of your own gets a little Sepolia test ETH from us."}
             </p>
           </div>
           <div className="flex flex-wrap items-center gap-2">

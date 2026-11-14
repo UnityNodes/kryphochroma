@@ -6,7 +6,7 @@ interface Record {
   readonly KryphoTable?: string;
   readonly takeover?: string;
   readonly block?: number;
-  readonly libraries?: { readonly KryphoDeck?: string; readonly KryphoScore?: string; readonly KryphoRadio?: string; readonly KryphoLobby?: string };
+  readonly libraries?: { readonly KryphoDeck?: string; readonly KryphoScore?: string; readonly KryphoRadio?: string; readonly KryphoLobby?: string; readonly KryphoHand?: string };
 }
 
 export function readDeployment(): Deployment {
@@ -22,6 +22,7 @@ export function readDeployment(): Deployment {
     score: record.libraries?.KryphoScore ?? "",
     radio: record.libraries?.KryphoRadio ?? "",
     lobby: record.libraries?.KryphoLobby ?? "",
+    hand: record.libraries?.KryphoHand ?? "",
     takeover: record.takeover ?? "",
     block: record.block ?? 0,
   };

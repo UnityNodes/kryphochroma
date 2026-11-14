@@ -7,7 +7,7 @@ A five colour shedding card game where hiding is the game. Bluff with a veiled c
 **[Play now](https://kryphochroma.unitynodes.com)** · **[Watch the 3 minute video](https://youtu.be/VIDEO_ID)** · **[Docs](https://kryphochroma.unitynodes.com/docs)** · **[How it stays secret](https://kryphochroma.unitynodes.com/secret)**
 
 - **Quick game**: no wallet and no test ETH needed. Your tab makes a session key and signs its seat, a relayer puts it on chain, and you sit down with three bots at a table whose cards were already drawn.
-- **With friends**: open a table for 2 to 4 players, send the invite link, start when everyone is in. Open tables are listed so anyone can join. A wallet is optional; it signs one `join` for the session key.
+- **With friends**: open a table for 2 to 4 players and send the invite link. Play opens by itself when the last seat is taken, or the host starts earlier and bots take the empty seats. Open tables are listed so anyone can join. A wallet is optional; it signs one `join` for the session key.
 - **Practice offline**: the same rules engine against local bots, no chain.
 - **Kryphochroma FM**: three radio stations composed live in your browser, no tracks. The beat speeds up when someone is down to one card.
 
@@ -24,7 +24,7 @@ Built for the Zama Developer Program, Mainnet Season 5, Confidential Gaming.
 | **Sonar** | Once per round, instead of your move, ask how many cards of one colour a rival holds. | The contract counts inside the encrypted hand: `FHE.add` of `FHE.select(FHE.eq(colour[slot], asked), 1, 0)`, then `FHE.allow(count, your session key)`. The table sees the ping, only you see the number. |
 | **Secret colour** | You get a hidden colour at the deal. Go out on a card of that colour and the round counts double. | `FHE.rem(FHE.randEuint8(), 5)`, allowed only to you, revealed with the hands at the end of the round. |
 
-A drawn card opens at once. Each seat keeps a queue of two deck handles, `FHE.allow`ed to its session key at the deal and topped up from the deck on every draw. The handle moves from the queue into the hand, so the browser already holds its value and a move can name it before the draw is mined. The table never shows the queue.
+A drawn card opens at once. Each seat keeps a queue of two deck handles, `FHE.allow`ed to its session key right after the deal and topped up from the deck on every draw. The handle moves from the queue into the hand, so the browser already holds its value and a move can name it before the draw is mined. The table never shows the queue.
 
 ## What would break if this were public
 
@@ -50,8 +50,8 @@ flowchart LR
   end
   SK -- "EIP-712 signed moves" --> HUB[relay hub]
   HUB -- "relay(id, actions) about once per block" --> T[KryphoTable on Sepolia]
-  K[keeper] -- "deal, reveals, challenges, timeouts" --> T
-  S[shuffler] -- "encrypted card draws in the background" --> T
+  K[keeper] -- "deal, draw queues, reveals, challenges, timeouts" --> T
+  S[background key] -- "encrypted card draws" --> T
   T <-- "FHE ops, ACL" --> C[Zama coprocessor]
   SK -- "user decrypt of own cards" --> R[Zama relayer and KMS]
   K -- "public decrypt with proof" --> R
@@ -62,8 +62,8 @@ flowchart LR
 - **Moves and honesty.** You say which card you play. The contract checks the public rules in plain and folds the hidden part into `honest = FHE.and(honest, FHE.eq(hand[slot], card))`. All honesty bits are revealed once at the end of the round with `FHE.checkSignatures`; a liar can not win.
 - **Veil and Wild +4.** Both store one encrypted bit and share one challenge stage: a doubt or a challenge makes exactly that bit public and settles it with a KMS proof.
 - **One second moves.** Moves are EIP-712 signatures from the session key. A hub checks them with the rules engine, streams them to every client at once and submits a batch with `relay` about once per block. Seat nonces and the handle of the played slot make stale or replayed actions fail on chain; a relayed action that runs out of gas reverts the whole batch, so nobody can burn your move.
-- **Leaving and running out.** After three timeouts in a row a takeover bot plays the seat with its sealed hand. When the deck runs low, the shuffler draws up to 60 fresh cards into a free part of the deck while play goes on. Played cards never come back.
-- **Size.** Deck steps and scoring live in linked libraries (`KryphoDeck`, `KryphoScore`) so `KryphoTable` stays under the 24 KB limit.
+- **Leaving and running out.** After three timeouts in a row a takeover bot plays the seat with its sealed hand. When the deck is down to 48 cards, a background key draws up to 60 fresh cards into a free part of the deck while play goes on. Played cards never come back.
+- **Size.** The card draws, scoring, signatures and sonar, the lobby and the draw path live in linked libraries (`KryphoDeck`, `KryphoScore`, `KryphoRadio`, `KryphoLobby`, `KryphoHand`) so `KryphoTable` stays under the 24 KB limit.
 
 ## Verifiable randomness
 
@@ -85,16 +85,20 @@ flowchart LR
 | `KryphoHand` library (dealing, draw queues, proofs) | [`0x3f430ac7c2Ab14F15F034546Db34Fb024D30795E`](https://sepolia.etherscan.io/address/0x3f430ac7c2Ab14F15F034546Db34Fb024D30795E) |
 | Deployment | [`0xf8aa03…c0e12`](https://sepolia.etherscan.io/tx/0xf8aa03a66a6cf3cf98aac29071b28976951bc792662e488ea633117e4cac0e12), block 12127945 |
 
-A full round on chain on an earlier deployment that still shuffled the deck, table 2: one human, three bots, three veils, one spyglass, Mono, a timeout and the reveal.
+A full round on this deployment, table 5: four seats, four veils, ten spyglass peeks, four sonar pings, Mono, a seat taken over after three timeouts, two deck refills and the reveal.
 
 | Step | Transaction |
 |---|---|
-| Table created | [`0xfe794f…6017`](https://sepolia.etherscan.io/tx/0xfe794f0d5793844e681c74b80a56420a46ab8990d45256c06a9cd31417617276) |
-| Starter revealed, play begins | [`0x1382c5…931c`](https://sepolia.etherscan.io/tx/0x1382c5180113bc7bb9acece21e8bf23e618db927441e5b2efb2e4ec37119931c) |
-| Batch of signed moves with a veil | [`0x4f5ecc…1e98`](https://sepolia.etherscan.io/tx/0x4f5ecc974f70dba2d0a1f89790d9c3ffec64b89562b27fb5dbe4fdd913971e98) |
-| Batch with a spyglass peek | [`0xc1fcb0…4134`](https://sepolia.etherscan.io/tx/0xc1fcb0ae3e1012294523e0a5772b70c40ab404977455a47e3382fda539664134) |
-| Reveal started | [`0xf927b1…5bef`](https://sepolia.etherscan.io/tx/0xf927b1949c7d06633aa0c9a35439acc1979d5373195dcb54226972fc10925bef) |
-| Round settled with secret colours | [`0xb71e0d…9a62`](https://sepolia.etherscan.io/tx/0xb71e0d068106e828a20cab9c158c8c05b563611d9cfed95c11dc6b5fc67e9a62) |
+| Table created | [`0xda44ab…9f36`](https://sepolia.etherscan.io/tx/0xda44abf1e8a4004c2e43e27e94d53fdca36f0549c986bc6185c5a7b22ca39f36) |
+| First of 12 draw steps | [`0xaba31c…a530`](https://sepolia.etherscan.io/tx/0xaba31c5193888683a03e2aaf783c7025e09703249b002a71bd00f9abec05a530) |
+| Last seat joins, hands dealt, play begins | [`0x1b96e3…2e27`](https://sepolia.etherscan.io/tx/0x1b96e3b7f9bc55ea880b7e187a007fc38adc64c2b2480896f4d4382fe0562e27) |
+| Batch of signed moves with a veil | [`0x9762cc…3d96`](https://sepolia.etherscan.io/tx/0x9762cc022e0530f1052a3620cfee767588b6c195a0ada9275bc25e91b77f3d96) |
+| Batch with a spyglass peek | [`0xad9bd8…6f12`](https://sepolia.etherscan.io/tx/0xad9bd892572c7b8613cd508777e493b7f81acba1e35b217ba253f2b7d9d66f12) |
+| Batch with a sonar ping | [`0x849544…af5e`](https://sepolia.etherscan.io/tx/0x8495449621afd9cd3ad1be578d46bf9cf5d148f26f93b0717cc06fb47717af5e) |
+| Third timeout, the takeover bot gets the seat | [`0xd09f1a…1868`](https://sepolia.etherscan.io/tx/0xd09f1ae5de6cc110c70a07e1975b658608f0c098abe578b76a083494ebac1868) |
+| Deck switches to freshly drawn cards | [`0x04fd2a…6327`](https://sepolia.etherscan.io/tx/0x04fd2a2895e76304f2dc625f97f18b968a98cb2eb3732e45b84463039ea46327) |
+| Reveal started | [`0xc5aaab…5ec7`](https://sepolia.etherscan.io/tx/0xc5aaabc9eae2304ad36da42ffc98e9f6a3b0fd83fca3d22e1502fc3d3c345ec7) |
+| Round settled with secret colours | [`0xa0f136…25c4`](https://sepolia.etherscan.io/tx/0xa0f1361f13a33cf5bf7924f1aaee3523e924abe68bb4416d145985b2c32425c4) |
 
 `pnpm --filter @kryphochroma/bots exec tsx scripts/round-trail.ts <table id>` prints the same trail for any table.
 
@@ -106,7 +110,7 @@ HCU limits on Sepolia: 20M per transaction, 5M depth.
 |---|---:|---:|
 | Draw step (12 cards, `randEuint16` + 13 ops each) | ~14M | 5.78M |
 | Deal 7 cards to a seat, with slot colours and a secret colour | ~0.3M | ~3.6M |
-| Join that fills a 4 seat table and deals every hand | ~1.2M | 15.73M |
+| Join that fills a 4 seat table and deals every hand | ~1.2M | 15.77M |
 | One move check (`eq` + `and`) | 80k | 0.23M |
 | Veil bit / Wild +4 bit (`eq` / `isIn`) | 80k / 148k | 0.3M / 0.36M |
 | Spyglass (`FHE.allow`) | 0 | ~0.1M extra |
@@ -117,14 +121,13 @@ HCU limits on Sepolia: 20M per transaction, 5M depth.
 | Latency | Time |
 |---|---:|
 | A signed move reaches every client | under 1 s |
-| Own card decryptable after its transaction | ~3 s |
-| Quick game: click to your hand face up. Three bots already wait at a table with its cards drawn, the guest signs its join and the relayer submits it, so the guest key needs no faucet top up; the join deals in the same block | 13 s to 18 s: one block, then ~5 s of decryption |
+| Quick game: click to your hand face up. Three bots already wait at a table with its cards drawn, the guest signs its join and the relayer submits it, so the guest key needs no faucet top up; the join deals in the same block | 12 s to 21 s: one block, then ~5 s of decryption |
 | With friends: click to lobby, from a ready table | under 1 s, the seat lands one block later |
 | Last seat taken to play, starter revealed in the lobby | same block (~12 s) |
 | Hand decrypted after play opens | ~4 s to 9 s |
-| A drawn card from your queue, face up in your hand | under 1 s; a draw that empties the queue faster than a block waits ~10 s for the refill |
-| Round over to scores on screen at a table with bots: once the block that ends the round is mined the table server sends the bot hands and the browser scores them with the same rules | one block, ~6 s to 12 s |
-| Round over to scores proven on chain: the relayed batch that ends the round also opens every hand, `finishReveal` follows once the KMS answers | 12 s to 45 s, mostly the public decryption; the table shows Verified on Sepolia when it lands |
+| A drawn card from your queue, face up in your hand | under 1 s once the queue is decrypted; a draw in the first seconds of a round, or one that empties the queue faster than a block, waits 10 s to 20 s |
+| Round over to scores on screen at a table with bots: the table server sends the bot hands only after the chain has reached the reveal, then the browser scores them with the same rules | 16 s to 32 s, one or two blocks |
+| Scores on screen to scores proven on chain: Zama KMS decrypts every hand in public and `finishReveal` checks its signatures | 25 s to 45 s more; the table shows Verified on Sepolia when it lands |
 | Background draw of a fresh table | ~30 s |
 
 ## What still shows, on purpose
@@ -135,22 +138,22 @@ HCU limits on Sepolia: 20M per transaction, 5M depth.
 
 Trust assumptions we accept for a testnet game:
 - Bot hands are sent to the table only after the chain itself has reached the reveal, never from moves still waiting for a block, so a player can not see them while the round can still go on. A sonar count on a bot is cut from the public stream.
-- A lie costs up to 100 of the liar's own points and the liar can not win; in a single round everyone starts at 0, so there the only cost is losing the round and the public `lied` mark.
+- A lie costs up to 100 of the liar's own points and the liar can not win; in a single round everyone starts at 0, so there the only cost is losing the round and the public `lied` mark. A player willing to pay that can claim a spyglass they do not hold and still read one rival card.
 - The relay hub can delay moves but can not forge them: every action is signed by the session key and checked on chain.
 - The takeover key sees the hand of a seat that was abandoned, because it has to play it.
 - A seat's key can open its own next two draws, which is what makes a drawn card appear at once. The table does not show them, but a player who inspects their own browser can read them. Nobody can read another seat's queue.
-- A signed move has no expiry beyond its nonce; the hub submits within seconds.
+- A signed move has no expiry beyond its nonce; the hub submits within seconds. A relayed join names only its table, so it can be submitted again if that seat leaves the lobby, and `join` lets anyone seat another session address. Both cost a lobby seat at most, never a card or a move.
 
 ## Tests and checks
 
 | Suite | What it covers |
 |---|---|
-| `packages/rules` (76) | every rule including veil, spyglass, sonar and secret colour; scoring; bots; 1,000 simulated games |
-| `contracts` (32) | parity with the rules engine move by move on the FHEVM mock, including relayed batches with veils, spyglasses and sonar pings; forged and replayed proofs; privacy of hands, peeks, sonar answers and secret colours; relay signatures and out of gas griefing; leaving a lobby and host handover; a starter revealed in the lobby and play opened by the join that fills the table; takeover; background refill |
-| `services/bots` (40) | keeper planning and scheduling, quick game pool, hub reads pinned to one block, faucet policy, action parsing, chain view |
-| `apps/web` (35 unit, 12 e2e) | seat flows, seats taken in the background, sounds, the radio, offline game; a judge scenario in Playwright with axe accessibility checks on phone and desktop |
+| `packages/rules` (81) | every rule including veil, spyglass, sonar, secret colour and the draw queues; scoring; bots; 1,000 simulated games |
+| `contracts` (35) | parity with the rules engine move by move on the FHEVM mock, including relayed batches with veils, spyglasses and sonar pings; forged and replayed proofs; privacy of hands, peeks, sonar answers and secret colours; relay signatures and out of gas griefing; leaving a lobby and host handover; a starter revealed in the lobby and play opened by the join that fills the table; takeover; draw queues; relayed joins; background refill with fresh draws |
+| `services/bots` (80) | keeper planning and scheduling, quick game pool, pipelined relay batches, bot hands revealed only from chain state, hub reads pinned to one block, faucet and relayer budgets, action parsing, chain view |
+| `apps/web` (73 unit, 12 e2e) | seat flows, seats taken in the background, the score shown before the proof, wait hints, the API proxy limits, sounds, the radio, offline game; a judge scenario in Playwright with axe accessibility checks on phone and desktop |
 
-Before going public the contracts had two independent security passes and the services one; every high finding is fixed and has a test that fails without the fix.
+Before going public the contracts had two independent security passes and the services one, and the whole stack had a full audit after the move to independent draws. Every critical and high finding that could be fixed without a new deployment is fixed and has a test that fails without the fix; what is left is listed under the trust assumptions above.
 
 ## Run locally
 
@@ -175,12 +178,12 @@ To run the whole stack against Sepolia, copy `.env.example` to `.env`, fill in t
 
 | Path | What |
 |---|---|
-| `contracts/` | `KryphoTable`, `KryphoDeck`, `KryphoScore`, `CardLib`; Hardhat 3 with the FHEVM plugin |
+| `contracts/` | `KryphoTable` and its libraries `KryphoDeck`, `KryphoScore`, `KryphoRadio`, `KryphoLobby`, `KryphoHand`, `CardLib`; Hardhat 3 with the FHEVM plugin |
 | `packages/rules` | rules engine shared by the client, the bots and the contract tests |
 | `packages/abi` | generated ABI, chain views, signed action helpers |
 | `packages/cards` | SVG card faces and backs |
 | `apps/web` | Next.js client, docs and privacy page |
-| `services/bots` | keeper, shuffler, relay hub and bots |
+| `services/bots` | keeper, background card draws, relay hub, seat relayer and bots |
 | `infra/` | systemd units and Caddy site |
 
 ## License

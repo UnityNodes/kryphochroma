@@ -8,6 +8,7 @@ export interface Deployment {
   readonly score: string;
   readonly radio: string;
   readonly lobby: string;
+  readonly hand: string;
   readonly takeover: string;
   readonly block: number;
 }
@@ -82,10 +83,12 @@ const ACTION_TYPE = `Action(
   uint256 table,
   uint8 seat,
   uint8 kind,      // 0 play, 1 draw, 2 pass, 3 take, 4 mono,
-                   // 5 accept, 6 challenge, 7 catch, 8 veil, 9 doubt
+                   // 5 accept, 6 challenge, 7 catch, 8 veil, 9 doubt,
+                   // 10 sonar, 11 join (seat 255, nonce 0)
   uint8 slot,
   uint8 card,      // played card, or the named card of a veil
-  uint8 color,     // wild colour, or seat * 32 + slot for a spyglass
+  uint8 color,     // wild colour, seat * 32 + slot for a spyglass,
+                   // or the asked colour of a sonar
   bytes32 seenHandle,
   uint32 nonce
 )`;
@@ -171,10 +174,10 @@ export const DOCS: readonly DocPage[] = [
           head={["Topic", "Value"]}
           rows={[
             ["Players", "2 to 4, humans and bots in any mix"],
-            ["Deck", "138 cards: 5 colours, spyglasses, wilds"],
+            ["Deck", "Every card drawn with the odds of a 138 card deck: 5 colours, spyglasses, wilds"],
             ["Network", "Sepolia, FHEVM v0.13"],
             ["Move latency", "Under a second to every client, batched on chain about once per block"],
-            ["Wallet", "Optional. Guests get a session key and test ETH"],
+            ["Wallet", "Optional. Guests get a session key in the tab and our relayer pays for the seat"],
           ]}
         />
       </>
@@ -195,12 +198,12 @@ export const DOCS: readonly DocPage[] = [
       <>
         <H2 id="guest">Play as a guest</H2>
         <P>
-          Open <a href="/new" className="text-sun underline underline-offset-4">Play on Sepolia</a> and press <b>Quick game vs bots</b>. Your tab creates a session key and signs its seat, our relayer puts it on chain, and you sit down with three bots at a table whose cards were already drawn. Your hand opens about 15 s after the click.
+          Open <a href="/new" className="text-sun underline underline-offset-4">Play on Sepolia</a> and press <b>Deal me in</b> under Quick game. Your tab creates a session key and signs its seat, our relayer puts it on chain, and you sit down with three bots at a table whose cards were already drawn. Your hand opens 12 to 21 s after the click: one Sepolia block for the seat, then a few seconds of decryption.
         </P>
         <H2 id="wallet">Play with a wallet</H2>
         <P>Connect an injected wallet and switch to Sepolia. The wallet signs one <C>join</C> for the tab session key and sends it a little gas in the same transaction. After that the session key plays every move, so there are no more popups. It can never move your funds.</P>
         <H2 id="friends">Play with friends</H2>
-        <P>Pick the number of players and press <b>With friends</b>. You land in the lobby with an invite link. Friends open it and press <b>Take a seat</b>. The host starts when everyone is in, or fills the empty seats with bots. Open tables are also listed on the play page, so anyone can join.</P>
+        <P>Pick the number of players and press <b>With friends</b>. You land in the lobby with an invite link. Friends open it and press <b>Take a seat</b>. Play opens by itself when the last seat is taken; the host can start earlier and bots take the empty seats. Open tables are also listed on the play page, so anyone can join.</P>
         <Callout tone="ok" title="Watching">Every table has a spectator view at /t/&lt;id&gt;/watch with public state only.</Callout>
         <H2 id="offline">Practice offline</H2>
         <P>
@@ -236,8 +239,9 @@ export const DOCS: readonly DocPage[] = [
           ]}
         />
         <P>Colours: red, sun, teal, blue and violet. A card is one byte: <C>colour * 16 + rank</C>, wilds use colour 5.</P>
+        <P>The table above gives the odds, not a fixed pile. Every card is its own encrypted draw with the share it has in this 138 card deck, so a round can see a card more often than a paper deck holds it, and nobody can count cards.</P>
         <H2 id="turn">A turn</H2>
-        <P>Play a card that matches the top card by colour or number, or any wild. If you can not, draw one card; you may play it if it fits, otherwise pass. Instead of a normal play you may veil a card once per round.</P>
+        <P>Play a card that matches the top card by colour or number, or any wild. If you can not, draw one card; you may play it if it fits, otherwise pass. Once per round you may veil a card instead of a normal play, and once per round you may spend your turn on a sonar ping.</P>
         <H2 id="actions">Action cards</H2>
         <Table
           head={["Card", "Effect"]}
@@ -247,7 +251,7 @@ export const DOCS: readonly DocPage[] = [
             ["Draw Two", "The next player draws two and is skipped (stacking is a table option)"],
             ["Spyglass", "You read one sealed card of a rival of your choice"],
             ["Wild", "Pick the next colour"],
-            ["Wild +4", "Pick the colour; the next player takes four or challenges it"],
+            ["Wild +4", "Pick the colour; the next player takes four or challenges it. A challenge opens one encrypted bit: if you held the colour in play, you draw the four yourself, otherwise the challenger draws six"],
           ]}
         />
         <H2 id="mono">Mono!</H2>
@@ -262,7 +266,7 @@ export const DOCS: readonly DocPage[] = [
   {
     slug: "mechanics",
     group: "Game",
-    title: "Veil, Spyglass, Secret colour",
+    title: "Veil, Spyglass, Sonar, Secret colour",
     summary: "The four mechanics that only exist because cards stay encrypted.",
     headings: [
       { id: "veil", text: "Veil" },
@@ -309,9 +313,10 @@ export const DOCS: readonly DocPage[] = [
           head={["Data", "Type", "Who can read it", "Revealed"]}
           rows={[
             ["Cards in a hand", <C key="a">euint8</C>, "Owner only", "Played cards as part of the move; the rest at round end"],
-            ["Deck order", <C key="b">euint8[138]</C>, "Nobody", "Never, only drawn cards to their drawer"],
+            ["Deck order", <C key="b">euint8[138]</C>, "Nobody", "Never. A seat key can open only its own drawn cards and its own next two draws"],
             ["Veiled card", <C key="c">euint8 + ebool</C>, "Nobody", "One bit, only if doubted"],
             ["Spyglass target", <C key="d">FHE.allow</C>, "The spyglass player", "Never to the rest of the table"],
+            ["Sonar answer", <C key="h">euint8</C>, "The player who pinged", "Never"],
             ["Secret colour", <C key="e">euint8</C>, "Owner only", "Round end"],
             ["Wild +4 colour bit", <C key="f">ebool</C>, "Nobody", "One bit, only if challenged"],
             ["Honesty of moves", <C key="g">ebool</C>, "Nobody", "Round end"],
@@ -321,6 +326,9 @@ export const DOCS: readonly DocPage[] = [
         <P>Hand slots are numbered, so you can tell that a played card is the one drawn a few turns ago. Everyone sees which slot a spyglass looked at. Drawing and playing at once is visible. Transaction timing can hint that a player was thinking.</P>
         <H2 id="trust">Trust assumptions</H2>
         <P>The relay hub can delay moves but can not forge them: every action is signed by the session key and checked on chain. The takeover key sees the hand of an abandoned seat because it has to play it. A signed move has no expiry beyond its nonce; the hub submits within seconds.</P>
+        <P>Bot hands reach the table only after the chain itself has reached the reveal, never from moves still waiting for a block, and a sonar count on a bot is cut from the public stream.</P>
+        <P>Each seat key can open its own next two draws; that is what makes a drawn card appear at once. The table does not show them, but a player who inspects their own browser can read them. Nobody can read another seat&apos;s queue.</P>
+        <P>A lie costs up to 100 of the liar&apos;s own points and the liar can not win. In a single round everyone starts at 0, so there the only cost is losing the round and the public mark; a player willing to pay that can claim a spyglass they do not hold and still read one rival card.</P>
       </>
     ),
   },
@@ -331,7 +339,7 @@ export const DOCS: readonly DocPage[] = [
     summary: "Browser session keys, the relay hub, the keeper lanes and the contract.",
     headings: [
       { id: "flow", text: "How a move travels" },
-      { id: "keeper", text: "Keeper and shuffler" },
+      { id: "keeper", text: "Keeper, background draws and relayer" },
       { id: "reveal", text: "Reveals" },
     ],
     body: () => (
@@ -343,8 +351,8 @@ export const DOCS: readonly DocPage[] = [
 KryphoTable <── FHE ops, ACL ──> Zama coprocessor
 browser <── user decrypt of own cards ── Zama relayer and KMS`}</Code>
         <P>Clients render the projected state at once and the chain stays the source of truth. Each action carries its seat nonce and the handle of the slot it plays, so a stale or replayed action is refused on chain.</P>
-        <H2 id="keeper">Keeper and shuffler</H2>
-        <P>Two keys drive the table. The keeper does the urgent work on every table first: dealing, revealing the first card, settling challenges and veils, reveals at round end and timeouts. The shuffler draws cards in the background: twelve transactions of encrypted draws for each ready table, and fresh cards for a running deck that runs low.</P>
+        <H2 id="keeper">Keeper, background draws and relayer</H2>
+        <P>Three server keys keep a table moving. The keeper does the urgent work on every table first: dealing, revealing the first card, filling the draw queues, settling challenges and veils, reveals at round end and timeouts. A second key draws cards in the background: twelve transactions of encrypted draws for each ready table, and fresh cards for a running deck that runs low. The relayer submits the signed moves and the signed seats of guests, so a guest key never needs ETH.</P>
         <H2 id="reveal">Reveals</H2>
         <P>Every reveal uses a handle the contract stored, <C>FHE.makePubliclyDecryptable</C>, a KMS proof checked with <C>FHE.checkSignatures</C>, and a forward stage change. A caller never supplies the handle, and a proof can not be replayed.</P>
       </>
@@ -367,11 +375,11 @@ browser <── user decrypt of own cards ── Zama relayer and KMS`}</Code>
         <P>Every card is its own encrypted random draw with the odds of a full 138 card deck: a 16 bit random number is scaled to an index from 0 to 137, and the index is turned into a card with the same layout as a real deck, all on ciphertexts. A table draws its 138 cards in twelve transactions of twelve cards.</P>
         <Code title="KryphoDeck.randomCard">{DRAW}</Code>
         <H2 id="why">Why not a shuffle</H2>
-        <P>The first version shuffled a plaintext deck through 32 layers of encrypted switches, 70 transactions per table, and stored every intermediate ciphertext on the shared Zama coprocessor. Drawing each card on its own stores one ciphertext per card and needs no switch network: about 30 times fewer stored values and 9 times less gas per table, with no change to the game.</P>
+        <P>The first version shuffled a plaintext deck through 32 layers of encrypted switches, 70 transactions per table, and stored every intermediate ciphertext on the shared Zama coprocessor. Drawing each card on its own stores one ciphertext per card and needs no switch network: about 65 times fewer stored values (138 instead of about 9,000) and 9 times less gas per table (about 64M instead of 600M). The one change to the game: played cards never return to the deck.</P>
         <H2 id="quality">Odds</H2>
         <P>Scaling a 16 bit draw to 138 keeps every card within 0.2 percent of its share of a real deck. Cards are independent, so a table can hold more copies of a card than a paper deck would, and nobody can count cards to predict the next one. The first discard is revealed one card at a time from the far end, so no card that stays in play becomes public.</P>
         <H2 id="refill">Background refill</H2>
-        <P>When a running deck has 48 cards or fewer left, the shuffler draws up to 60 fresh cards into a free part of the deck while play goes on, and the deck switches over when it runs out. Played cards never come back.</P>
+        <P>When a running deck has 48 cards or fewer left, a background key draws up to 60 fresh cards into a free part of the deck while play goes on, and the deck switches over when it runs out. Played cards never come back.</P>
       </>
     ),
   },
@@ -396,6 +404,7 @@ browser <── user decrypt of own cards ── Zama relayer and KMS`}</Code>
             ["KryphoScore (library)", <Address key="s" value={d.score} />],
             ["KryphoRadio (library)", <Address key="r" value={d.radio} />],
             ["KryphoLobby (library)", <Address key="l" value={d.lobby} />],
+            ["KryphoHand (library)", <Address key="h" value={d.hand} />],
             ["Takeover key", <Address key="k" value={d.takeover} />],
           ]}
         />
@@ -406,17 +415,20 @@ browser <── user decrypt of own cards ── Zama relayer and KMS`}</Code>
           rows={[
             [<C key="1">createTable(config)</C>, "anyone", "Open a table for 2 to 4 seats"],
             [<C key="2">join(id, session)</C>, "player", "Take a seat for a session key, forwards any ETH sent to it"],
+            [<C key="9">relayJoin(id, action)</C>, "anyone", "Seat the session key that signed the join, so a guest needs no ETH"],
             [<C key="3">start(id)</C>, "host", "Start drawing the cards, or deal at once if the table already has them"],
             [<C key="4">play(id, slot, card, color, seenHandle)</C>, "seat on turn", "Play a card; color carries the wild colour or the spyglass target"],
             [<C key="5">veil(id, slot, claim, seenHandle)</C>, "seat on turn", "Lay a card face down as a named number card"],
             [<C key="6">doubtVeil(id)</C>, "next seat", "Doubt the veil; the keeper settles it with a proof"],
+            [<C key="10">sonar(id, target, color)</C>, "seat on turn", "Count one colour inside a rival hand; only the caller can decrypt the answer"],
             [<C key="7">relay(id, actions[])</C>, "anyone", "Submit a batch of signed actions"],
-            [<C key="8">handOf / secretOf</C>, "view", "Encrypted handles of a hand and a secret colour"],
+            [<C key="11">fillQueues(id)</C>, "anyone", "Give every seat its next two cards once play is open"],
+            [<C key="8">handOf / queueOf / secretOf / sonarOf</C>, "view", "Encrypted handles of a hand, the next two draws, a secret colour and a sonar answer"],
           ]}
         />
         <H2 id="events">Events</H2>
         <P>
-          <C>Played</C>, <C>Drew</C>, <C>Veiled</C>, <C>VeilDoubted</C>, <C>VeilResolved</C>, <C>Peeked</C>, <C>ChallengeResolved</C>, <C>RoundSettled</C> and more. Encrypted values never appear in events.
+          <C>Played</C>, <C>Drew</C>, <C>Veiled</C>, <C>VeilDoubted</C>, <C>VeilResolved</C>, <C>Peeked</C>, <C>Sonared</C>, <C>ChallengeResolved</C>, <C>RoundSettled</C> and more. Encrypted values never appear in events.
         </P>
       </>
     ),
@@ -458,7 +470,7 @@ browser <── user decrypt of own cards ── Zama relayer and KMS`}</Code>
     body: () => (
       <>
         <H2 id="reviews">Reviews</H2>
-        <P>The contracts had two independent security passes and the services and web app one, before going public. Every high finding is fixed and has a test that fails without the fix.</P>
+        <P>The contracts had two independent security passes and the services and web app one before going public, and the whole stack had a full audit after the move to independent draws. Every critical and high finding that could be fixed without a new deployment is fixed and has a test that fails without the fix. The rest are listed under accepted risks.</P>
         <H2 id="fixed">Fixed before launch</H2>
         <Table
           head={["Finding", "Fix"]}
@@ -467,10 +479,12 @@ browser <── user decrypt of own cards ── Zama relayer and KMS`}</Code>
             ["A relayed action starved of gas burned the nonce", "An out of gas failure reverts the whole batch"],
             ["Faucet race and spoofable client IP", "Atomic faucet ledger, client IP trusted only from Cloudflare"],
             ["Anyone could seat bots at any table", "Bot requests need a signature from a seated player"],
+            ["Bot hands were sent when a round ended only in the hub, before the chain", "Bot hands are sent only from chain state in the reveal stage"],
+            ["A sonar count on a bot was visible in the public stream", "The count is cut from the stream; only the asking key decrypts it"],
           ]}
         />
         <H2 id="accepted">Accepted risks</H2>
-        <P>A signed move has no expiry beyond its nonce. The takeover key sees abandoned hands. The switch network over a deck that is not a power of two is close to, not exactly, uniform.</P>
+        <P>A signed move has no expiry beyond its nonce. The takeover key sees abandoned hands. A 16 bit draw scaled to 138 is within 0.2 percent of uniform, not exactly uniform. A lie is free in a single round apart from losing it, see the privacy model. A relayed join names only its table, so it can be submitted again if that seat leaves the lobby, and <C>join</C> lets anyone seat another session address; both cost a lobby seat at most, never a card or a move.</P>
       </>
     ),
   },
@@ -480,7 +494,8 @@ browser <── user decrypt of own cards ── Zama relayer and KMS`}</Code>
     title: "FAQ",
     summary: "Short answers to common questions.",
     headings: [
-      { id: "slow", text: "Why does my hand take a minute?" },
+      { id: "slow", text: "How long until my first move?" },
+      { id: "waits", text: "Why do some steps take 10 to 40 s?" },
       { id: "cheat", text: "Can someone cheat by naming a card they do not hold?" },
       { id: "wallet", text: "Do I need a wallet?" },
     ],
@@ -488,10 +503,12 @@ browser <── user decrypt of own cards ── Zama relayer and KMS`}</Code>
       <>
         <H2 id="slow">How long until my first move?</H2>
         <P>The server draws the cards of a few tables ahead of time and reveals their first discard while they wait in the lobby. The join that fills the last seat deals every hand and opens play in one Sepolia block. Your browser then decrypts your hand in a few seconds. After that, moves reach every player in under a second.</P>
+        <H2 id="waits">Why do some steps take 10 to 40 s?</H2>
+        <P>Two things set the pace. Sepolia makes a block about every 12 s, and a seat, a deal or the end of a round counts only once it is in a block. And a card is a ciphertext: Zama KMS has to re-encrypt it for your key, 3 to 8 s, or decrypt it in public with a proof at the end of a round, 15 to 40 s. Ordinary moves do not wait for either: they are signed in the tab and shown to everyone in under a second. The score appears as soon as the hands are open and is marked Verified on Sepolia when the proof lands.</P>
         <H2 id="cheat">Can someone cheat by naming a card they do not hold?</H2>
         <P>They can try. Every play updates an encrypted honesty bit, and all bits are revealed at the end of the round. A liar can not win and forfeits points. The veil is the only legal bluff, and it can be doubted.</P>
         <H2 id="wallet">Do I need a wallet?</H2>
-        <P>No. Guests get a session key and test ETH from the faucet. A wallet only signs the join for your session key.</P>
+        <P>No. A guest gets a session key in the tab and signs its seat; our relayer pays for it. Opening a table of your own as a guest gets a little test ETH from the faucet. A wallet only signs the join for your session key.</P>
       </>
     ),
   },

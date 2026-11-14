@@ -15,7 +15,7 @@ const FAN = [
 ] as const;
 
 const MOVES = [
-  { icon: EyeOff, color: VIOLET, title: "Veil", text: "Play a card face down and name any card. The next player believes you or doubts.", hidden: "A doubt reveals one encrypted bit: true or false." },
+  { icon: EyeOff, color: VIOLET, title: "Veil", text: "Play a card face down and name a number card that fits. The next player believes you or doubts.", hidden: "A doubt reveals one encrypted bit: true or false." },
   { icon: ScanEye, color: "var(--color-teal)", title: "Spyglass", text: "Look at one sealed card in a rival hand. Your session key, and only yours, gets access to it.", hidden: "Everyone sees which slot you looked at, never the card." },
   { icon: Radar, color: "var(--color-blue)", title: "Sonar", text: "Ask how many cards of a colour a rival holds. The contract counts inside the encrypted hand.", hidden: "The answer is a ciphertext only you can open." },
   { icon: Sparkles, color: "var(--color-sun)", title: "Secret colour", text: "A colour dealt to you alone. Go out on it and the round counts double.", hidden: "Nobody can block a colour they can not see." },
@@ -65,7 +65,7 @@ export default function Home() {
               </li>
               <li className="flex items-center gap-2">
                 <Wallet className="size-4 shrink-0 text-sun" aria-hidden />
-                No wallet needed, test ETH is on us
+                No wallet needed, gas is on us
               </li>
             </ul>
           </div>

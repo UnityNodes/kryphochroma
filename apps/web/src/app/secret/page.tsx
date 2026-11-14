@@ -11,9 +11,10 @@ export const metadata: Metadata = {
 
 const MATRIX = [
   { data: "Cards in a hand", type: "euint8 per slot", who: "Only the owner, through the ACL of their session key", when: "A played card becomes public as part of the move. The rest at the end of the round, for scoring", breaks: "Everyone sees who holds what. Bluffing and tactics are gone" },
-  { data: "Deck order", type: "euint8[138]", who: "Nobody, not the contract and not us", when: "Never. Only a drawn card, and only to the player who drew it", breaks: "You know what you and your rivals will draw next" },
+  { data: "Deck order", type: "euint8[138]", who: "Nobody, not the contract and not us", when: "Never. A seat key can open only its own drawn cards and its own next two draws", breaks: "You know what you and your rivals will draw next" },
   { data: "Veiled card", type: "euint8 + ebool", who: "Nobody. The table sees only the named card", when: "Only if the next player doubts it: exactly one bit, true or false", breaks: "A veil is a plain lie anyone can check, so bluffing is dead" },
   { data: "Spyglass target", type: "FHE.allow to one key", who: "The player who played the spyglass, for one card", when: "Never to the rest of the table", breaks: "A peek would show the card to everyone watching" },
+  { data: "Sonar answer", type: "euint8", who: "Only the player who pinged", when: "Never. The table sees who asked whom about which colour", breaks: "A rival would know exactly what you learned" },
   { data: "Secret colour", type: "euint8 from FHE.randEuint8", who: "Only its owner", when: "At the end of the round, with the hands", breaks: "Rivals would block your colour and the bonus means nothing" },
   { data: "Had the colour at a Wild +4", type: "ebool", who: "Nobody", when: "Only when challenged, exactly one bit", breaks: "Proving an honest +4 would mean showing your hand" },
   { data: "Honesty of every move", type: "ebool per player", who: "Nobody", when: "Once, at the end of the round", breaks: "A lie would show at once instead of at the end" },
