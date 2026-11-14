@@ -14,7 +14,7 @@ const RULES = [
   "Sonar: once per round, instead of your move, ask how many cards of one colour a rival holds. The contract counts it inside their encrypted hand and only your key reads the answer.",
   "Veil, once per round: lay any card face down and name a number card that fits. The next player may doubt it. A lie draws 4, a wrong doubt draws 2.",
   "Secret colour: you get a hidden colour at the deal. Go out on a card of that colour and the round counts double.",
-  "No card to play? Draw one. If it fits you may play it, otherwise pass. Down to one card? Press Mono! or get caught for 2.",
+  "No card to play? Draw one. If it fits you may play it or pass; if it does not, the turn moves on by itself. Down to one card? Press Mono! or get caught for 2.",
 ] as const;
 
 const KEYS = [

@@ -241,7 +241,7 @@ export const DOCS: readonly DocPage[] = [
         <P>Colours: red, sun, teal, blue and violet. A card is one byte: <C>colour * 16 + rank</C>, wilds use colour 5.</P>
         <P>The table above gives the odds, not a fixed pile. Every card is its own encrypted draw with the share it has in this 138 card deck, so a round can see a card more often than a paper deck holds it, and nobody can count cards.</P>
         <H2 id="turn">A turn</H2>
-        <P>Play a card that matches the top card by colour or number, or any wild. If you can not, draw one card; you may play it if it fits, otherwise pass. Once per round you may veil a card instead of a normal play, and once per round you may spend your turn on a sonar ping.</P>
+        <P>Play a card that matches the top card by colour or number, or any wild. If you can not, draw one card; you may play it if it fits, and if it does not the turn passes on its own. Once per round you may veil a card instead of a normal play, and once per round you may spend your turn on a sonar ping.</P>
         <H2 id="actions">Action cards</H2>
         <Table
           head={["Card", "Effect"]}

@@ -7,11 +7,13 @@ import Link from "next/link";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { toast } from "sonner";
 import { Dialog, DialogContent, DialogDescription, DialogTitle } from "@/components/ui/dialog";
+import { autoPassKey } from "@/game/autoPass";
 import { anchorKey } from "@/game/flight";
 import type { TableController } from "@/game/controller";
 import { SEAT_COLORS } from "@/game/offline";
 import { SOUND_FOR_ICON } from "@/game/sound";
 import { tableTension } from "@/game/radio";
+import { useAutoPass } from "@/game/useAutoPass";
 import { useRadio } from "@/game/useRadio";
 import { useSound } from "@/game/useSound";
 import { useOfflineGame } from "@/game/useOfflineGame";
@@ -151,14 +153,17 @@ export function TableView({ controller: game, colorBlind, onToggleShapes }: Tabl
   const drawn = pub.drawnSlot !== null;
   const drawLabel = drawn || (mine && !canDraw(pub, HUMAN)) ? "Pass" : "Draw";
   const onDraw = () => run({ type: drawLabel === "Pass" ? "pass" : "draw" });
+  const passDue = game.watching || busy ? null : autoPassKey(pub, HUMAN, hand);
+  const passOn = useCallback(() => run({ type: "pass" }), [run]);
+  useAutoPass(passDue, passOn);
   const monoHot = canSayMono(pub, HUMAN) && hand.some((c) => c !== null && isPlayable(pub, c));
   const catchable = botCatchTarget(pub, HUMAN);
   const meSeat = pub.seats[HUMAN];
   const radio = useRadio(tableTension(pub, HUMAN));
   const canSonar = mine && !game.watching && !!meSeat && !meSeat.sonarUsed && pub.pendingDraw === 0 && pub.drawFour === null && pub.drawnSlot === null;
-  const canVeil = mine && !!meSeat && !meSeat.veilUsed && meSeat.handSize >= 2 && pub.pendingDraw === 0 && pub.drawFour === null && veilClaims(pub).length > 0;
+  const canVeil = mine && !!meSeat && !meSeat.veilUsed && meSeat.handSize >= 2 && pub.pendingDraw === 0 && pub.drawFour === null && passDue === null && veilClaims(pub).length > 0;
   const canDoubt = mine && pub.veil !== null && pub.veil.judge === HUMAN && pub.drawnSlot === null;
-  const status = canDoubt && pub.veil ? `${names[pub.veil.by] ?? "Someone"} veiled a card as ${cardLabel(pub.veil.claim)}: doubt it or play on` : statusText(pub.stage, pub.turn, game.watching ? -1 : HUMAN, names, busy, drawn, pub.drawFour !== null, pub.pendingDraw);
+  const status = canDoubt && pub.veil ? `${names[pub.veil.by] ?? "Someone"} veiled a card as ${cardLabel(pub.veil.claim)}: doubt it or play on` : passDue !== null ? "Drawn card does not fit, passing on…" : statusText(pub.stage, pub.turn, game.watching ? -1 : HUMAN, names, busy, drawn, pub.drawFour !== null, pub.pendingDraw, !canDraw(pub, HUMAN));
   const seats = pub.config.seats;
   const opponents = POSITIONS[seats] ?? [];
   const result = pub.lastResult;
@@ -488,7 +493,7 @@ function roundLeader(seats: readonly { readonly handSize: number }[], names: rea
   return out >= 0 ? (names[out] ?? null) : null;
 }
 
-function statusText(stage: string, turn: number, me: number, names: readonly string[], busy: boolean, drawn: boolean, drawFour: boolean, pending: number): string {
+function statusText(stage: string, turn: number, me: number, names: readonly string[], busy: boolean, drawn: boolean, drawFour: boolean, pending: number, deckShut: boolean): string {
   if (stage === "AwaitChallenge") return "Revealing one bit…";
   if (stage === "Revealing") return "Revealing hands…";
   if (stage === "MatchOver") return "Round over";
@@ -496,5 +501,6 @@ function statusText(stage: string, turn: number, me: number, names: readonly str
   if (busy) return "Waiting for the table…";
   if (drawFour) return "Wild +4 on you: take 4 or challenge";
   if (pending > 0) return `Stack a +2 or take ${pending}`;
-  return drawn ? "Play the drawn card or pass" : "Your turn";
+  if (drawn) return "Play the drawn card or pass";
+  return deckShut ? "No card to draw: play or pass" : "Your turn";
 }
