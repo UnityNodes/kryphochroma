@@ -1,5 +1,5 @@
 import { CARD_COLORS } from "@kryphochroma/cards";
-import { cardLabel, isWild } from "@kryphochroma/rules";
+import { isWild } from "@kryphochroma/rules";
 import { Lock, RotateCw } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { pileTilt } from "@/game/flight";
@@ -16,14 +16,13 @@ export interface CenterProps {
   readonly status: string;
   readonly note?: WaitNote | null;
   readonly canDraw: boolean;
-  readonly next?: readonly number[];
   readonly colorBlind: boolean;
   readonly onDraw: () => void;
   readonly deckRef: (el: HTMLButtonElement | null) => void;
   readonly pileRef: (el: HTMLDivElement | null) => void;
 }
 
-export function Center({ discard, color, deckCount, dir, status, note, canDraw, next = [], colorBlind, onDraw, deckRef, pileRef }: CenterProps) {
+export function Center({ discard, color, deckCount, dir, status, note, canDraw, colorBlind, onDraw, deckRef, pileRef }: CenterProps) {
   const start = Math.max(0, discard.length - PILE_SHOWN);
   const current = CARD_COLORS[color]?.base ?? "var(--r)";
   const top = discard[discard.length - 1];
@@ -31,16 +30,6 @@ export function Center({ discard, color, deckCount, dir, status, note, canDraw, 
   return (
     <div className="kc-center">
       <div className="kc-piles">
-        {next.length > 0 && (
-          <div className="kc-next" role="group" aria-label={`Your next draws: ${next.map((card) => (card < 0 ? "being decrypted" : cardLabel(card))).join(", ")}`}>
-            <span>Next</span>
-            {next.map((card, i) => (
-              <div key={i} className="kc-nx">
-                {card < 0 ? <CardBack /> : <CardFace card={card} colorBlind={colorBlind} />}
-              </div>
-            ))}
-          </div>
-        )}
         <button className="kc-deck" ref={deckRef} onClick={onDraw} disabled={!canDraw} aria-label={`Draw a card, ${deckCount} sealed`}>
           <div className="kc-s"><CardBack /></div>
           <div className="kc-s"><CardBack /></div>

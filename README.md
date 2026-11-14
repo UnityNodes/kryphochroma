@@ -15,7 +15,7 @@ Built for the Zama Developer Program, Mainnet Season 5, Confidential Gaming.
 
 ## The game
 
-138 cards in five colours (red, sun, teal, blue, violet). Match the top card by colour or number, empty your hand first, score what is left in the other hands. Skip, Reverse, Draw Two and wilds work as you would expect. One rule differs from a paper deck: you see your own next two draws, and nobody else does. Four mechanics only exist because every card is encrypted:
+138 cards in five colours (red, sun, teal, blue, violet). Match the top card by colour or number, empty your hand first, score what is left in the other hands. Skip, Reverse, Draw Two and wilds work as you would expect. Four mechanics only exist because every card is encrypted:
 
 | Mechanic | What you do | What happens on chain |
 |---|---|---|
@@ -23,14 +23,15 @@ Built for the Zama Developer Program, Mainnet Season 5, Confidential Gaming.
 | **Spyglass** | A coloured action card. Play it and look at one sealed card of a rival. | `FHE.allow(hand[target][slot], your session key)`. Everyone sees which slot you looked at, nobody else sees the card. |
 | **Sonar** | Once per round, instead of your move, ask how many cards of one colour a rival holds. | The contract counts inside the encrypted hand: `FHE.add` of `FHE.select(FHE.eq(colour[slot], asked), 1, 0)`, then `FHE.allow(count, your session key)`. The table sees the ping, only you see the number. |
 | **Secret colour** | You get a hidden colour at the deal. Go out on a card of that colour and the round counts double. | `FHE.rem(FHE.randEuint8(), 5)`, allowed only to you, revealed with the hands at the end of the round. |
-| **Next draws** | Your next two cards wait beside the deck, visible only to you. A draw puts the first one straight into your hand. | Each seat keeps a queue of two deck handles, `FHE.allow`ed to its session key at the deal and topped up from the deck on every draw. The handle moves from the queue into the hand, so your browser already holds its value and a move can name it before the draw is mined. |
+
+A drawn card opens at once. Each seat keeps a queue of two deck handles, `FHE.allow`ed to its session key at the deal and topped up from the deck on every draw. The handle moves from the queue into the hand, so the browser already holds its value and a move can name it before the draw is mined. The table never shows the queue.
 
 ## What would break if this were public
 
 | Data | Type | Who can read it | Revealed | If it were public |
 |---|---|---|---|---|
 | Cards in a hand | `euint8` per slot | owner only | played cards with the move, the rest at round end | every hand is visible, no tactics left |
-| Deck order | `euint8[138]` | nobody, not the contract and not us | never; each seat sees only its own next two draws | you know every draw in advance |
+| Deck order | `euint8[138]` | nobody, not the contract and not us | never; a seat's key can open only its own next two draws | you know every draw in advance |
 | Veiled card | `euint8` + `ebool` | nobody | one bit, only if doubted | a veil is a lie anyone can check |
 | Spyglass target | `FHE.allow` to one key | the spyglass player | never to the rest | the peek is shown to the whole table |
 | Sonar answer | `euint8` | the player who pinged | never | a rival knows exactly what you learned |
@@ -137,6 +138,7 @@ Trust assumptions we accept for a testnet game:
 - A lie costs up to 100 of the liar's own points and the liar can not win; in a single round everyone starts at 0, so there the only cost is losing the round and the public `lied` mark.
 - The relay hub can delay moves but can not forge them: every action is signed by the session key and checked on chain.
 - The takeover key sees the hand of a seat that was abandoned, because it has to play it.
+- A seat's key can open its own next two draws, which is what makes a drawn card appear at once. The table does not show them, but a player who inspects their own browser can read them. Nobody can read another seat's queue.
 - A signed move has no expiry beyond its nonce; the hub submits within seconds.
 
 ## Tests and checks
