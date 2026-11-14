@@ -343,15 +343,16 @@ export function createRelay(deps: RelayDeps) {
     return { batch, gas: pipelinedGas(batch.length, dealt(end) - dealt(first), endsRound(id, pending.slice(0, end)), RELAY_GAS) };
   }
 
-  async function settle(id: bigint, hash: Hex, batch: readonly SignedAction[]): Promise<void> {
+  async function settle(id: bigint, hash: Hex, batch: readonly SignedAction[], gasLimit: bigint): Promise<void> {
     const hub = hubOf(id);
+    const sentAt = Date.now();
     let mined = 0n;
     try {
       const receipt = await deps.publicClient.waitForTransactionReceipt({ hash, timeout: RECEIPT_TIMEOUT_MS });
       mined = receipt.blockNumber;
       budget = spend(budget, receipt.gasUsed);
       tableBudgets.set(id.toString(), spend(tableBudget(id), receipt.gasUsed));
-      deps.log({ event: "relay", id, actions: batch.length, pipes: hub.pipes, hash, status: receipt.status, gas: receipt.gasUsed });
+      deps.log({ event: "relay", id, actions: batch.length, pipes: hub.pipes, hash, status: receipt.status, gas: receipt.gasUsed, gasLimit, waitMs: Date.now() - sentAt, block: receipt.blockNumber });
       const rejected = parseEventLogs({ abi: kryphoTableAbi, logs: receipt.logs, eventName: "ActionRejected" });
       if (rejected.length > 0) deps.log({ event: "relay-rejected", id, actions: rejected.map((e) => e.args) });
       deps.onRelayed?.(id);
@@ -382,7 +383,7 @@ export function createRelay(deps: RelayDeps) {
       const hash = await send(id, next.batch, next.gas);
       for (const action of next.batch) hub.sent.add(pipeKey(action));
       hub.pipes += 1;
-      void settle(id, hash, next.batch);
+      void settle(id, hash, next.batch, next.gas);
     } catch (error) {
       deps.log({ event: "relay-error", id, message: (error as Error).message.slice(0, 200) });
     } finally {
