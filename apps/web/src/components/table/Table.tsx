@@ -17,7 +17,7 @@ import { useSound } from "@/game/useSound";
 import { useOfflineGame } from "@/game/useOfflineGame";
 import { cn } from "@/lib/utils";
 import { Center } from "./Center";
-import { RoundEndProgress, WaitHint, refillNote, sealedCardNote } from "./ChainProgress";
+import { RoundEndProgress, WaitHint, challengeNote, refillNote, sealedCardNote } from "./ChainProgress";
 import { Feed } from "./Feed";
 import { Hand } from "./Hand";
 import { HowToPlay } from "./HowToPlay";
@@ -260,7 +260,7 @@ export function TableView({ controller: game, colorBlind, onToggleShapes }: Tabl
           deckCount={pub.deckCount}
           dir={pub.dir}
           status={status}
-          note={game.watching ? null : (sealedCardNote(game.sync, hand.filter((c) => c !== null && c < 0).length, hand.filter((c) => c !== null).length) ?? (pub.stage === "Playing" ? refillNote(game.sync, pub.deckCount) : null))}
+          note={challengeNote(game.sync, pub.stage, pub.veil !== null && pub.drawFour === null) ?? (game.watching ? null : (sealedCardNote(game.sync, hand.filter((c) => c !== null && c < 0).length, hand.filter((c) => c !== null).length) ?? (pub.stage === "Playing" ? refillNote(game.sync, pub.deckCount) : null)))}
           canDraw={mine && drawLabel === "Draw" && pub.drawFour === null && pub.pendingDraw === 0}
           colorBlind={colorBlind}
           onDraw={onDraw}

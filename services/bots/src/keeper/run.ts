@@ -128,7 +128,9 @@ export async function runKeeper(config: KeeperConfig, env: NodeJS.ProcessEnv, un
   }
 
   async function revealAndSend(functionName: string, id: bigint, handles: readonly Hex[]): Promise<void> {
+    const startedAt = Date.now();
     const result = await decryptPublic(handles);
+    log({ event: "decrypted", functionName, id, handles: handles.length, decryptMs: Date.now() - startedAt });
     await send(functionName, [id, result.abiEncodedClearValues, result.decryptionProof]);
   }
 

@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { refillNote, roundEndSteps, sealedCardNote } from "@/components/table/ChainProgress";
+import { challengeNote, refillNote, roundEndSteps, sealedCardNote } from "@/components/table/ChainProgress";
 
 const base = { pendingMoves: 0, chainStage: 5, revealPrepared: 0, seats: 4, refillStep: 0, refillTotal: 0 };
 
@@ -58,5 +58,28 @@ describe("refill note", () => {
     const note = refillNote({ ...base, refillStep: 20, refillTotal: 65 }, 0);
     expect(note?.title).toMatch(/fresh cards/);
     expect(note?.why).toMatch(/Step 20 of 65/);
+  });
+});
+
+describe("challenge note", () => {
+  it("stays quiet outside the one bit reveal", () => {
+    expect(challengeNote(base, "Playing", false)).toBeNull();
+  });
+
+  it("stays quiet at an offline table, where the answer is instant", () => {
+    expect(challengeNote(null, "AwaitChallenge", false)).toBeNull();
+  });
+
+  it("says what the bit answers and how long it takes for a challenged +4", () => {
+    const note = challengeNote(base, "AwaitChallenge", false);
+    expect(note?.title).toBe("Checking the Wild +4");
+    expect(note?.why).toContain("15 to 40 s");
+    expect(note?.why).toContain("held the colour");
+  });
+
+  it("names the veil when a veil is doubted", () => {
+    const note = challengeNote(base, "AwaitChallenge", true);
+    expect(note?.title).toBe("Checking the veil");
+    expect(note?.why).toContain("15 to 40 s");
   });
 });

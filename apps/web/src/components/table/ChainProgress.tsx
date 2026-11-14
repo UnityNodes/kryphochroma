@@ -83,6 +83,14 @@ export function sealedCardNote(sync: ChainSync | null | undefined, sealed: numbe
   return { title: `Opening your cards, ${sealed} still sealed`, why: KMS_WHY, phase: "kms" };
 }
 
+const BIT_WHY = "Zama's coprocessor works the bit out under encryption, the KMS decrypts that one bit in public and the contract checks its signatures. Usually 15 to 40 s; no card is shown to anyone.";
+
+export function challengeNote(sync: ChainSync | null | undefined, stage: string, veilDoubted: boolean): WaitNote | null {
+  if (!sync || stage !== "AwaitChallenge") return null;
+  if (veilDoubted) return { title: "Checking the veil", why: `One encrypted yes or no decides it: was the veiled card what it claimed to be? ${BIT_WHY}`, phase: "bit" };
+  return { title: "Checking the Wild +4", why: `One encrypted yes or no decides it: had the player held the colour in play? ${BIT_WHY}`, phase: "bit" };
+}
+
 export function refillNote(sync: ChainSync | null | undefined, deckCount: number): WaitNote | null {
   if (!sync || deckCount > 0) return null;
   const progress = sync.refillTotal > 0 ? ` Step ${sync.refillStep} of ${sync.refillTotal}.` : "";
