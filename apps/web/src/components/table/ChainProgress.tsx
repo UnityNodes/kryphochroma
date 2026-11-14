@@ -57,7 +57,9 @@ export function RoundEndProgress({ sync, winner }: { readonly sync: ChainSync; r
           </li>
         ))}
       </ol>
-      <small className="kc-elapsed">{elapsed} s</small>
+      <small className="kc-elapsed" aria-hidden>
+        {elapsed} s
+      </small>
     </div>
   );
 }
@@ -94,7 +96,9 @@ export function WaitHint({ note, className }: { readonly note: WaitNote; readonl
       <p>
         <Loader2 className="animate-spin" aria-hidden />
         <b>{note.title}</b>
-        <span className="kc-elapsed">{elapsed} s</span>
+        <span className="kc-elapsed" aria-hidden>
+          {elapsed} s
+        </span>
       </p>
       <small>{note.why}</small>
     </div>

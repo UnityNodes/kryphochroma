@@ -28,6 +28,18 @@ describe("provisional result", () => {
     expect(result?.pub.lastResult?.secrets).toEqual([1, 2]);
   });
 
+  it("does not call a rival a liar because its last plays were projected over cards the browser can not see", () => {
+    const blind = { ...state, honest: state.honest.map((h, seat) => (seat === 1 ? false : h)) };
+    const result = provisionalResult(blind, 0, 1, bots);
+    expect(result?.pub.lastResult?.cheaters).toEqual([]);
+    expect(result?.pub.lastResult?.winner).toBe(provisionalResult(state, 0, 1, bots)?.pub.lastResult?.winner);
+  });
+
+  it("keeps the player's own lie, which the browser does know", () => {
+    const lied = { ...state, honest: state.honest.map((h, seat) => (seat === 0 ? false : h)) };
+    expect(provisionalResult(lied, 0, 1, bots)?.pub.lastResult?.cheaters).toEqual([0]);
+  });
+
   it("waits while a hand or a secret is still unknown", () => {
     expect(provisionalResult(state, 0, null, bots)).toBeNull();
     expect(provisionalResult(state, 0, 1, { ...bots, seats: [] })).toBeNull();

@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useEffect } from "react";
+import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
 import { createPublicClient } from "viem";
@@ -76,12 +77,6 @@ export function ChainTable({ id, watch }: { readonly id: string; readonly watch?
       );
     });
 
-  const seatedNow = (game.snapshot?.me ?? -1) >= 0;
-  useEffect(() => {
-    if (watch || seatedNow || !funderState.ready || funderState.funder.kind !== "guest") return;
-    void fundBurner(seatDeps(funderState.funder)).catch(() => undefined);
-  }, [watch, seatedNow, funderState]);
-
   const start = () =>
     withFunder("Could not start", async (deps) => {
       await fundBurner(deps);
@@ -104,6 +99,21 @@ export function ChainTable({ id, watch }: { readonly id: string; readonly watch?
               }
             />
           )}
+        </div>
+      </PageShell>
+    );
+  }
+  if (/^0x0+$/.test(game.snapshot.table.creator)) {
+    return (
+      <PageShell>
+        <div className="grid flex-1 place-items-center px-4 py-14">
+          <div className="kc-panel grid max-w-md gap-4 p-6 text-center sm:p-8">
+            <h1 className="font-display text-4xl leading-none text-sun">No such table</h1>
+            <p className="text-cream/75">This table does not exist on the current contract. It may belong to an earlier deployment of the game.</p>
+            <Link href="/new" className="kc-btn justify-self-center">
+              Open a new table
+            </Link>
+          </div>
         </div>
       </PageShell>
     );

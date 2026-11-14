@@ -11,6 +11,7 @@ import { createWaker } from "../keeper/waker.js";
 import { createBot } from "../player/run.js";
 import { type SignedAction } from "@kryphochroma/abi";
 import { GAS_PRICE, createRelay, encodeMessage } from "../relay/hub.js";
+import { emptyDay, relayGasPrice, serial, takeDaily } from "./limits.js";
 import { type DripLedger, decideDrip, releaseDrip } from "./drip.js";
 import { createTableScan } from "../keeper/scan.js";
 import { type PoolTable, SPARE_BY_SEATS, pickBots, pickReady, planPool, pickQuick } from "./pool.js";
@@ -58,8 +59,20 @@ const scan = createTableScan();
 const keeper = privateKeyToAccount(env("KEEPER_PRIVATE_KEY") as Hex, { nonceManager });
 const keeperWallet = createWalletClient({ account: keeper, chain: sepolia, transport: rpcTransport(rpcUrl) });
 const bots = env("BOT_KEYS").split(",").map((key) => createBot(key as Hex, table, publicClient, rpcUrl));
-const dripWei = BigInt(env("DRIP_WEI", parseEther("0.003").toString()));
-const dripPolicy = { perAddressMs: Number(env("DRIP_PER_ADDRESS_MS", "21600000")), dailyCap: Number(env("DRIP_DAILY_CAP", "200")) };
+const dripWei = BigInt(env("DRIP_WEI", parseEther("0.0006").toString()));
+const dripPolicy = { perAddressMs: Number(env("DRIP_PER_ADDRESS_MS", "21600000")), dailyCap: Number(env("DRIP_DAILY_CAP", "80")) };
+const seatDailyCap = Number(env("SEAT_DAILY_CAP", "600"));
+const relayDailyGas = BigInt(env("RELAY_DAILY_GAS", "15000000000"));
+const RELAY_GAS_PRICE_CAP = 50_000_000n;
+const RELAYER_MIN_WEI = parseEther("0.02");
+const RELAYER_TOPUP_WEI = parseEther("0.05");
+const RELAYER_DAILY_TOPUPS = 4;
+const RELAYER_HEALTHY_WEI = parseEther("0.002");
+const MAX_STREAMS = 400;
+let baseFee = 0n;
+let relayerBalance = RELAYER_HEALTHY_WEI;
+let streams = 0;
+const gasPrice = (): bigint => relayGasPrice(baseFee, GAS_PRICE, RELAY_GAS_PRICE_CAP);
 let ledger: DripLedger = { lastByAddress: new Map(), dayStart: Date.now(), count: 0 };
 let keeperBusy = Promise.resolve();
 const takeoverKey = env("TAKEOVER_PRIVATE_KEY", env("RELAYER_PRIVATE_KEY", env("DEPLOYER_PRIVATE_KEY"))) as Hex;
@@ -75,10 +88,11 @@ const relay = createRelay({
   rpcUrl,
   botKeys: env("BOT_KEYS").split(",") as Hex[],
   takeoverKey,
-  dailyGas: BigInt(env("RELAY_DAILY_GAS", "2000000000")),
+  dailyGas: relayDailyGas,
   tableDailyGas: BigInt(env("RELAY_TABLE_DAILY_GAS", "400000000")),
   log,
   onRelayed: () => keeperWaker.wake(),
+  gasPrice,
 });
 
 function withKeeperWallet<T>(task: () => Promise<T>): Promise<T> {
@@ -115,7 +129,7 @@ interface LobbyView {
 
 const POOL_SEATS = 4;
 const POOL_TURN_TIMEOUT = 120;
-const RESERVE_MS = 120_000;
+const RESERVE_MS = 45_000;
 /** Each pool table costs about 0.7 billion gas to shuffle, so the shuffler budget is sized for a hundred tables a day; the wallet balance stays the real ceiling. */
 const SHUFFLER_DAILY_GAS = "80000000000";
 const MAX_POOL_TABLES = 8;
@@ -236,7 +250,13 @@ async function reserveReady(seats: number): Promise<{ id?: string; warming?: num
   return { id: ready.id.toString() };
 }
 
+const reserving = serial();
+
 async function quick(): Promise<{ id?: string; warming?: number }> {
+  return reserving(quickTable);
+}
+
+async function quickTable(): Promise<{ id?: string; warming?: number }> {
   const waiting = pickQuick(await poolView());
   if (waiting) {
     reserved.set(waiting.id.toString(), Date.now() + RESERVE_MS);
@@ -257,7 +277,7 @@ async function quick(): Promise<{ id?: string; warming?: number }> {
 
 async function friends(seats: number): Promise<{ id?: string; warming?: number }> {
   if (!Number.isInteger(seats) || !(seats in SPARE_BY_SEATS)) return { warming: 0 };
-  return reserveReady(seats);
+  return reserving(() => reserveReady(seats));
 }
 
 async function seatBots(id: bigint, free: number): Promise<number> {
@@ -343,14 +363,39 @@ function signatureOf(raw: unknown): Hex {
 }
 
 /** The relayer submits a guest's signed join, so taking a seat costs the guest one block instead of a faucet top up and then a block of its own. */
+let seatsToday = emptyDay(Date.now());
+const seating = new Set<string>();
+
 async function relaySeat(id: bigint, signature: Hex): Promise<{ ok: boolean; seated?: boolean; hash?: Hex; error?: string }> {
   const fields = joinFields(id);
   const session = (await recoverTypedDataAddress({ domain: actionDomain(sepolia.id, table), types: ACTION_TYPES, primaryType: "Action", message: { ...fields }, signature })).toLowerCase();
+  const key = `${id}:${session}`;
+  if (seating.has(key)) return { ok: true };
+  seating.add(key);
+  try {
+    return await sendSeat(id, session, signature);
+  } finally {
+    seating.delete(key);
+  }
+}
+
+/** The relayer pays for a stranger's seat, so every relayed join is simulated first, counted against a daily allowance and refused when the relayer runs low; the browser then falls back to a join the guest pays for itself. */
+async function sendSeat(id: bigint, session: string, signature: Hex): Promise<{ ok: boolean; seated?: boolean; hash?: Hex; error?: string }> {
+  const fields = joinFields(id);
   const view = await readLobby(id);
   const sessions = (await seatedPlayers(id, Number(view.joined))).map((p) => p.toLowerCase());
   if (sessions.includes(session)) return { ok: true, seated: true };
   if (Number(view.stage) !== 0 || Number(view.joined) >= Number(view.config.seats)) return { ok: false, error: "This table is already full" };
-  const hash = await relayWallet.writeContract({ address: table, abi: kryphoTableAbi, functionName: "relayJoin", args: [id, toContractAction({ ...fields, signature })], gas: JOIN_GAS_LIMIT, gasPrice: GAS_PRICE, chain: sepolia, account: relayAccount } as never);
+  if (relayerBalance < RELAYER_HEALTHY_WEI) return { ok: false, error: "The relayer is out of test ETH" };
+  const allowance = takeDaily(seatsToday, Date.now(), seatDailyCap);
+  seatsToday = allowance.counter;
+  if (!allowance.ok) {
+    log({ event: "relay-seat-capped", id });
+    return { ok: false, error: "Too many relayed seats today" };
+  }
+  const request = { address: table, abi: kryphoTableAbi, functionName: "relayJoin", args: [id, toContractAction({ ...fields, signature })], account: relayAccount } as const;
+  await publicClient.simulateContract({ ...request, gas: JOIN_GAS_LIMIT } as never);
+  const hash = await relayWallet.writeContract({ ...request, gas: JOIN_GAS_LIMIT, gasPrice: gasPrice(), chain: sepolia } as never);
   log({ event: "relay-seat", id, session, hash });
   void publicClient
     .waitForTransactionReceipt({ hash, timeout: RECEIPT_TIMEOUT_MS })
@@ -401,10 +446,13 @@ const server = createServer(async (req, res) => {
     const url = new URL(req.url ?? "/", "http://local");
     if (req.method === "GET" && url.pathname === "/stream") {
       const id = tableId(url.searchParams.get("id"));
+      if (streams >= MAX_STREAMS) return reply(res, 503, { error: "too many streams" });
+      streams += 1;
       res.writeHead(200, { "content-type": "text/event-stream", "cache-control": "no-cache", connection: "keep-alive" });
       const unsubscribe = relay.subscribe(id, (message) => res.write(`data: ${encodeMessage(message)}\n\n`));
       const ping = setInterval(() => res.write(": ping\n\n"), 15_000);
       req.on("close", () => {
+        streams -= 1;
         clearInterval(ping);
         unsubscribe();
       });
@@ -420,8 +468,9 @@ const server = createServer(async (req, res) => {
     if (req.method === "GET" && url.pathname === "/health") {
       const now = Date.now();
       const ages = { relayMs: now - beats.relay, keeperMs: now - beats.keeper, shufflerMs: Number.isFinite(beats.shuffler) ? now - beats.shuffler : null };
-      const healthy = ages.relayMs < HEALTH_STALE_MS && ages.keeperMs < HEALTH_STALE_MS && (ages.shufflerMs === null || ages.shufflerMs < HEALTH_STALE_MS);
-      return reply(res, healthy ? 200 : 503, { ok: healthy, table, ...ages });
+      const funded = relayerBalance >= RELAYER_HEALTHY_WEI;
+      const healthy = funded && ages.relayMs < HEALTH_STALE_MS && ages.keeperMs < HEALTH_STALE_MS && (ages.shufflerMs === null || ages.shufflerMs < HEALTH_STALE_MS);
+      return reply(res, healthy ? 200 : 503, { ok: healthy, table, ...ages, relayerFunded: funded });
     }
     if (req.method !== "POST") return reply(res, 405, { error: "method" });
     const body = await readBody(req);
@@ -457,7 +506,9 @@ async function relayLoop(): Promise<void> {
   let lastBlock = 0n;
   for (;;) {
     try {
-      const block = await publicClient.getBlockNumber({ cacheTime: 0 });
+      const head = await publicClient.getBlock({ blockTag: "latest" });
+      const block = head.number;
+      baseFee = head.baseFeePerGas ?? 0n;
       const count = (await publicClient.readContract({ address: table, abi: kryphoTableAbi, functionName: "tableCount" })) as bigint;
       knownTables = count;
       const ids = scan.ids(count);
@@ -476,7 +527,7 @@ async function relayLoop(): Promise<void> {
           await relay.submit(id);
         }),
       );
-      if (block !== lastBlock && block % 5n === 0n) await ensurePool();
+      if (block !== lastBlock && block % 5n === 0n) void ensurePool().catch((error: Error) => log({ event: "pool-error", message: error.message.slice(0, 160) }));
       lastBlock = block;
       beats.relay = Date.now();
     } catch (error) {
@@ -486,7 +537,25 @@ async function relayLoop(): Promise<void> {
   }
 }
 
-server.listen(Number(env("BOTS_PORT", "3320")), "127.0.0.1", () => log({ event: "listening", table }));
+/** The relayer pays for every move and every guest seat; when it runs dry the tables stop with no error on screen, so it is topped up from the keeper a few times a day and its balance decides the health check. */
+let relayerTopUps = emptyDay(Date.now());
+async function fundRelayer(): Promise<void> {
+  relayerBalance = await publicClient.getBalance({ address: relayAccount.address });
+  if (relayerBalance >= RELAYER_MIN_WEI || relayAccount.address === keeper.address) return;
+  const allowance = takeDaily(relayerTopUps, Date.now(), RELAYER_DAILY_TOPUPS);
+  relayerTopUps = allowance.counter;
+  if (!allowance.ok) {
+    log({ event: "relayer-topup-capped", balance: relayerBalance });
+    return;
+  }
+  await topUp(relayAccount.address, RELAYER_MIN_WEI, RELAYER_TOPUP_WEI, "relayer-topup");
+  relayerBalance = await publicClient.getBalance({ address: relayAccount.address });
+}
+const RELAYER_CHECK_MS = 120_000;
+void fundRelayer().catch((error: Error) => log({ event: "relayer-topup-failed", message: error.message.split("\n")[0] }));
+setInterval(() => void fundRelayer().catch((error: Error) => log({ event: "relayer-topup-failed", message: error.message.split("\n")[0] })), RELAYER_CHECK_MS);
+
+server.listen(Number(env("BOTS_PORT", "3320")), "127.0.0.1", () => log({ event: "listening", table, limits: { relayDailyGas, dripWei, dripDailyCap: dripPolicy.dailyCap, seatDailyCap } }));
 void relayLoop();
 const keeperConfig = loadKeeperConfig({ ...process.env, TABLE_ADDRESS: table });
 const shufflerKey = process.env.SHUFFLER_PRIVATE_KEY as Hex | undefined;

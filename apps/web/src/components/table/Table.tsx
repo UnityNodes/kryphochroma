@@ -38,6 +38,14 @@ const ERROR_TEXT: Record<string, string> = {
   NoVeil: "There is no veil to doubt",
   BadPeek: "Pick a card in an opponent's hand",
   BadSonar: "Sonar works once per round, on a rival, for one of the five colours",
+  IllegalMove: "That move is not allowed right now",
+  WrongStage: "The round is not being played right now",
+  NotYourTurn: "It is not your turn",
+  BadSignature: "This tab is not seated at the table",
+  CannotCatch: "Nobody can be caught right now",
+  CatchTooEarly: "Give them a moment to say Mono first",
+  "bots service unavailable": "The table server is restarting, try again in a few seconds",
+  "slow down": "Too many moves at once, wait a second",
 };
 
 export interface TableProps {
@@ -103,9 +111,12 @@ export function TableView({ controller: game, colorBlind, onToggleShapes }: Tabl
 
   const run = useCallback(
     (move: Parameters<typeof act>[0]) => {
-      void act(move).then((error) => {
-        if (error) toast.error(ERROR_TEXT[error] ?? error);
-      });
+      void act(move).then(
+        (error) => {
+          if (error) toast.error(ERROR_TEXT[error] ?? error);
+        },
+        () => toast.error("Your move did not go through, try again"),
+      );
     },
     [act],
   );
@@ -154,9 +165,10 @@ export function TableView({ controller: game, colorBlind, onToggleShapes }: Tabl
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
-      if (e.target instanceof HTMLInputElement) return;
-      if (e.key === "d" || e.key === "D") onDraw();
-      if (e.key === "m" || e.key === "M") run({ type: "mono" });
+      if (e.target instanceof HTMLInputElement || e.ctrlKey || e.metaKey || e.altKey || e.repeat) return;
+      if (document.querySelector('[role="dialog"]')) return;
+      if ((e.key === "d" || e.key === "D") && mine) onDraw();
+      if ((e.key === "m" || e.key === "M") && canSayMono(pub, HUMAN)) run({ type: "mono" });
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
@@ -374,21 +386,21 @@ export function TableView({ controller: game, colorBlind, onToggleShapes }: Tabl
       <Dialog open={pub.stage === "MatchOver" && !busy}>
         <DialogContent className="kc-box border-2 border-cream bg-ink sm:max-w-[360px]" showCloseButton={false}>
           <DialogTitle className="font-display text-[30px] font-normal text-sun">
-            {result?.winner === HUMAN && !game.watching ? "You win!" : result?.winner === null ? "No winner" : `${names[result?.winner ?? 0] ?? "Seat"} wins`}
+            {!result ? "Round over" : result.winner === HUMAN && !game.watching ? "You win!" : result.winner === null ? "No winner" : `${names[result.winner] ?? "Seat"} wins`}
           </DialogTitle>
           <DialogDescription className="text-muted">
             {result
               ? result.winner === null
                 ? "Every hand was revealed and nobody played honestly, so nobody scores."
                 : `${result.points} points: the value of every card left in the other hands${result.bonus ? ", doubled by the secret colour" : ""}. ${game.verifying ? "Zama KMS is now proving every hand and honesty bit on chain." : "All honesty bits were revealed and checked on chain."}`
-              : ""}
+              : "This round was settled on Sepolia. Reading the result from the chain."}
           </DialogDescription>
           {result && game.mode === "chain" && (
             game.verifying ? (
               <WaitHint note={{ title: "Proving the score on Sepolia", why: "The hands are already open, so the score is shown at once. Zama KMS now decrypts them in public and the contract checks its signatures, usually 15 to 40 s. You can start a new game meanwhile." }} />
             ) : (
-              <p className="flex items-center gap-2 text-xs font-semibold text-muted" role="status">
-                <BadgeCheck className="size-3.5 text-teal" aria-hidden />
+              <p className="flex items-start gap-2 text-left text-xs font-semibold text-muted" role="status">
+                <BadgeCheck className="mt-px size-3.5 shrink-0 text-teal" aria-hidden />
                 Verified on Sepolia: every hand and honesty bit checked against the KMS proof
               </p>
             )

@@ -6,7 +6,7 @@ import { sepoliaTransport } from "./rpc";
 import { confirm } from "./confirm";
 import { isFundsLag, isNodeFailure } from "./errors";
 
-export const MIN_BURNER_BALANCE = 500_000_000_000_000n;
+export const MIN_BURNER_BALANCE = 100_000_000_000_000n;
 export const WALLET_CRUMB = 2_000_000_000_000_000n;
 const BALANCE_WAIT_MS = 2000;
 const BALANCE_TRIES = 30;

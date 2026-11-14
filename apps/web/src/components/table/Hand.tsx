@@ -62,7 +62,7 @@ export function Hand({ hand, mine, playable, colorBlind, onPlay, slotRef, boxRef
         const ok = mine && !sealed && playable(slot);
         return (
           <button
-            key={`${slot}:${card}`}
+            key={slot}
             ref={(node) => slotRef(slot, node)}
             type="button"
             className={cn("kc-card", ok && "kc-ok", mine && !ok && "kc-no")}

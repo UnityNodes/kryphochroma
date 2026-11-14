@@ -25,6 +25,7 @@ import { createConfig } from "@zama-fhe/sdk/viem";
 import { type Hex, type PublicClient, type WalletClient, createWalletClient, parseEventLogs, recoverTypedDataAddress } from "viem";
 import { rpcTransport } from "../rpc.js";
 import { nextBatch, pipeKey, pipelinedGas } from "./pipeline.js";
+import { type RevealedSeat, botReveal, sealed } from "./reveal.js";
 import { type PrivateKeyAccount, privateKeyToAccount } from "viem/accounts";
 import { type GasBudget, canSpend, rollBudget, spend } from "../keeper/safety.js";
 import { sepolia } from "viem/chains";
@@ -38,6 +39,7 @@ export const GAS_PRICE = 5_000_000n;
 const THINK_MS = [250, 600] as const;
 const CATCH_DELAY_BLOCKS = 2n;
 const DECRYPT_RETRY_MS = 3000;
+const BOT_DECRYPT_TIMEOUT_MS = 20_000;
 const RECEIPT_TIMEOUT_MS = 90_000;
 
 export type HubMessage =
@@ -45,12 +47,6 @@ export type HubMessage =
   | { readonly type: "backlog"; readonly actions: readonly SignedAction[] }
   | { readonly type: "chain"; readonly block: string }
   | { readonly type: "reveal"; readonly round: number; readonly seats: readonly RevealedSeat[] };
-
-export interface RevealedSeat {
-  readonly seat: number;
-  readonly hand: readonly (number | null)[];
-  readonly secret: number;
-}
 
 interface Bot {
   readonly account: PrivateKeyAccount;
@@ -70,6 +66,7 @@ export interface RelayDeps {
   readonly tableDailyGas?: bigint;
   readonly log: (entry: Record<string, unknown>) => void;
   readonly onRelayed?: (id: bigint) => void;
+  readonly gasPrice?: () => bigint;
 }
 
 interface TableHub {
@@ -135,7 +132,7 @@ export function createRelay(deps: RelayDeps) {
       await bot.sdk.permits.grantPermit([deps.table]);
       bot.permitted = true;
     }
-    const { values, pending } = await decryptEach((batch) => bot.sdk.decryption.decryptValues(batch.map((encryptedValue) => ({ encryptedValue, contractAddress: deps.table }))), missing);
+    const { values, pending } = await decryptEach((batch) => bot.sdk.decryption.decryptValues(batch.map((encryptedValue) => ({ encryptedValue, contractAddress: deps.table })), { timeout: BOT_DECRYPT_TIMEOUT_MS }), missing);
     for (const [handle, value] of values) bot.plain.set(handle, value);
     if (pending.length > 0) deps.log({ event: "bot-decrypt-pending", id, seat, pending: pending.length });
     return values.size;
@@ -220,18 +217,12 @@ export function createRelay(deps: RelayDeps) {
       });
   }
 
-  /** Every hand becomes public at the reveal, so the bot hands go to the table as soon as a round is over and players see the scores before the KMS proof. A round a bot ends is over the moment the hub signs that move; a round a player ends waits for the chain, or a forged last move could open the bots' hands and let the round go on. */
-  function revealBots(hub: TableHub, state: GameState): void {
-    if (state.pub.stage !== "Revealing" || hub.reveal) return;
-    const seats: RevealedSeat[] = [];
-    for (const seat of hub.sessions.keys()) {
-      if (!botFor(hub, seat)) continue;
-      const hand = state.hands[seat] ?? [];
-      const secret = hub.botSecrets.get(seat);
-      if (secret === undefined || hand.some((card) => card !== null && card < 0)) return;
-      seats.push({ seat, hand, secret });
-    }
-    hub.reveal = { type: "reveal", round: state.pub.round, seats };
+  /** Every hand becomes public at the reveal, so once the chain itself has reached it the bot hands go to the table and players see the scores before the KMS proof. It never fires from the hub's own projection: a player can sign a move here and land a different one on chain first, so a round that only the pending moves end may still go on, with the bots' hands already handed out. */
+  function revealBots(hub: TableHub, chain: GameState): void {
+    if (hub.reveal) return;
+    const seats = botReveal(chain, (seat) => botFor(hub, seat) !== undefined, hub.botSecrets);
+    if (!seats) return;
+    hub.reveal = { type: "reveal", round: chain.pub.round, seats };
     broadcast(hub, hub.reveal);
   }
 
@@ -248,8 +239,7 @@ export function createRelay(deps: RelayDeps) {
     if (!next) return { ok: false, reason: "IllegalMove" };
     hub.log.push(action);
     hub.signers.set(actionKey(action), signer.toLowerCase());
-    broadcast(hub, { type: "action", action, events: next.events });
-    if (botFor(hub, action.seat)) revealBots(hub, next.state);
+    broadcast(hub, { type: "action", action, events: next.events.map(sealed) });
     driveBots(action.table, hub);
     if (!botFor(hub, action.seat)) void submit(action.table);
     return { ok: true };
@@ -336,7 +326,7 @@ export function createRelay(deps: RelayDeps) {
       functionName: "relay",
       args: [id, batch.map(toContractAction)],
       gas,
-      gasPrice: GAS_PRICE,
+      gasPrice: deps.gasPrice?.() ?? GAS_PRICE,
       chain: sepolia,
       account: deps.relayer.account ?? null,
     } as never);

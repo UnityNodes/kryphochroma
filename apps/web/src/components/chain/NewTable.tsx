@@ -21,7 +21,7 @@ import { FlowProgress, type OpenTable, OpenTablesPanel, OwnTablePanel, QuickPane
 type Flow = "quick" | "friends" | "bots";
 
 const FLOW_STEPS: Record<Flow, readonly string[]> = {
-  quick: ["Session key created in this tab", "Gas for the session key", "You took a seat at a ready table", "Bots seated"],
+  quick: ["Session key created in this tab", "A ready table is reserved", "Your seat is signed and relayed, free of charge", "Three bots already wait there"],
   friends: ["Session key created in this tab", "Gas for the session key", "A ready table is waiting", "You took a seat", "Invite link ready"],
   bots: ["Session key created in this tab", "Gas for the session key", "A ready table is waiting", "You took a seat", "Bots seated", "Game starting"],
 };
@@ -143,6 +143,7 @@ export function NewTable() {
         setDone(5);
         return seatInBackground(d, ready, async () => {
           await requestBots(d.burner, ready);
+          await fundBurner(d);
           await startTable(d, ready);
         });
       }
@@ -155,12 +156,6 @@ export function NewTable() {
       setDone(5);
       router.push(tablePath(id));
     });
-
-  useEffect(() => {
-    if (!funderState.ready || funderState.funder.kind !== "guest") return;
-    const d = { publicClient: createPublicClient({ chain: sepolia, transport: sepoliaTransport(), pollingInterval: RECEIPT_POLL_MS }), burner: loadBurner(window.sessionStorage), funder: funderState.funder, drip };
-    void fundBurner(d).catch(() => undefined);
-  }, [funderState]);
 
   const disabled = running || !funderState.ready;
 

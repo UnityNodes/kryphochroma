@@ -1,7 +1,7 @@
 const BOTS_URL = process.env.BOTS_URL ?? "http://127.0.0.1:3320";
 const WINDOW_MS = 60_000;
 const LIMIT_PER_WINDOW = 6;
-const RESERVE_LIMIT_PER_WINDOW = 30;
+const RESERVE_LIMIT_PER_WINDOW = 10;
 const ACT_LIMIT_PER_WINDOW = 240;
 const STREAM_LIMIT_PER_WINDOW = 30;
 const OPEN_LIMIT_PER_WINDOW = 30;
@@ -46,7 +46,7 @@ export function sameOrigin(request: Request): boolean {
   const site = request.headers.get("sec-fetch-site");
   if (site) return site === "same-origin";
   const origin = request.headers.get("origin");
-  if (!origin) return false;
+  if (!origin || !URL.canParse(origin)) return false;
   return new URL(origin).host === request.headers.get("host");
 }
 
@@ -54,8 +54,8 @@ export function admit(request: Request, path: string): Response | null {
   if (request.method === "POST" && !sameOrigin(request)) return Response.json({ error: "cross-site request" }, { status: 403 });
   const now = Date.now();
   const limit = path === "/rpc" ? RPC_LIMIT_PER_WINDOW : path === "/quick" || path === "/friends" ? RESERVE_LIMIT_PER_WINDOW : path === "/act" ? ACT_LIMIT_PER_WINDOW : path === "/stream" ? STREAM_LIMIT_PER_WINDOW : path === "/open" ? OPEN_LIMIT_PER_WINDOW : path === "/profiles" ? PROFILES_LIMIT_PER_WINDOW : LIMIT_PER_WINDOW;
-  if (!allowed(`global:${path}`, GLOBAL_LIMIT_PER_WINDOW[path] ?? LIMIT_PER_WINDOW, now)) return Response.json({ error: "busy, try again in a minute" }, { status: 429 });
   if (!allowed(`${path}:${clientIp(request)}`, limit, now)) return Response.json({ error: "slow down" }, { status: 429 });
+  if (!allowed(`global:${path}`, GLOBAL_LIMIT_PER_WINDOW[path] ?? LIMIT_PER_WINDOW, now)) return Response.json({ error: "busy, try again in a minute" }, { status: 429 });
   return null;
 }
 

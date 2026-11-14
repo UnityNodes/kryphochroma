@@ -6,7 +6,7 @@ A five colour shedding card game where hiding is the game. Bluff with a veiled c
 
 **[Play now](https://kryphochroma.unitynodes.com)** · **[Watch the 3 minute video](https://youtu.be/VIDEO_ID)** · **[Docs](https://kryphochroma.unitynodes.com/docs)** · **[How it stays secret](https://kryphochroma.unitynodes.com/secret)**
 
-- **Quick game**: no wallet needed. Your tab gets a session key and a little Sepolia ETH, and you sit down with three bots at a table whose cards were already drawn on chain.
+- **Quick game**: no wallet and no test ETH needed. Your tab makes a session key and signs its seat, a relayer puts it on chain, and you sit down with three bots at a table whose cards were already drawn.
 - **With friends**: open a table for 2 to 4 players, send the invite link, start when everyone is in. Open tables are listed so anyone can join. A wallet is optional; it signs one `join` for the session key.
 - **Practice offline**: the same rules engine against local bots, no chain.
 - **Kryphochroma FM**: three radio stations composed live in your browser, no tracks. The beat speeds up when someone is down to one card.
@@ -122,7 +122,7 @@ HCU limits on Sepolia: 20M per transaction, 5M depth.
 | Last seat taken to play, starter revealed in the lobby | same block (~12 s) |
 | Hand decrypted after play opens | ~4 s to 9 s |
 | A drawn card from your queue, face up in your hand | under 1 s; a draw that empties the queue faster than a block waits ~10 s for the refill |
-| Round over to scores on screen: the table server sends the bot hands once the round is over (at once when a bot goes out, after the block when a player does) and the browser scores them with the same rules | under 1 s when a bot goes out, one block when you do |
+| Round over to scores on screen at a table with bots: once the block that ends the round is mined the table server sends the bot hands and the browser scores them with the same rules | one block, ~6 s to 12 s |
 | Round over to scores proven on chain: the relayed batch that ends the round also opens every hand, `finishReveal` follows once the KMS answers | 12 s to 45 s, mostly the public decryption; the table shows Verified on Sepolia when it lands |
 | Background draw of a fresh table | ~30 s |
 
@@ -133,6 +133,8 @@ HCU limits on Sepolia: 20M per transaction, 5M depth.
 - Drawing and playing at once is visible, as it is in person. Transaction timing can hint that a player was thinking.
 
 Trust assumptions we accept for a testnet game:
+- Bot hands are sent to the table only after the chain itself has reached the reveal, never from moves still waiting for a block, so a player can not see them while the round can still go on. A sonar count on a bot is cut from the public stream.
+- A lie costs up to 100 of the liar's own points and the liar can not win; in a single round everyone starts at 0, so there the only cost is losing the round and the public `lied` mark.
 - The relay hub can delay moves but can not forge them: every action is signed by the session key and checked on chain.
 - The takeover key sees the hand of a seat that was abandoned, because it has to play it.
 - A signed move has no expiry beyond its nonce; the hub submits within seconds.

@@ -1,5 +1,5 @@
 import { CARD_COLORS } from "@kryphochroma/cards";
-import { cardLabel } from "@kryphochroma/rules";
+import { cardLabel, isWild } from "@kryphochroma/rules";
 import { Lock, RotateCw } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { pileTilt } from "@/game/flight";
@@ -26,6 +26,8 @@ export interface CenterProps {
 export function Center({ discard, color, deckCount, dir, status, note, canDraw, next = [], colorBlind, onDraw, deckRef, pileRef }: CenterProps) {
   const start = Math.max(0, discard.length - PILE_SHOWN);
   const current = CARD_COLORS[color]?.base ?? "var(--r)";
+  const top = discard[discard.length - 1];
+  const called = top !== undefined && isWild(top) ? CARD_COLORS[color]?.name : undefined;
   return (
     <div className="kc-center">
       <div className="kc-piles">
@@ -70,6 +72,7 @@ export function Center({ discard, color, deckCount, dir, status, note, canDraw, 
           <RotateCw aria-hidden />
         </span>
         <span>{status}</span>
+        {called && <span className="kc-called">colour: {called}</span>}
       </div>
       {note && <WaitHint note={note} className="kc-note" />}
     </div>

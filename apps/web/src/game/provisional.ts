@@ -5,7 +5,7 @@ export interface RevealedBots {
   readonly seats: readonly { readonly seat: number; readonly hand: readonly (number | null)[]; readonly secret: number }[];
 }
 
-/** Every hand is known once the chain reaches the reveal: the player's own from its key, the bots' from the table server. Scoring them with the same rules shows the result at once, and the KMS proof that follows only confirms it. */
+/** Every hand is known once the chain reaches the reveal: the player's own from its key, the bots' from the table server. Scoring them with the same rules shows the result at once, and the KMS proof that follows only confirms it. Honesty is the one thing nobody can read before that proof: the browser projects rival plays over cards it cannot see, which would mark every rival a liar, so rivals count as honest here and a caught lie changes the result when the proof lands. */
 export function provisionalResult(state: GameState, me: number, ownSecret: number | null, bots: RevealedBots | null): GameState | null {
   if (state.pub.stage !== "Revealing" || !bots || bots.round !== state.pub.round) return null;
   const hands: RevealedHand[] = [];
@@ -19,7 +19,8 @@ export function provisionalResult(state: GameState, me: number, ownSecret: numbe
     secrets.push(secret);
   }
   try {
-    return applyReveal(state, { honest: state.honest, hands, secrets }).state;
+    const honest = hands.map((_, seat) => (seat === me ? (state.honest[seat] ?? true) : true));
+    return applyReveal(state, { honest, hands, secrets }).state;
   } catch {
     return null;
   }
