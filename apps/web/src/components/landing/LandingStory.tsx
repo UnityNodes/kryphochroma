@@ -72,12 +72,6 @@ export function Hero() {
             </p>
             <PlayCtas />
           </div>
-          <ul className="br-facts" data-in>
-            <li>Live on Sepolia with Zama FHEVM</li>
-            <li>No wallet needed, gas is on us</li>
-            <li>2 to 4 players</li>
-            <li>Phone and desktop</li>
-          </ul>
         </div>
       </div>
     </section>

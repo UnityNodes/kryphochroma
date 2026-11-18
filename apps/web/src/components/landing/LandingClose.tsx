@@ -2,8 +2,6 @@ import Link from "next/link";
 import { ASSET_BASE } from "./constants";
 import { PlayCtas } from "./LandingStory";
 
-const ETHERSCAN = "https://sepolia.etherscan.io/address";
-
 export function Close() {
   return (
     <section className="br-close" data-close>
@@ -20,7 +18,7 @@ export function Close() {
   );
 }
 
-export function Footer({ table }: { readonly table: string }) {
+export function Footer() {
   return (
     <footer className="br-foot">
       <div className="br-foot__in">
@@ -39,13 +37,6 @@ export function Footer({ table }: { readonly table: string }) {
             <Link href="/play">Practice</Link>
           </li>
         </ul>
-        <p className="br-foot__contract">
-          Contract{" "}
-          <a href={`${ETHERSCAN}/${table}`} target="_blank" rel="noopener noreferrer">
-            <code>{`${table.slice(0, 6)}…${table.slice(-4)}`}</code>
-          </a>
-        </p>
-        <p className="br-foot__built">Built for the Zama Developer Program, Mainnet Season 5</p>
       </div>
     </footer>
   );

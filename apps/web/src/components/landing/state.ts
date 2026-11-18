@@ -1,5 +1,5 @@
 import type { ScrollTrigger } from "gsap/ScrollTrigger";
-import type { Group, LoadingManager, PerspectiveCamera, Raycaster, Scene, SpotLight, Texture, Vector2, Vector3, WebGLRenderer } from "three";
+import type { Group, InstancedMesh, LoadingManager, PerspectiveCamera, Raycaster, Scene, SpotLight, Texture, Vector2, Vector3, WebGLRenderer } from "three";
 import type { Slot, TablePoint } from "./layout";
 import type { Frame } from "./pose";
 
@@ -36,6 +36,8 @@ export interface Rig {
   readonly rivals: readonly CardRig[];
   readonly first: CardRig;
   readonly draws: readonly CardRig[];
+  readonly deckTop: CardRig;
+  readonly deckStack: InstancedMesh;
   readonly soft: boolean;
 }
 

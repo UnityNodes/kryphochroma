@@ -121,7 +121,7 @@ function addLamp(scene: Scene): void {
   scene.add(cord);
 }
 
-function addCards(scene: Scene, renderer: WebGLRenderer, manager: LoadingManager, textures: Texture[]): Pick<Rig, "hand" | "rivals" | "first" | "draws"> {
+function addCards(scene: Scene, renderer: WebGLRenderer, manager: LoadingManager, textures: Texture[]): Pick<Rig, "hand" | "rivals" | "first" | "draws" | "deckTop" | "deckStack"> {
   const anisotropy = Math.min(8, renderer.capabilities.getMaxAnisotropy());
   const kit = buildCardKit(new TextureLoader(manager), anisotropy, textures);
   const rnd = seeded(77);
@@ -137,9 +137,11 @@ function addCards(scene: Scene, renderer: WebGLRenderer, manager: LoadingManager
   }
   const first = makeCard(scene, kit, faceOf(kit, FIRST_FACE));
   const draws = [makeCard(scene, kit, null), makeCard(scene, kit, null), makeCard(scene, kit, faceOf(kit, DRAWN_FACE))];
-  place(makeCard(scene, kit, null), DECK.x, DECK_TOP + CARD_T / 2, DECK.z, DECK.yaw, 0, Math.PI, true);
-  scene.add(buildDeckStack(kit, rnd));
-  return { hand, rivals, first, draws };
+  const deckTop = makeCard(scene, kit, null);
+  place(deckTop, DECK.x, DECK_TOP + CARD_T / 2, DECK.z, DECK.yaw, 0, Math.PI, true);
+  const deckStack = buildDeckStack(kit, rnd);
+  scene.add(deckStack);
+  return { hand, rivals, first, draws, deckTop, deckStack };
 }
 
 function disposeParts(renderer: WebGLRenderer, canvas: HTMLCanvasElement, scene: Scene, textures: readonly Texture[], manager: LoadingManager): void {

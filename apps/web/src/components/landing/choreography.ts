@@ -5,6 +5,7 @@ import {
   DEAL_GAP,
   DEAL_ORDER_STEP,
   DECK,
+  DECK_SHOT,
   DECK_TOP,
   DRAWN_SLOT,
   HAND_ROLL,
@@ -26,6 +27,7 @@ import {
   VEIL,
   VEILED_SLOT,
 } from "./constants";
+import { DRAW_COUNT, deckLeft, drawPose, drawProgress } from "./draw";
 import { easeInOut, easeOut, mix, seg, smooth } from "./ease";
 import { type Slot, handSlot, seatSlot } from "./layout";
 import { poseAt } from "./pose";
@@ -142,27 +144,34 @@ function moveFirst(card: CardRig, t: number, done: boolean): void {
   place(card, mix(DECK.x, PILE.x, p), mix(DECK_TOP + CARD_T, CARD_T / 2, smooth(p)) + Math.sin(PI * turn) * 0.5, mix(DECK.z, PILE.z, p), mix(DECK.yaw, 0.12, p), 0, PI * (1 - turn), p > 0);
 }
 
+function revealYaw(): number {
+  const camera = poseAt(DECK_SHOT);
+  return Math.atan2(camera.px - DECK.x, camera.pz - DECK.z);
+}
+
+const REVEAL_YAW = revealYaw();
+
 function moveDraw(card: CardRig, order: number, at: Slot, shot: number, closing: boolean, count: number): void {
-  const start = 7.26 + order * 0.15;
-  const p = closing ? 0 : easeInOut(seg(shot, start, start + 0.22));
+  const p = closing ? 0 : drawProgress(order, shot);
   if (p <= 0) {
     card.pivot.visible = false;
     return;
   }
-  let turn = 0;
-  let y = RIVAL_Y;
-  let flip = PI + RIVAL_ROLL * p;
-  if (order < 2) {
-    seatSlot(SEATS[order === 0 ? 1 : 0], HAND_SIZE, at);
-  } else {
-    handSlot(DRAWN_SLOT, count, at);
-    turn = easeInOut(seg(p, 0.22, 0.8));
-    y = HAND_Y;
-    flip = PI * (1 - turn) + HAND_ROLL * p;
-  }
-  const w = smooth(p);
-  const height = mix(DECK_TOP + CARD_T * 1.5, y, easeInOut(seg(p, 0.3, 1))) + Math.sin(PI * turn) * 0.5 + Math.sin(PI * p) * 0.14;
-  place(card, mix(DECK.x, at.x, w), height, mix(DECK.z, at.z, w), mix(DECK.yaw, at.yaw, p), 0, flip, true);
+  const toHand = order === DRAW_COUNT - 1;
+  if (toHand) handSlot(DRAWN_SLOT, count, at);
+  else seatSlot(SEATS[order === 0 ? 1 : 0], HAND_SIZE, at);
+  const pose = drawPose(p, at, toHand ? HAND_Y : RIVAL_Y, REVEAL_YAW);
+  const turn = toHand ? easeInOut(seg(pose.travel, 0.2, 0.8)) : 0;
+  const flip = toHand ? PI * (1 - turn) + HAND_ROLL * pose.travel : PI + RIVAL_ROLL * pose.travel;
+  place(card, pose.x, pose.y + Math.sin(PI * turn) * 0.5, pose.z, pose.yaw, pose.tilt, flip, true);
+}
+
+/** Cards that leave the deck make it lower: without it the stack stays the same height and the draws read as cards appearing from elsewhere. */
+function settleDeck(rig: Rig, shot: number, closing: boolean): void {
+  const left = closing ? 0 : deckLeft(shot);
+  if (rig.deckStack.count === DECK.n - left) return;
+  rig.deckStack.count = DECK.n - left;
+  rig.deckTop.pivot.position.y = DECK_TOP - left * DECK.step + CARD_T / 2;
 }
 
 export function updateCards(rig: Rig, at: Slot, t: number, shot: number, closing: boolean): void {
@@ -173,7 +182,7 @@ export function updateCards(rig: Rig, at: Slot, t: number, shot: number, closing
   const gapPlayed = smooth(seg(played, 0.36, 0.9));
   const gapVeiled = smooth(seg(veiled, 0.36, 0.9));
   const gapSpied = smooth(seg(spied, 0.36, 0.9));
-  const drawn = closing ? 0 : smooth(seg(shot, 7.66, 7.78));
+  const drawn = closing ? 0 : smooth(seg(drawProgress(DRAW_COUNT - 1, shot), 0.3, 0.75));
   const count = HAND_SIZE - gapPlayed - gapVeiled - gapSpied + drawn;
   const peek = closing ? 0 : easeInOut(seg(shot, 4.38, 4.6)) * (1 - easeInOut(seg(shot, 4.78, 4.94)));
 
@@ -201,4 +210,5 @@ export function updateCards(rig: Rig, at: Slot, t: number, shot: number, closing
     const card = rig.draws[order];
     if (card) moveDraw(card, order, at, shot, closing, count);
   }
+  settleDeck(rig, shot, closing);
 }

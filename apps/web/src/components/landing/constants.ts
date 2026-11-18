@@ -59,6 +59,7 @@ export const SONAR_SEAT = 2;
 export const SONAR_COUNT = 3;
 export const VEIL_SHOT = 3;
 export const SPYGLASS_SHOT = 4;
+export const DECK_SHOT = 7;
 
 export interface Seat {
   readonly x: number;
