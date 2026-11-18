@@ -1,15 +1,17 @@
 "use client";
 
 import { CARD_COLORS } from "@kryphochroma/cards";
-import { COLOR, type Card, type Color, type Peek, type PublicState, cardLabel, colorOf, peekTargets, rankOf, veilClaims } from "@kryphochroma/rules";
+import { type Card, type Color, type Peek, type PublicState, cardLabel, colorOf, peekTargets, rankOf, veilClaims } from "@kryphochroma/rules";
 import { EyeOff, Lock } from "lucide-react";
 import { Fragment, useEffect, useState } from "react";
 import { Dialog, DialogContent, DialogDescription, DialogTitle } from "@/components/ui/dialog";
 import { cn } from "@/lib/utils";
 import { CardBack, CardFace } from "./CardSvg";
+import { inkOn, tint } from "./tint";
 
-const DIALOG = "kc-box max-h-[90dvh] overflow-auto border-2 border-cream bg-ink text-left sm:max-w-[520px]";
-const TITLE = "font-display text-[30px] font-normal text-sun";
+const DIALOG = "kc-box kc-box-wide max-h-[90dvh] overflow-auto";
+const PLAIN = "kc-box";
+const COLOR_KEY = "grid size-11 place-items-center rounded-[4px] font-display text-2xl leading-none shadow-[inset_0_0_0_1px_rgb(0_0_0/.35)] transition-transform enabled:hover:-translate-y-0.5";
 
 function MiniCard({ card, colorBlind, label, selected, onClick }: { readonly card: Card | null; readonly colorBlind: boolean; readonly label: string; readonly selected?: boolean; readonly onClick?: () => void }) {
   return (
@@ -18,7 +20,7 @@ function MiniCard({ card, colorBlind, label, selected, onClick }: { readonly car
       aria-label={label}
       aria-pressed={selected}
       onClick={onClick}
-      className={cn("w-[52px] rounded-[8px] transition-transform sm:w-[60px] [&_svg]:block [&_svg]:size-full", selected ? "-translate-y-2 ring-4 ring-sun" : "hover:-translate-y-1")}
+      className={cn("w-[52px] rounded-[12%/8%] shadow-[0_3px_6px_rgb(0_0_0/.5)] transition-transform sm:w-[60px] [&_svg]:block [&_svg]:size-full", selected ? "-translate-y-2 ring-[3px] ring-brass" : "hover:-translate-y-1")}
     >
       <div className="aspect-[2/3]">{card === null || card < 0 ? <CardBack /> : <CardFace card={card} colorBlind={colorBlind} />}</div>
     </button>
@@ -44,11 +46,11 @@ export function VeilDialog({ open, pub, hand, colorBlind, onClose, onVeil }: Vei
   return (
     <Dialog open={open} onOpenChange={(next) => !next && close()}>
       <DialogContent className={DIALOG}>
-        <DialogTitle className={TITLE}>Veil a card</DialogTitle>
-        <DialogDescription className="text-muted">
+        <DialogTitle>Veil a card</DialogTitle>
+        <DialogDescription>
           Lay any card face down and name a number card that fits the pile. Its real value stays encrypted. The next player can doubt you: one bit settles it. Once per round.
         </DialogDescription>
-        <h3 className="text-xs font-semibold tracking-[.12em] text-muted uppercase">1. The card you hide</h3>
+        <h3>1. The card you hide</h3>
         <div className="flex flex-wrap gap-2">
           {hand.map((card, i) =>
             card === null || card < 0 || (pub.drawnSlot !== null && i !== pub.drawnSlot) ? null : (
@@ -56,7 +58,7 @@ export function VeilDialog({ open, pub, hand, colorBlind, onClose, onVeil }: Vei
             ),
           )}
         </div>
-        <h3 className="text-xs font-semibold tracking-[.12em] text-muted uppercase">2. The card you name</h3>
+        <h3>2. The card you name</h3>
         {slot === null && <p className="-mt-1 text-xs text-muted">Pick the card you hide first, then name one of these.</p>}
         <div className="grid grid-cols-[3.5rem_minmax(0,1fr)] items-start gap-x-2 gap-y-2">
           {CARD_COLORS.map((color, c) => {
@@ -73,8 +75,8 @@ export function VeilDialog({ open, pub, hand, colorBlind, onClose, onVeil }: Vei
                       disabled={slot === null}
                       onClick={() => slot !== null && (onVeil(slot, claim), setSlot(null))}
                       aria-label={`Name it ${cardLabel(claim)}`}
-                      className="grid size-11 place-items-center rounded-full border-2 border-cream font-display text-xl transition-transform enabled:hover:-translate-y-0.5 disabled:opacity-35"
-                      style={{ background: color.base, color: c === COLOR.sun ? "var(--color-ink)" : "var(--color-cream)" }}
+                      className={cn(COLOR_KEY, "disabled:opacity-35")}
+                      style={{ background: color.base, color: inkOn(c) }}
                     >
                       {rankOf(claim)}
                     </button>
@@ -104,11 +106,11 @@ export function PeekDialog({ open, pub, me, names, onClose, onPeek }: PeekDialog
   return (
     <Dialog open={open} onOpenChange={(next) => !next && onClose()}>
       <DialogContent className={DIALOG}>
-        <DialogTitle className={TITLE}>Spyglass</DialogTitle>
-        <DialogDescription className="text-muted">Pick one sealed card. The contract grants your key access to exactly that card. Everyone sees which slot you looked at, nobody else sees the card.</DialogDescription>
+        <DialogTitle>Spyglass</DialogTitle>
+        <DialogDescription>Pick one sealed card. The contract grants your key access to exactly that card. Everyone sees which slot you looked at, nobody else sees the card.</DialogDescription>
         {seats.map((seat) => (
           <div key={seat} className="grid gap-2">
-            <b className="text-cream">{names[seat] ?? `Seat ${seat + 1}`}</b>
+            <b className="font-display text-xl leading-none font-normal tracking-[.03em] text-cream uppercase">{names[seat] ?? `Seat ${seat + 1}`}</b>
             <div className="flex flex-wrap gap-2">
               {targets
                 .filter((t) => t.seat === seat)
@@ -133,9 +135,9 @@ export interface PeekResultProps {
 export function PeekResult({ peek, names, colorBlind, onClose }: PeekResultProps) {
   return (
     <Dialog open={peek !== null} onOpenChange={(next) => !next && onClose()}>
-      <DialogContent className="kc-box border-2 border-cream bg-ink sm:max-w-[360px]">
-        <DialogTitle className={TITLE}>You peeked</DialogTitle>
-        <DialogDescription className="text-muted">
+      <DialogContent className={PLAIN}>
+        <DialogTitle>You peeked</DialogTitle>
+        <DialogDescription>
           {peek ? `${names[peek.seat] ?? "Seat"} holds this card. Only your key can decrypt it.` : ""}
         </DialogDescription>
         <div className="mx-auto w-28 [&_svg]:block [&_svg]:size-full">
@@ -158,7 +160,8 @@ export function SecretChip({ color, compact }: { readonly color: number | null; 
     <span className="whitespace-nowrap" title="Your secret colour: go out on a card of this colour to double the round">
       <EyeOff aria-hidden />
       {compact ? "secret" : "secret colour"}
-      <b style={{ color: swatch?.base }}>{swatch ? `● ${swatch.name}` : "…"}</b>
+      <i className="kc-swatch" style={{ "--c": swatch?.base } as React.CSSProperties} aria-hidden />
+      <b>{swatch ? swatch.name : "…"}</b>
     </span>
   );
 }
@@ -171,7 +174,7 @@ export function SecretBadge({ color }: { readonly color: number | null }) {
       role="img"
       aria-label={label}
       title={label}
-      className="absolute -right-1 -bottom-1 size-4 rounded-full border-2 border-ink"
+      className="absolute -right-1.5 -bottom-1.5 size-4 rounded-[3px] border-2 border-bg"
       style={{ background: swatch?.base ?? "var(--muted)" }}
     />
   );
@@ -198,11 +201,11 @@ export function SonarDialog({ open, pub, me, names, onClose, onSonar }: SonarDia
   return (
     <Dialog open={open} onOpenChange={(next) => !next && close()}>
       <DialogContent className={DIALOG}>
-        <DialogTitle className={TITLE}>Sonar</DialogTitle>
-        <DialogDescription className="text-muted">
+        <DialogTitle>Sonar</DialogTitle>
+        <DialogDescription>
           Ask how many cards of one colour a rival holds. The contract counts it inside their encrypted hand and only your key can read the answer. Everyone sees that you pinged, nobody sees the number. Once per round, uses your turn.
         </DialogDescription>
-        <h3 className="text-xs font-semibold tracking-[.12em] text-muted uppercase">1. Who</h3>
+        <h3>1. Who</h3>
         <div className="flex flex-wrap gap-2" role="radiogroup" aria-label="Rival to ping">
           {rivals.map((r) => (
             <button key={r.seat} type="button" role="radio" aria-checked={chosen === r.seat} className={cn("kc-chip min-h-11", chosen === r.seat && "kc-chip-on")} onClick={() => setTarget(r.seat)}>
@@ -210,7 +213,7 @@ export function SonarDialog({ open, pub, me, names, onClose, onSonar }: SonarDia
             </button>
           ))}
         </div>
-        <h3 className="text-xs font-semibold tracking-[.12em] text-muted uppercase">2. Which colour</h3>
+        <h3>2. Which colour</h3>
         <div className="flex flex-wrap gap-2">
           {CARD_COLORS.map((color, c) => (
             <button
@@ -219,8 +222,8 @@ export function SonarDialog({ open, pub, me, names, onClose, onSonar }: SonarDia
               disabled={chosen === null}
               onClick={() => chosen !== null && (onSonar(chosen, c as Color), setTarget(null))}
               aria-label={`Ping for ${color.name} cards`}
-              className="grid size-11 place-items-center rounded-full border-2 border-cream text-xs font-semibold text-ink disabled:opacity-40"
-              style={{ background: color.base }}
+              className={cn(COLOR_KEY, "disabled:opacity-40")}
+              style={{ background: color.base, color: inkOn(c) }}
             >
               {color.name.slice(0, 1)}
             </button>
@@ -242,11 +245,11 @@ export function SonarResult({ sonar, names, onClose }: SonarResultProps) {
   const who = sonar ? (names[sonar.target] ?? "Seat") : "";
   return (
     <Dialog open={sonar !== null} onOpenChange={(next) => !next && onClose()}>
-      <DialogContent className="kc-box border-2 border-cream bg-ink sm:max-w-[360px]">
-        <DialogTitle className={TITLE}>Sonar answer</DialogTitle>
-        <DialogDescription className="text-muted">{sonar ? `${who} · ${swatch?.name ?? ""} cards. Only your key can decrypt this number.` : ""}</DialogDescription>
+      <DialogContent className={PLAIN}>
+        <DialogTitle>Sonar answer</DialogTitle>
+        <DialogDescription>{sonar ? `${who} · ${swatch?.name ?? ""} cards. Only your key can decrypt this number.` : ""}</DialogDescription>
         {sonar && sonar.count !== null ? (
-          <p className="text-center font-display text-7xl" style={{ color: swatch?.base }} role="status">
+          <p className="text-center font-display text-7xl leading-none" style={{ color: swatch ? tint(swatch.base) : undefined }} role="status">
             {sonar.count}
           </p>
         ) : (

@@ -39,18 +39,28 @@
 }
 
 @theme {
-  --color-bg: #170e14;
-  --color-felt-1: #3e1f2c;
-  --color-felt-2: #1b0f17;
+  --color-bg: #07130e;
+  --color-felt-1: #235a47;
+  --color-felt-2: #0e3a2b;
+  --color-felt-3: #08241a;
   --color-cream: #f4e6c8;
-  --color-ink: #2b1b24;
-  --color-muted: #bba78f;
+  --color-ink: #0b1f17;
+  --color-muted: #b9b199;
+  --color-brass: #e2a93b;
+  --color-brass-hi: #efbd58;
+  --color-brass-lo: #94670f;
+  --color-on-brass: #171004;
+  --color-wood: #4f2f18;
+  --color-wood-hi: #6d4525;
+  --color-wood-lo: #2c190c;
+  --color-lamp: #ffe2b8;
+  --color-paper-lo: #a9997a;
   --color-red: #e4512f;
   --color-sun: #f2b134;
   --color-teal: #1f9e8a;
   --color-blue: #3b5ba5;
-  --font-display: "Tanker", "Arial Black", system-ui, sans-serif;
-  --font-sans: "Chillax", system-ui, sans-serif;
+  --font-display: "Tanker", "Impact", "Arial Narrow", sans-serif;
+  --font-sans: "Switzer", ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif;
   --ease-fly: cubic-bezier(0.3, 0.7, 0.2, 1);
   --ease-hand: cubic-bezier(0.2, 0.8, 0.2, 1);
   --ease-overshoot: cubic-bezier(0.5, -0.4, 0.3, 1.5);
@@ -61,7 +71,8 @@
   --foreground: var(--color-cream);
   --popover: var(--color-ink);
   --popover-foreground: var(--color-cream);
-  --border: #f4e6c824;
+  --border: color-mix(in srgb, var(--color-cream) 22%, transparent);
+  --radius: 4px;
 }
 
 @layer base {
@@ -74,6 +85,7 @@
     background: var(--color-bg);
     color: var(--color-cream);
     font-family: var(--font-sans);
+    -webkit-font-smoothing: antialiased;
     -webkit-tap-highlight-color: transparent;
   }
 
@@ -83,22 +95,17 @@
 
   html {
     scrollbar-color: color-mix(in srgb, var(--color-cream) 22%, transparent) var(--color-bg);
-    caret-color: var(--color-sun);
+    caret-color: var(--color-brass);
   }
 
   ::selection {
-    background: color-mix(in srgb, var(--color-sun) 38%, transparent);
-    color: var(--color-cream);
+    background: var(--color-brass);
+    color: var(--color-on-brass);
   }
 }
 
-button {
-  font: inherit;
-  color: inherit;
-}
-
 :focus-visible {
-  outline: 2px solid var(--color-sun);
+  outline: 2px solid var(--color-brass);
   outline-offset: 3px;
 }
 
@@ -164,16 +171,17 @@ button {
 }
 
 .kc-panel {
-  border-radius: 28px;
-  border: 2px solid var(--color-cream);
+  border-radius: 6px;
+  border: 1px solid color-mix(in srgb, var(--color-cream) 24%, transparent);
   background: var(--color-ink);
-  box-shadow:
-    6px 6px 0 var(--color-red),
-    12px 12px 0 #0008;
 }
 
 .kc-felt {
   background: radial-gradient(120% 95% at 80% 35%, var(--color-felt-1), var(--color-felt-2) 78%);
+}
+
+.kc-room {
+  background: radial-gradient(90% 60% at 50% 0%, color-mix(in srgb, var(--color-felt-2) 55%, transparent), transparent 70%);
 }
 
 .kc-seat-pick {
@@ -182,33 +190,27 @@ button {
   gap: 8px;
   min-height: 112px;
   padding: 14px 8px;
-  border-radius: 20px;
-  border: 2px solid color-mix(in srgb, var(--color-cream) 30%, transparent);
+  border-radius: var(--radius);
+  background: color-mix(in srgb, var(--color-bg) 60%, transparent);
+  box-shadow: inset 0 0 0 1.5px color-mix(in srgb, var(--color-cream) 34%, transparent);
   color: var(--color-cream);
   cursor: pointer;
-  transition:
-    transform 0.15s var(--ease-hand),
-    background-color 0.2s,
-    border-color 0.2s,
-    box-shadow 0.2s;
+  transition: transform 0.15s var(--ease-hand);
 }
 
 .kc-seat-pick:hover:not(:disabled) {
-  border-color: var(--color-cream);
+  box-shadow: inset 0 0 0 1.5px var(--color-cream);
   transform: translateY(-2px);
 }
 
 .kc-seat-pick[aria-checked="true"] {
-  background: var(--color-sun);
-  color: var(--color-ink);
-  border-color: var(--color-ink);
-  box-shadow:
-    3px 3px 0 var(--color-red),
-    6px 6px 0 #0008;
+  background: var(--color-brass);
+  color: var(--color-on-brass);
+  box-shadow: 0 4px 0 var(--color-brass-lo);
 }
 
 .kc-seat-pick:active:not(:disabled) {
-  transform: scale(0.95);
+  transform: translateY(2px);
 }
 
 .kc-seat-pick:disabled {
@@ -222,20 +224,19 @@ button {
   gap: 14px;
   min-height: 72px;
   padding: 12px 18px;
-  border-radius: 20px;
-  border: 2px solid var(--color-cream);
+  border-radius: var(--radius);
+  background: color-mix(in srgb, var(--color-bg) 60%, transparent);
+  box-shadow: inset 0 0 0 1.5px var(--color-cream);
   text-align: left;
   cursor: pointer;
-  transition:
-    transform 0.15s var(--ease-hand),
-    background-color 0.2s;
+  transition: transform 0.15s var(--ease-hand);
 }
 
 .kc-option > svg {
   flex: none;
   width: 26px;
   height: 26px;
-  color: var(--color-sun);
+  color: var(--color-brass);
 }
 
 .kc-option b {
@@ -248,15 +249,15 @@ button {
 .kc-option small {
   display: block;
   font-size: 13px;
-  color: color-mix(in srgb, var(--color-cream) 68%, transparent);
+  color: var(--color-muted);
 }
 
 .kc-option:hover:not(:disabled) {
-  background: color-mix(in srgb, var(--color-cream) 7%, transparent);
+  background: color-mix(in srgb, var(--color-cream) 9%, transparent);
 }
 
 .kc-option:active:not(:disabled) {
-  transform: scale(0.97);
+  transform: translateY(2px);
 }
 
 .kc-option:disabled {
@@ -289,25 +290,12 @@ button {
 }
 
 .kc-switch:checked {
-  background: var(--color-sun);
+  background: var(--color-brass);
 }
 
 .kc-switch:checked::after {
   transform: translateX(18px);
-  background: var(--color-ink);
-}
-
-@keyframes kc-live {
-  0% {
-    box-shadow: 0 0 0 0 color-mix(in srgb, var(--color-teal) 70%, transparent);
-  }
-  100% {
-    box-shadow: 0 0 0 9px transparent;
-  }
-}
-
-.kc-live {
-  animation: kc-live 1.6s ease-out infinite;
+  background: var(--color-on-brass);
 }
 
 @keyframes kc-riffle {
@@ -336,9 +324,23 @@ button {
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .kc-live,
   .kc-riffle > div,
   .kc-menu:not([hidden]) {
     animation: none;
   }
+}
+
+[data-sonner-toaster] [data-sonner-toast] {
+  font-family: var(--font-sans);
+  font-weight: 500;
+  box-shadow: 0 16px 40px rgb(0 0 0 / 0.55);
+}
+
+[data-sonner-toaster] [data-sonner-toast] [data-icon] {
+  color: var(--color-brass);
+}
+
+.font-display {
+  letter-spacing: 0.02em;
+  text-transform: uppercase;
 }

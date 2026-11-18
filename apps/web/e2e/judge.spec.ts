@@ -64,7 +64,7 @@ test("a practice game teaches the rules, plays a move and keeps the table access
     await page.keyboard.press("d");
   }
   await expect(page.locator(".kc-feed").getByText(/^You (played|drew)/).first()).toBeVisible({ timeout: 20_000 });
-  expect(await seriousViolations(page, [".kc-rays", ".kc-grain"])).toEqual([]);
+  expect(await seriousViolations(page, [".kc-baize", ".kc-print"])).toEqual([]);
 });
 
 test("a new table can start as a guest without a wallet", async ({ page }) => {

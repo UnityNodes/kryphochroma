@@ -45,26 +45,26 @@ export function HowToPlay({ autoOpen }: { readonly autoOpen?: boolean }) {
         <span className="kc-hide-s">How to play</span>
       </button>
       <Dialog open={open} onOpenChange={setOpen}>
-        <DialogContent className="kc-box max-h-[90dvh] overflow-auto border-2 border-cream bg-ink text-left sm:max-w-[480px]">
-          <DialogTitle className="font-display text-[30px] font-normal text-sun">How to play</DialogTitle>
-          <DialogDescription className="text-muted">A shedding card game where hidden information is part of the play. Nobody can see your hand, not even the contract.</DialogDescription>
+        <DialogContent className="kc-box kc-box-wide max-h-[90dvh] overflow-auto">
+          <DialogTitle>How to play</DialogTitle>
+          <DialogDescription>A shedding card game where hidden information is part of the play. Nobody can see your hand, not even the contract.</DialogDescription>
           <ol className="grid list-decimal gap-2 pl-5 text-sm text-cream">
             {RULES.map((rule) => (
               <li key={rule}>{rule}</li>
             ))}
           </ol>
-          <h3 className="mt-2 text-xs font-semibold tracking-[.12em] text-muted uppercase">Keyboard</h3>
+          <h3 className="mt-2">Keyboard</h3>
           <dl className="grid grid-cols-[auto_1fr] gap-x-4 gap-y-1 text-sm">
             {KEYS.map(([key, what]) => (
               <div key={key} className="contents">
-                <dt className="font-semibold text-sun">{key}</dt>
+                <dt className="font-semibold text-brass">{key}</dt>
                 <dd className="text-cream">{what}</dd>
               </div>
             ))}
           </dl>
-          <p className="text-sm text-muted">
+          <p>
             Lying about a card is possible but every move updates an encrypted honesty bit. Liars are caught at the end of the round.{" "}
-            <Link href="/secret" className="text-sun underline">
+            <Link href="/secret" className="text-brass underline underline-offset-4">
               How it stays secret
             </Link>
           </p>

@@ -7,10 +7,10 @@ export default function NotFound() {
     <PageShell>
       <div className="grid flex-1 place-items-center px-4 py-14">
         <div className="kc-box grid gap-4">
-          <h1 className="font-display text-4xl leading-none text-sun">No such table</h1>
+          <h1 className="font-display text-4xl leading-none text-brass">No such table</h1>
           <p>This link points nowhere. Table invites look like /j/teal-otter; check the spelling or open a new table.</p>
           <div className="flex flex-wrap justify-center gap-3">
-            <Link href="/new" className="kc-btn kc-mono">
+            <Link href="/new" className="kc-btn kc-btn-brass">
               <Play aria-hidden />
               Play
             </Link>

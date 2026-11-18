@@ -167,7 +167,7 @@ export function NewTable() {
       <div className="mx-auto grid w-full max-w-[1200px] grid-cols-1 gap-8 px-4 pt-8 pb-16 sm:px-6 lg:pt-12">
         <div className="flex flex-wrap items-end justify-between gap-x-8 gap-y-5">
           <div className="grid max-w-2xl gap-3">
-            <h1 className="font-display text-6xl leading-[.88] text-sun [text-shadow:3px_3px_0_var(--color-red),6px_6px_0_var(--color-ink)] sm:text-7xl">Pick a table</h1>
+            <h1 className="font-display text-6xl leading-[.88] text-brass sm:text-7xl">Pick a table</h1>
             <p className="max-w-[58ch] text-base leading-relaxed text-cream/75">
               {wallet
                 ? "Your wallet signs one join for a session key that lives only in this tab. The session key plays the moves and can never touch your funds."

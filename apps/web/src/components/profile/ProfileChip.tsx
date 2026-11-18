@@ -48,9 +48,9 @@ export function ProfileChip({ profile, onSave }: ProfileChipProps) {
         <Pencil aria-hidden />
       </button>
       <Dialog open={open} onOpenChange={setOpen}>
-        <DialogContent className="kc-box max-h-[90dvh] overflow-auto border-2 border-cream bg-ink text-left sm:max-w-[440px]">
-          <DialogTitle className="font-display text-[30px] font-normal text-sun">Your profile</DialogTitle>
-          <DialogDescription className="text-muted">Everyone at your table sees this name and avatar. It lives on our server, not on chain, and is signed by your session key.</DialogDescription>
+        <DialogContent className="kc-box kc-box-wide max-h-[90dvh] overflow-auto">
+          <DialogTitle>Your profile</DialogTitle>
+          <DialogDescription>Everyone at your table sees this name and avatar. It lives on our server, not on chain, and is signed by your session key.</DialogDescription>
           <div className="flex items-center gap-3">
             <span className="kc-avatar size-14 text-2xl" style={{ "--c": avatarColor(avatar, "var(--y)") } as React.CSSProperties} aria-hidden>
               <AvatarGlyph avatar={avatar} letter="?" />
@@ -61,7 +61,7 @@ export function ProfileChip({ profile, onSave }: ProfileChipProps) {
                 value={name}
                 maxLength={NAME_MAX}
                 onChange={(e) => setName(e.target.value)}
-                className="h-11 rounded-xl border-2 border-cream/40 bg-black/30 px-3 text-cream focus:border-sun focus:outline-none"
+                className="h-11 rounded-[4px] border-[1.5px] border-cream/40 bg-bg/60 px-3 text-cream focus:border-brass focus:outline-none"
                 placeholder="2 to 16 letters"
                 aria-invalid={name.length > 0 && !clean}
               />
@@ -79,7 +79,7 @@ export function ProfileChip({ profile, onSave }: ProfileChipProps) {
                   aria-checked={parsed?.icon === icon}
                   aria-label={icon}
                   onClick={() => setAvatar(avatarOf(icon, parsed?.color ?? 0))}
-                  className={cn("grid size-11 place-items-center rounded-full border-2 text-cream", parsed?.icon === icon ? "border-sun bg-sun/20" : "border-cream/30")}
+                  className={cn("grid size-11 place-items-center rounded-[4px] border-[1.5px] text-cream", parsed?.icon === icon ? "border-brass bg-brass/20" : "border-cream/30")}
                 >
                   <Glyph className="size-5" aria-hidden />
                 </button>
@@ -95,12 +95,12 @@ export function ProfileChip({ profile, onSave }: ProfileChipProps) {
                 aria-checked={parsed?.color === c}
                 aria-label={CARD_COLORS[c]?.name ?? `Colour ${c + 1}`}
                 onClick={() => setAvatar(avatarOf(parsed?.icon ?? "cat", c))}
-                className={cn("size-11 rounded-full border-2", parsed?.color === c ? "border-cream ring-2 ring-sun" : "border-cream/30")}
+                className={cn("size-11 rounded-[4px] border-[1.5px]", parsed?.color === c ? "border-cream ring-2 ring-brass" : "border-cream/30")}
                 style={{ background: CARD_COLORS[c]?.base }}
               />
             ))}
           </div>
-          <button type="button" className="kc-btn kc-mono justify-center" onClick={save} disabled={!clean || saving}>
+          <button type="button" className="kc-btn kc-btn-brass justify-center" onClick={save} disabled={!clean || saving}>
             Save
           </button>
         </DialogContent>

@@ -27,7 +27,9 @@ import { MonoBurst } from "./MonoBurst";
 import { RadioChip } from "./RadioChip";
 import { AvatarGlyph, avatarColor } from "@/components/profile/Avatar";
 import { Seat } from "./Seat";
+import { tint } from "./tint";
 
+const WORDMARK = "KRYPHOCHROMA";
 const POSITIONS: Record<number, readonly ("left" | "top" | "right")[]> = { 2: ["top"], 3: ["left", "right"], 4: ["left", "top", "right"] };
 
 const ERROR_TEXT: Record<string, string> = {
@@ -183,8 +185,8 @@ export function TableView({ controller: game, colorBlind, onToggleShapes }: Tabl
       <div aria-hidden dangerouslySetInnerHTML={{ __html: sharedDefs() }} />
       <header className="kc-top">
         <Link href="/" className="kc-brand" aria-label="Kryphochroma, back to the menu">
-          <span className="grid size-10 shrink-0 place-items-center rounded-full border-2 border-cream/70" aria-hidden>
-            <ArrowLeft className="size-[18px]" />
+          <span className="kc-back" aria-hidden>
+            <ArrowLeft />
           </span>
           <Logo />
           <div>
@@ -200,7 +202,7 @@ export function TableView({ controller: game, colorBlind, onToggleShapes }: Tabl
             </span>
           ) : (
             <span className="kc-chip kc-hide-s">
-              <span className="kc-dot" />
+              <span className="kc-dot" aria-hidden />
               Sepolia · Zama FHE
             </span>
           )}
@@ -226,8 +228,10 @@ export function TableView({ controller: game, colorBlind, onToggleShapes }: Tabl
       </header>
       <main className="kc-table">
         <MonoBurst actor={burst.actor} stamp={burst.stamp} />
-        <div className="kc-rays" />
-        <div className="kc-grain" />
+        <div className="kc-baize" aria-hidden />
+        <div className="kc-print" aria-hidden>
+          {WORDMARK}
+        </div>
         {opponents.map((position, i) => {
           const seat = (HUMAN + i + 1) % seats;
           const s = pub.seats[seat];
@@ -300,7 +304,7 @@ export function TableView({ controller: game, colorBlind, onToggleShapes }: Tabl
             </div>
             {mine && pub.drawFour ? (
               <>
-                <button type="button" className="kc-btn" onClick={() => run({ type: "accept" })}>
+                <button type="button" className="kc-btn kc-btn-brass" onClick={() => run({ type: "accept" })}>
                   <Layers aria-hidden />
                   Take 4
                 </button>
@@ -310,12 +314,12 @@ export function TableView({ controller: game, colorBlind, onToggleShapes }: Tabl
                 </button>
               </>
             ) : mine && pub.pendingDraw > 0 ? (
-              <button type="button" className="kc-btn" onClick={() => run({ type: "take" })}>
+              <button type="button" className="kc-btn kc-btn-brass" onClick={() => run({ type: "take" })}>
                 <Layers aria-hidden />
                 Take {pub.pendingDraw}
               </button>
             ) : (
-              <button type="button" className="kc-btn" onClick={onDraw} disabled={!mine}>
+              <button type="button" className="kc-btn kc-btn-brass" onClick={onDraw} disabled={!mine}>
                 <Layers aria-hidden />
                 <span>{drawLabel}</span>
               </button>
@@ -351,12 +355,14 @@ export function TableView({ controller: game, colorBlind, onToggleShapes }: Tabl
         </div>
       </main>
       <Dialog open={pickingSlot !== null} onOpenChange={(open) => !open && setPickingSlot(null)}>
-        <DialogContent className="kc-box border-2 border-cream bg-ink sm:max-w-[360px]" showCloseButton={false}>
-          <DialogTitle className="font-display text-[30px] font-normal text-sun">Pick a colour</DialogTitle>
-          <DialogDescription className="text-muted">Your wild sets the colour for the next player.</DialogDescription>
+        <DialogContent className="kc-box" showCloseButton={false}>
+          <DialogTitle>Pick a colour</DialogTitle>
+          <DialogDescription>Your wild sets the colour for the next player.</DialogDescription>
           <div className="kc-sw">
             {CARD_COLORS.map((c, i) => (
-              <button key={c.name} type="button" aria-label={c.name} style={{ "--c": c.base } as React.CSSProperties} onClick={() => pick(i as Color)} />
+              <button key={c.name} type="button" aria-label={c.name} style={{ "--c": c.base } as React.CSSProperties} onClick={() => pick(i as Color)}>
+                {c.name}
+              </button>
             ))}
           </div>
         </DialogContent>
@@ -387,11 +393,11 @@ export function TableView({ controller: game, colorBlind, onToggleShapes }: Tabl
       <PeekDialog open={peekSlot !== null} pub={pub} me={HUMAN} names={names} onClose={() => setPeekSlot(null)} onPeek={peekAt} />
       <PeekResult peek={game.peek ?? null} names={names} colorBlind={colorBlind} onClose={() => game.clearPeek?.()} />
       <Dialog open={pub.stage === "MatchOver" && !busy}>
-        <DialogContent className="kc-box border-2 border-cream bg-ink sm:max-w-[360px]" showCloseButton={false}>
-          <DialogTitle className="font-display text-[30px] font-normal text-sun">
+        <DialogContent className="kc-box" showCloseButton={false}>
+          <DialogTitle>
             {!result ? "Round over" : result.winner === HUMAN && !game.watching ? "You win!" : result.winner === null ? "No winner" : `${names[result.winner] ?? "Seat"} wins`}
           </DialogTitle>
-          <DialogDescription className="text-muted">
+          <DialogDescription>
             {result
               ? result.winner === null
                 ? "Every hand was revealed and nobody played honestly, so nobody scores."
@@ -425,17 +431,17 @@ export function TableView({ controller: game, colorBlind, onToggleShapes }: Tabl
                   const won = result.winner === seat;
                   const lied = result.cheaters.includes(seat);
                   return (
-                    <tr key={seat} className={cn("border-t border-cream/10", won && "text-sun")}>
+                    <tr key={seat} className={cn("border-t border-cream/10", won && "text-brass")}>
                       <th scope="row" className="py-2 font-semibold">
                         {seat === HUMAN && !game.watching ? "You" : names[seat]}
                         {won && <Trophy className="ml-1 inline size-3.5" aria-label="winner" />}
-                        {lied && <span className="ml-1 rounded-full bg-red/20 px-1.5 py-0.5 text-[11px] text-red">lied</span>}
+                        {lied && <span className="ml-1 rounded-[3px] bg-red px-1.5 py-0.5 text-[11px] font-semibold text-bg">lied</span>}
                       </th>
                       <td className="py-2 text-right tabular-nums">{s.handSize === 0 ? "out" : s.handSize}</td>
                       <td className="py-2 text-right">
                         {swatch ? (
-                          <span className="inline-flex items-center gap-1" style={{ color: `color-mix(in srgb, ${swatch.base} 62%, var(--color-cream))` }}>
-                            <span className="inline-block size-2.5 rounded-full" style={{ background: swatch.base }} aria-hidden />
+                          <span className="inline-flex items-center gap-1" style={{ color: tint(swatch.base) }}>
+                            <span className="inline-block size-2.5 rounded-[2px]" style={{ background: swatch.base }} aria-hidden />
                             {swatch.name}
                           </span>
                         ) : (
@@ -450,13 +456,13 @@ export function TableView({ controller: game, colorBlind, onToggleShapes }: Tabl
           )}
           <div className="flex flex-wrap justify-center gap-3">
             {game.restart && (
-              <button type="button" className="kc-btn" onClick={game.restart}>
+              <button type="button" className="kc-btn kc-btn-brass" onClick={game.restart}>
                 <Shuffle aria-hidden />
                 Deal again
               </button>
             )}
             {game.mode === "chain" && (
-              <Link href="/new" className="kc-btn">
+              <Link href="/new" className="kc-btn kc-btn-brass">
                 <Play aria-hidden />
                 Play again
               </Link>

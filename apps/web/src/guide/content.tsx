@@ -26,7 +26,7 @@ const EXPLORER = "https://sepolia.etherscan.io";
 
 function H2({ id, children }: { readonly id: string; readonly children: ReactNode }) {
   return (
-    <h2 id={id} className="mt-14 mb-1 scroll-mt-24 font-display text-[32px] leading-tight tracking-wide text-sun first:mt-0">
+    <h2 id={id} className="mt-14 mb-1 scroll-mt-24 font-display text-[32px] leading-tight tracking-wide text-brass first:mt-0">
       {children}
     </h2>
   );
@@ -37,12 +37,12 @@ function P({ children }: { readonly children: ReactNode }) {
 }
 
 function C({ children }: { readonly children: ReactNode }) {
-  return <code className="rounded-md bg-black/40 px-1.5 py-0.5 font-mono text-[0.85em] text-sun">{children}</code>;
+  return <code className="rounded-md bg-black/40 px-1.5 py-0.5 font-mono text-[0.85em] text-brass">{children}</code>;
 }
 
 function Table({ head, rows }: { readonly head: readonly string[]; readonly rows: readonly (readonly ReactNode[])[] }) {
   return (
-    <div className="my-5 overflow-x-auto rounded-2xl border border-cream/15" tabIndex={0} role="region" aria-label="Table, scroll sideways on small screens">
+    <div className="my-5 overflow-x-auto rounded-md border border-cream/15" tabIndex={0} role="region" aria-label="Table, scroll sideways on small screens">
       <table className={cn("w-full border-collapse text-left text-sm", head.length > 2 && "min-w-[520px]")}>
         {head.some(Boolean) && (
           <thead className="bg-black/30 text-xs tracking-[.08em] text-muted uppercase">
@@ -73,7 +73,7 @@ function Table({ head, rows }: { readonly head: readonly string[]; readonly rows
 
 function Address({ value }: { readonly value: string }) {
   return (
-    <a href={`${EXPLORER}/address/${value}`} target="_blank" rel="noopener noreferrer" className="break-all font-mono text-sun underline underline-offset-4">
+    <a href={`${EXPLORER}/address/${value}`} target="_blank" rel="noopener noreferrer" className="break-all font-mono text-brass underline underline-offset-4">
       {value}
     </a>
   );
@@ -198,7 +198,7 @@ export const DOCS: readonly DocPage[] = [
       <>
         <H2 id="guest">Play as a guest</H2>
         <P>
-          Open <a href="/new" className="text-sun underline underline-offset-4">Play on Sepolia</a> and press <b>Deal me in</b> under Quick game. Your tab creates a session key and signs its seat, our relayer puts it on chain, and you sit down with three bots at a table whose cards were already drawn. Your hand opens 12 to 21 s after the click: one Sepolia block for the seat, then a few seconds of decryption.
+          Open <a href="/new" className="text-brass underline underline-offset-4">Play on Sepolia</a> and press <b>Deal me in</b> under Quick game. Your tab creates a session key and signs its seat, our relayer puts it on chain, and you sit down with three bots at a table whose cards were already drawn. Your hand opens 12 to 21 s after the click: one Sepolia block for the seat, then a few seconds of decryption.
         </P>
         <H2 id="wallet">Play with a wallet</H2>
         <P>Connect an injected wallet and switch to Sepolia. The wallet signs one <C>join</C> for the tab session key and sends it a little gas in the same transaction. After that the session key plays every move, so there are no more popups. It can never move your funds.</P>
@@ -207,7 +207,7 @@ export const DOCS: readonly DocPage[] = [
         <Callout tone="ok" title="Watching">Every table has a spectator view at /t/&lt;id&gt;/watch with public state only.</Callout>
         <H2 id="offline">Practice offline</H2>
         <P>
-          <a href="/play" className="text-sun underline underline-offset-4">Practice offline</a> runs the same rules engine against local bots, with no chain and no keys.
+          <a href="/play" className="text-brass underline underline-offset-4">Practice offline</a> runs the same rules engine against local bots, with no chain and no keys.
         </P>
       </>
     ),

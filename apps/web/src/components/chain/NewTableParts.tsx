@@ -37,22 +37,22 @@ export function FlowProgress({ status }: { readonly status: FlowStatus }) {
   return (
     <div className="grid gap-3 empty:hidden" aria-live="polite">
       {done >= 0 && (
-        <ol className="grid gap-1.5 rounded-2xl bg-black/25 p-4 text-sm">
+        <ol className="grid gap-1.5 rounded-md bg-black/25 p-4 text-sm">
           {steps.map((step, i) => (
             <li key={step} className={cn("flex items-center gap-2.5", i > done + 1 && "text-cream/45")}>
-              {i <= done ? <Check className="size-4 shrink-0 text-teal" aria-hidden /> : i === done + 1 && running ? <Loader2 className="size-4 shrink-0 animate-spin text-sun" aria-hidden /> : <span className="size-4 shrink-0 rounded-full border border-cream/30" />}
+              {i <= done ? <Check className="size-4 shrink-0 text-teal" aria-hidden /> : i === done + 1 && running ? <Loader2 className="size-4 shrink-0 animate-spin text-brass" aria-hidden /> : <span className="size-4 shrink-0 rounded-full border border-cream/30" />}
               {step}
             </li>
           ))}
         </ol>
       )}
       {error && (
-        <p role="alert" className="rounded-2xl border-2 border-red/70 bg-red/10 px-4 py-3 text-sm text-cream">
+        <p role="alert" className="rounded-md border-2 border-red/70 bg-red/10 px-4 py-3 text-sm text-cream">
           {error}
         </p>
       )}
       {warming !== null && (
-        <p role="status" className="rounded-2xl bg-black/25 px-4 py-3 text-sm text-cream/85">
+        <p role="status" className="rounded-md bg-black/25 px-4 py-3 text-sm text-cream/85">
           Every ready table is taken, a new one is drawing its cards on chain: step {warming} of {SETUP_STEPS}. Try again in half a minute, or open your own table below.
         </p>
       )}
@@ -70,12 +70,12 @@ export function QuickPanel({ onPlay, disabled, children }: { readonly onPlay: ()
           </h2>
           <p className="max-w-[40ch] text-base leading-relaxed text-cream/80">You and three bots at a table whose cards were drawn on chain before you clicked. No waiting for the draw.</p>
           <div className="flex flex-wrap items-center gap-x-5 gap-y-3 pt-1">
-            <button type="button" className="kc-btn kc-mono h-14 px-7 text-2xl" onClick={onPlay} disabled={disabled}>
+            <button type="button" className="kc-btn kc-btn-brass h-14 px-7 text-2xl" onClick={onPlay} disabled={disabled}>
               <Zap aria-hidden />
               Deal me in
             </button>
             <span className="flex items-center gap-2 text-sm text-cream/75">
-              <span className="size-2 rounded-full bg-teal shadow-[0_0_0_4px_rgba(31,158,138,.25)]" aria-hidden />
+              <span className="size-2 rounded-[1px] bg-teal" aria-hidden />
               Tables ready now
             </span>
           </div>
@@ -113,7 +113,7 @@ export function OwnTablePanel({ seats, onSeats, stack, onStack, onFriends, onBot
   return (
     <section className="kc-panel grid grid-cols-1 gap-6 p-6 sm:p-8" aria-labelledby="own-title">
       <div className="grid gap-1.5">
-        <h2 id="own-title" className="font-display text-4xl leading-none text-sun">
+        <h2 id="own-title" className="font-display text-4xl leading-none text-brass">
           Your own table
         </h2>
         <p className="text-sm text-cream/70">Pick the seats, then fill them with friends or bots.</p>
@@ -127,7 +127,7 @@ export function OwnTablePanel({ seats, onSeats, stack, onStack, onFriends, onBot
           </button>
         ))}
       </div>
-      <label className="flex cursor-pointer items-start gap-3 rounded-2xl border border-cream/15 p-4 transition-colors hover:bg-cream/5">
+      <label className="flex cursor-pointer items-start gap-3 rounded-md border border-cream/15 p-4 transition-colors hover:bg-cream/5">
         <input type="checkbox" checked={stack} onChange={(e) => onStack(e.target.checked)} disabled={locked} className="kc-switch mt-0.5" />
         <span className="grid gap-1">
           <span className="font-semibold text-cream">Stack draw two cards</span>
@@ -159,16 +159,16 @@ export function OpenTablesPanel({ tables, onOpen, disabled }: { readonly tables:
   return (
     <section className="kc-panel grid grid-cols-1 content-start gap-5 p-6 sm:p-8 lg:sticky lg:top-24" aria-labelledby="open-title">
       <div className="flex items-baseline justify-between gap-3">
-        <h2 id="open-title" className="font-display text-4xl leading-none text-sun">
+        <h2 id="open-title" className="font-display text-4xl leading-none text-brass">
           Open tables
         </h2>
         <span className="flex items-center gap-2 text-xs font-semibold text-cream/70">
-          <span className="kc-live size-2 rounded-full bg-teal" aria-hidden />
+          <span className="size-2 rounded-[1px] bg-teal" aria-hidden />
           Live
         </span>
       </div>
       {tables.length === 0 ? (
-        <div className="grid justify-items-center gap-4 rounded-2xl border-2 border-dashed border-cream/20 px-5 py-8 text-center">
+        <div className="grid justify-items-center gap-4 rounded-md border-2 border-dashed border-cream/20 px-5 py-8 text-center">
           <SeatDots count={4} filled={0} className="text-cream/40" />
           <p className="max-w-[30ch] text-sm text-cream/75">Nobody is waiting for players right now. Open a table and send the link to a friend.</p>
           <button type="button" className="kc-btn" onClick={onOpen} disabled={disabled}>
@@ -180,11 +180,11 @@ export function OpenTablesPanel({ tables, onOpen, disabled }: { readonly tables:
         <ul className="grid gap-2">
           {tables.map((t) => (
             <li key={t.id}>
-              <Link href={tablePath(t.id)} className="group flex items-center gap-4 rounded-2xl border border-cream/15 px-4 py-3 transition-colors hover:border-sun/60 hover:bg-sun/5">
+              <Link href={tablePath(t.id)} className="group flex items-center gap-4 rounded-md border border-cream/15 px-4 py-3 transition-colors hover:border-brass/60 hover:bg-brass/5">
                 <span className="grid min-w-0 flex-1 gap-1">
                   <b className="truncate font-display text-2xl leading-none font-normal tracking-wide text-cream">{tableCode(t.id)}</b>
                   <span className="flex items-center gap-2 text-xs text-cream/65">
-                    <SeatDots count={t.seats} filled={t.joined} className="text-sun" />
+                    <SeatDots count={t.seats} filled={t.joined} className="text-brass" />
                     {t.joined} of {t.seats} seats
                   </span>
                 </span>

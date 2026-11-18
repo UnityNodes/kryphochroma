@@ -19,7 +19,7 @@ function Links({ groups }: { readonly groups: readonly NavGroup[] }) {
           {g.pages.map((p) => {
             const active = path === `/docs/${p.slug}`;
             return (
-              <Link key={p.slug} href={`/docs/${p.slug}`} aria-current={active ? "page" : undefined} className={cn("flex min-h-11 items-center rounded-xl px-3 text-sm transition-colors", active ? "bg-sun/15 font-semibold text-sun" : "text-cream/80 hover:bg-cream/5 hover:text-cream")}>
+              <Link key={p.slug} href={`/docs/${p.slug}`} aria-current={active ? "page" : undefined} className={cn("flex min-h-11 items-center rounded-[4px] px-3 text-sm transition-colors", active ? "bg-brass/15 font-semibold text-brass" : "text-cream/80 hover:bg-cream/5 hover:text-cream")}>
                 {p.title}
               </Link>
             );
@@ -33,7 +33,7 @@ function Links({ groups }: { readonly groups: readonly NavGroup[] }) {
 export function Sidebar({ groups }: { readonly groups: readonly NavGroup[] }) {
   return (
     <>
-      <details className="rounded-2xl border border-cream/15 bg-black/30 p-3 lg:hidden">
+      <details className="rounded-md border border-cream/15 bg-black/30 p-3 lg:hidden">
         <summary className="cursor-pointer text-sm font-semibold text-cream">Menu</summary>
         <div className="mt-4">
           <Links groups={groups} />

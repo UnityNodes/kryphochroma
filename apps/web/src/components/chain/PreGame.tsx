@@ -60,7 +60,7 @@ export function PreGame({ id, snapshot, address, watching, onFill, onStart, onJo
     <PageShell>
       <div className="mx-auto grid w-full max-w-[1100px] grid-cols-1 gap-8 px-4 pt-8 pb-16 sm:px-6 lg:pt-12">
         <div className="grid gap-3">
-          <h1 className="font-display text-6xl leading-[.88] tracking-wide text-sun [text-shadow:3px_3px_0_var(--color-red),6px_6px_0_var(--color-ink)] sm:text-7xl">{tableCode(id)}</h1>
+          <h1 className="font-display text-6xl leading-[.88] tracking-wide text-brass sm:text-7xl">{tableCode(id)}</h1>
           <p className="flex flex-wrap items-center gap-x-3 gap-y-1 text-cream/75">
             <span className="flex items-center gap-1.5">
               <Users className="size-4" aria-hidden />
@@ -74,7 +74,7 @@ export function PreGame({ id, snapshot, address, watching, onFill, onStart, onJo
         </div>
         <div className="grid grid-cols-1 items-start gap-8 lg:grid-cols-[minmax(0,1.3fr)_minmax(0,1fr)]">
           <section className="kc-panel grid grid-cols-1 gap-6 p-6 sm:p-8" aria-labelledby="seats-title">
-            <h2 id="seats-title" className="font-display text-4xl leading-none text-sun">
+            <h2 id="seats-title" className="font-display text-4xl leading-none text-brass">
               Seats
             </h2>
             <ol className="grid gap-3 sm:grid-cols-2">
@@ -87,7 +87,7 @@ export function PreGame({ id, snapshot, address, watching, onFill, onStart, onJo
               })}
               {pending && <SeatTile n={seats.length + 1} name={myProfile.profile?.name ?? "You"} tags="you · sitting down" avatar={myProfile.profile?.avatar} mine busy />}
               {Array.from({ length: Math.max(0, free - (pending ? 1 : 0)) }, (_, k) => (
-                <li key={`free-${k}`} className="flex min-h-[72px] items-center gap-3 rounded-2xl border-2 border-dashed border-cream/20 px-4 text-cream/55">
+                <li key={`free-${k}`} className="flex min-h-[72px] items-center gap-3 rounded-md border-2 border-dashed border-cream/20 px-4 text-cream/55">
                   <span className="grid size-10 place-items-center rounded-full border-2 border-dashed border-cream/25 font-display text-lg">{seats.length + (pending ? 1 : 0) + k + 1}</span>
                   Open seat
                 </li>
@@ -105,13 +105,13 @@ export function PreGame({ id, snapshot, address, watching, onFill, onStart, onJo
             {canJoin && <WalletBar disabled={working} />}
             <div className="flex flex-wrap gap-3 empty:hidden">
               {canJoin && (
-                <button type="button" className="kc-btn kc-mono h-14 px-7 text-2xl" onClick={onJoin} disabled={working}>
+                <button type="button" className="kc-btn kc-btn-brass h-14 px-7 text-2xl" onClick={onJoin} disabled={working}>
                   <Armchair aria-hidden />
                   Take a seat
                 </button>
               )}
               {canStart && (
-                <button type="button" className="kc-btn kc-mono h-14 px-7 text-2xl" onClick={onStart} disabled={working || seats.length < 2}>
+                <button type="button" className="kc-btn kc-btn-brass h-14 px-7 text-2xl" onClick={onStart} disabled={working || seats.length < 2}>
                   <Play aria-hidden />
                   Start
                 </button>
@@ -133,7 +133,7 @@ export function PreGame({ id, snapshot, address, watching, onFill, onStart, onJo
 
 function SeatTile({ n, name, tags, avatar, mine, busy }: { readonly n: number; readonly name: string; readonly tags: string; readonly avatar?: string; readonly mine: boolean; readonly busy?: boolean }) {
   return (
-    <li className={cn("flex min-h-[72px] items-center gap-3 rounded-2xl border-2 px-4 py-3", mine ? "border-sun bg-sun/10" : "border-cream/20 bg-black/20")} aria-live={busy ? "polite" : undefined}>
+    <li className={cn("flex min-h-[72px] items-center gap-3 rounded-md border-2 px-4 py-3", mine ? "border-brass bg-brass/10" : "border-cream/20 bg-black/20")} aria-live={busy ? "polite" : undefined}>
       <span className="kc-avatar size-10 text-lg" style={{ "--c": avatarColor(avatar, "var(--muted)") } as React.CSSProperties} aria-hidden>
         <AvatarGlyph avatar={avatar} letter={String(n)} />
       </span>
@@ -165,10 +165,10 @@ function InvitePanel({ id, free, isCreator, seated, watching, working, onLeave }
   useEffect(() => setHost(window.location.host), []);
   return (
     <section className="kc-panel grid grid-cols-1 content-start gap-5 p-6 sm:p-8" aria-labelledby="invite-title">
-      <h2 id="invite-title" className="font-display text-4xl leading-none text-sun">
+      <h2 id="invite-title" className="font-display text-4xl leading-none text-brass">
         Invite
       </h2>
-      <div className="flex items-center gap-2 rounded-2xl border border-cream/20 bg-black/30 p-1.5 pl-4">
+      <div className="flex items-center gap-2 rounded-md border border-cream/20 bg-black/30 p-1.5 pl-4">
         <span className="min-w-0 flex-1 truncate text-sm font-medium text-cream/85">{host}{path}</span>
         <button type="button" className="kc-chip kc-chip-on min-h-11 shrink-0 px-4" onClick={() => void copyInvite(id)}>
           <Link2 aria-hidden />
@@ -216,7 +216,7 @@ function SetupScreen({ id, stage, step, progress }: { readonly id: string; reado
             {RIFFLE.map((c, i) => (
               <div
                 key={c.seed}
-                className="absolute top-1/2 left-1/2 w-24 drop-shadow-[6px_8px_0_rgba(0,0,0,.45)] [&>svg]:block [&>svg]:h-auto [&>svg]:w-full"
+                className="absolute top-1/2 left-1/2 w-24 drop-shadow-[0_8px_10px_rgba(0,0,0,.5)] [&>svg]:block [&>svg]:h-auto [&>svg]:w-full"
                 style={{ "--r": `${c.r}deg`, "--dx": c.dx, animationDelay: `${i * -0.35}s`, transform: `translate(-50%, -50%) rotate(${c.r}deg)` } as React.CSSProperties}
                 dangerouslySetInnerHTML={{ __html: cardBack(c.seed) }}
               />
@@ -227,10 +227,10 @@ function SetupScreen({ id, stage, step, progress }: { readonly id: string; reado
           {shuffling ? (
             <>
               <div className="h-3 w-full overflow-hidden rounded-full bg-black/40" role="progressbar" aria-label="Draw progress" aria-valuenow={progress} aria-valuemin={0} aria-valuemax={100}>
-                <div className="h-full origin-left bg-sun transition-transform duration-500" style={{ transform: `scaleX(${progress / 100})` }} />
+                <div className="h-full origin-left bg-brass transition-transform duration-500" style={{ transform: `scaleX(${progress / 100})` }} />
               </div>
               <p className="flex items-center gap-2 text-sm text-cream/80">
-                <Shuffle className="size-4 text-sun" aria-hidden />
+                <Shuffle className="size-4 text-brass" aria-hidden />
                 Step {step} of {SETUP_STEPS} · FHE.randEuint16 scaled to a full deck
               </p>
               <p className="max-w-[44ch] text-sm leading-relaxed text-cream/65">Nobody, not even the contract, knows the order of the {DECK_SIZE} cards.</p>

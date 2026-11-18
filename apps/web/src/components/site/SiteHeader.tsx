@@ -37,16 +37,16 @@ export function SiteHeader({ section, wide = false }: { readonly section?: strin
           <Link
             href={back.href}
             aria-label={`Back to ${back.label}`}
-            className="grid size-11 shrink-0 place-items-center rounded-full border-2 border-cream/80 text-cream transition-[transform,background-color] hover:bg-cream/10 active:scale-90 sm:flex sm:w-auto sm:gap-1.5 sm:pr-4 sm:pl-3 sm:text-sm sm:font-semibold"
+            className="grid size-11 shrink-0 place-items-center rounded-[4px] border-[1.5px] border-cream/60 text-cream transition-transform hover:bg-cream/10 active:translate-y-0.5 sm:flex sm:w-auto sm:gap-1.5 sm:pr-4 sm:pl-3 sm:text-sm sm:font-semibold"
           >
             <ArrowLeft className="size-[18px]" aria-hidden />
             <span className="hidden sm:inline">{back.label}</span>
           </Link>
         )}
-        <Link href="/" className="flex min-h-11 min-w-0 items-center gap-2 font-display text-[22px] leading-none text-sun [text-shadow:2px_2px_0_var(--color-red)] sm:text-2xl" aria-label="Kryphochroma home">
+        <Link href="/" className="flex min-h-11 min-w-0 items-center gap-2 font-display text-[22px] leading-none tracking-[.02em] text-cream uppercase sm:text-2xl" aria-label="Kryphochroma home">
           <span className="truncate">Kryphochroma</span>
           {section && (
-            <span className="hidden items-center gap-1 rounded-full border border-cream/20 px-2 py-0.5 font-sans text-xs text-muted [text-shadow:none] sm:flex">
+            <span className="hidden items-center gap-1 rounded-[3px] border border-cream/25 px-2 py-1 font-sans text-xs tracking-normal text-muted normal-case sm:flex">
               <BookOpen className="size-3.5" aria-hidden />
               {section}
             </span>
@@ -54,25 +54,25 @@ export function SiteHeader({ section, wide = false }: { readonly section?: strin
         </Link>
         <nav className="ml-auto hidden items-center gap-1 text-sm md:flex" aria-label="Main">
           {LINKS.map(({ href, label, match }) => (
-            <Link key={href} href={href} aria-current={match(path) ? "page" : undefined} className="flex min-h-11 items-center rounded-full px-3 text-cream/75 transition-colors hover:text-cream aria-[current=page]:text-sun">
+            <Link key={href} href={href} aria-current={match(path) ? "page" : undefined} className="flex min-h-11 items-center rounded-[4px] px-3 font-medium text-cream/80 transition-colors hover:text-cream aria-[current=page]:text-brass">
               {label}
             </Link>
           ))}
-          <Link href="/new" aria-current={playing ? "page" : undefined} className="kc-chip kc-chip-on ml-1 min-h-11 px-4">
+          <Link href="/new" aria-current={playing ? "page" : undefined} className="kc-btn kc-btn-brass ml-2">
             <Play aria-hidden />
             Play
           </Link>
         </nav>
         <div className="ml-auto flex items-center gap-2 md:hidden">
           {!playing && (
-            <Link href="/new" className="kc-chip kc-chip-on min-h-11 px-4">
+            <Link href="/new" className="kc-btn kc-btn-brass">
               <Play aria-hidden />
               Play
             </Link>
           )}
           <button
             type="button"
-            className="grid size-11 place-items-center rounded-full border-2 border-cream/80 transition-transform active:scale-90"
+            className="grid size-11 place-items-center rounded-[4px] border-[1.5px] border-cream/60 transition-transform active:translate-y-0.5"
             aria-expanded={open}
             aria-controls="site-menu"
             aria-label={open ? "Close menu" : "Open menu"}
@@ -94,7 +94,7 @@ export function SiteHeader({ section, wide = false }: { readonly section?: strin
               <Link
                 href={href}
                 aria-current={match(path) ? "page" : undefined}
-                className="flex min-h-13 items-center gap-3 rounded-2xl px-3 text-lg font-semibold text-cream transition-colors hover:bg-cream/5 aria-[current=page]:bg-sun aria-[current=page]:text-ink"
+                className="flex min-h-13 items-center gap-3 rounded-[4px] px-3 text-lg font-semibold text-cream transition-colors hover:bg-cream/5 aria-[current=page]:bg-brass aria-[current=page]:text-on-brass"
               >
                 <Icon className="size-5 shrink-0" aria-hidden />
                 {label}

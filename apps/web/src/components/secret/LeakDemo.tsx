@@ -13,7 +13,7 @@ const NAMES = ["You", "Mira", "Delta", "Orin"] as const;
 
 function Row({ label, cards, open, note }: { readonly label: string; readonly cards: readonly number[]; readonly open: boolean; readonly note: string }) {
   return (
-    <div className="grid content-start gap-2 rounded-2xl border border-cream/10 bg-black/20 p-3">
+    <div className="grid content-start gap-2 rounded-md border border-cream/10 bg-black/20 p-3">
       <div className="flex flex-wrap items-baseline justify-between gap-x-3 gap-y-1 text-sm">
         <b className="text-cream">{label}</b>
         <span className="flex items-center gap-1 text-xs text-muted">
@@ -41,7 +41,7 @@ export function LeakDemo() {
     <section aria-labelledby="leak-title" className="grid gap-6 lg:grid-cols-[minmax(0,1fr)_minmax(0,1.6fr)] lg:items-start">
       <div aria-hidden className="absolute size-0 overflow-hidden" dangerouslySetInnerHTML={{ __html: sharedDefs() }} />
       <div className="grid gap-4 lg:sticky lg:top-8">
-        <h2 id="leak-title" className="font-display text-3xl text-sun">
+        <h2 id="leak-title" className="font-display text-3xl text-brass">
           The same table, two contracts
         </h2>
         <p className="text-muted">Flip the switch to see the table the way a plain smart contract would store it: in storage anyone can read through an RPC.</p>
@@ -50,7 +50,7 @@ export function LeakDemo() {
           role="switch"
           aria-checked={leak}
           onClick={() => setLeak((v) => !v)}
-          className={cn("flex w-full items-center gap-3 rounded-2xl border-2 px-4 py-3 text-left transition-colors", leak ? "border-red bg-red/15" : "border-cream/30 bg-black/20")}
+          className={cn("flex w-full items-center gap-3 rounded-md border-2 px-4 py-3 text-left transition-colors", leak ? "border-red bg-red/15" : "border-cream/30 bg-black/20")}
         >
           <span className={cn("relative h-7 w-12 shrink-0 rounded-full transition-colors", leak ? "bg-red" : "bg-cream/25")}>
             <span className={cn("absolute top-1 size-5 rounded-full bg-cream transition-transform", leak ? "translate-x-6" : "translate-x-1")} />
@@ -59,7 +59,7 @@ export function LeakDemo() {
             <b className="text-cream">Show what an open contract would leak</b>
             <span className="text-sm text-muted">{leak ? "Leaking: every hand and the draw pile are public" : "Sealed: FHE ciphertexts, only your hand decrypts"}</span>
           </span>
-          {leak ? <Eye className="ml-auto size-5 text-red" aria-hidden /> : <EyeOff className="ml-auto size-5 text-sun" aria-hidden />}
+          {leak ? <Eye className="ml-auto size-5 text-red" aria-hidden /> : <EyeOff className="ml-auto size-5 text-brass" aria-hidden />}
         </button>
         <p className="text-sm text-muted" aria-live="polite">
           {leak
@@ -67,7 +67,7 @@ export function LeakDemo() {
             : "Kryphochroma stores every card as an FHE ciphertext. Your session key decrypts your own hand. Nobody else, not the contract and not us, can read the rest."}
         </p>
       </div>
-      <div className={cn("grid gap-3 rounded-[28px] border-2 p-3 transition-colors sm:p-4", leak ? "border-red shadow-[6px_6px_0_var(--color-red)]" : "border-cream shadow-[6px_6px_0_var(--color-red)]")} style={{ background: "radial-gradient(120% 90% at 50% 40%, var(--felt1), var(--felt2))" }}>
+      <div className={cn("grid gap-3 rounded-md border-2 p-3 sm:p-4", leak ? "border-red" : "border-cream/30")} style={{ background: "radial-gradient(120% 90% at 50% 40%, var(--felt1), var(--felt2))" }}>
         <div className="grid gap-3 sm:grid-cols-2">
           {hands.map((cards, seat) => (
             <Row key={NAMES[seat]} label={NAMES[seat] ?? `Seat ${seat}`} cards={cards} open={seat === 0 || leak} note={seat === 0 ? "decrypted for you only" : leak ? "readable by anyone" : "sealed · FHE.allow to its owner"} />

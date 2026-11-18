@@ -30,23 +30,23 @@ export default async function DocPage({ params }: { readonly params: Promise<{ s
         <div className="mt-12 border-t border-cream/10 pt-10">{doc.body(readDeployment())}</div>
         <nav className="mt-16 grid gap-3 border-t border-cream/10 pt-6 sm:grid-cols-2" aria-label="Pages">
           {prev ? (
-            <Link href={`/docs/${prev.slug}`} className="group rounded-2xl border border-cream/15 p-4 hover:border-sun/60">
+            <Link href={`/docs/${prev.slug}`} className="group rounded-md border border-cream/15 p-4 hover:border-brass/60">
               <span className="flex items-center gap-1 text-xs text-muted">
                 <ArrowLeft className="size-3.5" aria-hidden />
                 Previous
               </span>
-              <b className="text-cream group-hover:text-sun">{prev.title}</b>
+              <b className="text-cream group-hover:text-brass">{prev.title}</b>
             </Link>
           ) : (
             <span />
           )}
           {next && (
-            <Link href={`/docs/${next.slug}`} className="group rounded-2xl border border-cream/15 p-4 text-right hover:border-sun/60">
+            <Link href={`/docs/${next.slug}`} className="group rounded-md border border-cream/15 p-4 text-right hover:border-brass/60">
               <span className="flex items-center justify-end gap-1 text-xs text-muted">
                 Next
                 <ArrowRight className="size-3.5" aria-hidden />
               </span>
-              <b className="text-cream group-hover:text-sun">{next.title}</b>
+              <b className="text-cream group-hover:text-brass">{next.title}</b>
             </Link>
           )}
         </nav>
@@ -56,7 +56,7 @@ export default async function DocPage({ params }: { readonly params: Promise<{ s
         <ul className="mt-3 grid gap-2 border-l border-cream/10 pl-3 text-sm">
           {doc.headings.map((h) => (
             <li key={h.id}>
-              <a href={`#${h.id}`} className="text-cream/70 hover:text-sun">
+              <a href={`#${h.id}`} className="text-cream/70 hover:text-brass">
                 {h.text}
               </a>
             </li>

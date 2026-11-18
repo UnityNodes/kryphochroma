@@ -16,7 +16,7 @@ export function Code({ children, title }: { readonly children: string; readonly 
     }
   };
   return (
-    <figure className="my-5 overflow-hidden rounded-2xl border border-cream/15 bg-black/40">
+    <figure className="my-5 overflow-hidden rounded-md border border-cream/15 bg-black/40">
       <figcaption className="flex items-center justify-between border-b border-cream/10 px-4 py-2 text-xs text-muted">
         <span className="font-mono">{title ?? "code"}</span>
         <button type="button" onClick={() => void copy()} className="flex items-center gap-1 rounded-md px-2 py-1 hover:bg-cream/10 hover:text-cream" aria-label="Copy code">
@@ -32,9 +32,9 @@ export function Code({ children, title }: { readonly children: string; readonly 
 }
 
 export function Callout({ tone = "info", title, children }: { readonly tone?: "info" | "warn" | "ok"; readonly title: string; readonly children: ReactNode }) {
-  const border = tone === "warn" ? "border-red/40 bg-red/10" : tone === "ok" ? "border-teal/40 bg-teal/10" : "border-sun/35 bg-sun/10";
+  const border = tone === "warn" ? "border-red/40 bg-red/10" : tone === "ok" ? "border-teal/40 bg-teal/10" : "border-brass/35 bg-brass/10";
   return (
-    <aside className={cn("my-5 rounded-2xl border px-4 py-3 text-sm", border)}>
+    <aside className={cn("my-5 rounded-md border px-4 py-3 text-sm", border)}>
       <b className="block text-cream">{title}</b>
       <div className="mt-1 text-muted">{children}</div>
     </aside>

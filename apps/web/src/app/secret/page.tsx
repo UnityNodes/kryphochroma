@@ -40,20 +40,20 @@ export default function SecretPage() {
       <SiteHeader />
       <main className="mx-auto grid w-full max-w-[1200px] gap-12 px-4 py-8 sm:px-6 lg:py-14">
         <header className="grid gap-4">
-          <h1 className="font-display text-5xl leading-[0.95] text-sun [text-shadow:3px_3px_0_var(--r)] sm:text-7xl">How it stays secret</h1>
+          <h1 className="font-display text-5xl leading-[0.95] text-brass sm:text-7xl">How it stays secret</h1>
           <p className="max-w-3xl text-lg text-muted">Hands, the deck, veiled cards and secret colours live on Sepolia as Zama FHE ciphertexts. The contract draws, deals and checks every move without ever seeing a card.</p>
         </header>
 
         <LeakDemo />
 
         <section aria-labelledby="mech-title" className="grid gap-5">
-          <h2 id="mech-title" className="font-display text-3xl text-sun">
+          <h2 id="mech-title" className="font-display text-3xl text-brass">
             Hidden information is the game
           </h2>
           <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
             {MECHANICS.map(({ icon: Icon, title, text, ops }) => (
-              <article key={title} className="grid content-start gap-3 rounded-3xl border border-cream/15 bg-black/25 p-5">
-                <Icon className="size-7 text-sun" aria-hidden />
+              <article key={title} className="grid content-start gap-3 rounded-md border border-cream/15 bg-black/25 p-5">
+                <Icon className="size-7 text-brass" aria-hidden />
                 <h3 className="font-display text-2xl text-cream">{title}</h3>
                 <p className="text-sm text-muted">{text}</p>
                 <code className="mt-auto text-xs text-teal">{ops}</code>
@@ -63,17 +63,17 @@ export default function SecretPage() {
         </section>
 
         <section aria-labelledby="matrix-title" className="grid gap-5">
-          <h2 id="matrix-title" className="font-display text-3xl text-sun">
+          <h2 id="matrix-title" className="font-display text-3xl text-brass">
             What is hidden, from whom, until when
           </h2>
           <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
             {MATRIX.map((row) => (
-              <dl key={row.data} className="grid content-start gap-2 rounded-3xl border border-cream/15 bg-black/25 p-5 text-sm">
+              <dl key={row.data} className="grid content-start gap-2 rounded-md border border-cream/15 bg-black/25 p-5 text-sm">
                 <dt className="flex items-center gap-2 text-base font-semibold text-cream">
-                  <Lock className="size-4 text-sun" aria-hidden />
+                  <Lock className="size-4 text-brass" aria-hidden />
                   {row.data}
                 </dt>
-                <dd className="font-mono text-xs text-sun">{row.type}</dd>
+                <dd className="font-mono text-xs text-brass">{row.type}</dd>
                 <dd>
                   <span className="text-muted">Who sees it: </span>
                   {row.who}
@@ -91,8 +91,8 @@ export default function SecretPage() {
           </div>
         </section>
 
-        <section aria-labelledby="leaks-title" className="grid gap-3 rounded-3xl border border-cream/15 p-5 sm:p-6">
-          <h2 id="leaks-title" className="font-display text-2xl text-sun">
+        <section aria-labelledby="leaks-title" className="grid gap-3 rounded-md border border-cream/15 p-5 sm:p-6">
+          <h2 id="leaks-title" className="font-display text-2xl text-brass">
             What still shows, on purpose
           </h2>
           <ul className="grid list-disc gap-2 pl-5 text-sm text-muted md:grid-cols-2 md:gap-x-10">
@@ -103,7 +103,7 @@ export default function SecretPage() {
         </section>
 
         <div className="flex flex-wrap gap-3">
-          <Link href="/new" className="kc-btn kc-mono">
+          <Link href="/new" className="kc-btn kc-btn-brass">
             <Play aria-hidden />
             Play on Sepolia
           </Link>

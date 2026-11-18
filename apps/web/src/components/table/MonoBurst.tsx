@@ -17,9 +17,9 @@ export function MonoBurst({ actor, stamp }: { readonly actor: string | null; rea
   if (!shown) return null;
   return (
     <div key={shown.stamp} className="kc-mono-burst pointer-events-none absolute inset-0 z-40 grid place-items-center" aria-hidden>
-      <div className="grid justify-items-center gap-1">
-        <span className="font-display text-[clamp(64px,14vw,168px)] leading-none text-sun [text-shadow:4px_4px_0_var(--color-red),9px_9px_0_var(--color-ink)]">MONO!</span>
-        <span className="rounded-full bg-ink/85 px-4 py-1 text-lg font-semibold text-cream">{shown.actor === "You" ? "You called it" : `${shown.actor} called it`}</span>
+      <div className="kc-burst">
+        <b>MONO!</b>
+        <span>{shown.actor === "You" ? "You called it" : `${shown.actor} called it`}</span>
       </div>
     </div>
   );

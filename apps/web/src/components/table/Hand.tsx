@@ -10,6 +10,7 @@ const EDGE_RATIO = 1.7;
 const MAX_SPREAD_DEG = 3.2;
 const TOTAL_SPREAD_DEG = 22;
 const ARC = 0.6;
+const MAX_DROP_RATIO = 0.2;
 const FALLBACK_CARD_PX = 80;
 
 export interface HandProps {
@@ -53,6 +54,7 @@ export function Hand({ hand, mine, playable, colorBlind, onPlay, slotRef, boxRef
   const n = entries.length;
   const step = n > 1 ? Math.max(0, Math.min(size.card * STEP_RATIO, (size.width - size.card * EDGE_RATIO) / (n - 1))) : 0;
   const spread = Math.min(MAX_SPREAD_DEG, TOTAL_SPREAD_DEG / Math.max(n, 1));
+  const maxDrop = size.card * MAX_DROP_RATIO;
 
   return (
     <div className="kc-hand" ref={setBox} role="group" aria-label={`Your hand, ${n} cards`} onKeyDown={moveFocus}>
@@ -66,7 +68,7 @@ export function Hand({ hand, mine, playable, colorBlind, onPlay, slotRef, boxRef
             ref={(node) => slotRef(slot, node)}
             type="button"
             className={cn("kc-card", ok && "kc-ok", mine && !ok && "kc-no")}
-            style={{ "--x": `${k * step}px`, "--r": `${k * spread}deg`, "--y": `${k * k * ARC}px`, zIndex: i } as React.CSSProperties}
+            style={{ "--x": `${k * step}px`, "--r": `${k * spread}deg`, "--y": `${Math.min(k * k * ARC, maxDrop)}px`, zIndex: i } as React.CSSProperties}
             aria-label={sealed ? "Card being decrypted" : `${cardLabel(card)}${ok ? ", playable" : ""}`}
             aria-disabled={!ok}
             onClick={() => ok && onPlay(slot)}

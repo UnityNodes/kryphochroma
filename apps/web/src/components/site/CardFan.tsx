@@ -15,7 +15,7 @@ export function CardFan({ cards, className, cardClassName }: { readonly cards: r
       {cards.map((card, i) => (
         <div
           key={i}
-          className={cn("kc-fan-card absolute top-1/2 left-1/2 drop-shadow-[8px_10px_0_rgba(0,0,0,.45)] [&>svg]:block [&>svg]:h-auto [&>svg]:w-full", cardClassName ?? "w-[40%]")}
+          className={cn("kc-fan-card absolute top-1/2 left-1/2 drop-shadow-[0_10px_12px_rgba(0,0,0,.5)] [&>svg]:block [&>svg]:h-auto [&>svg]:w-full", cardClassName ?? "w-[40%]")}
           style={{ zIndex: i + 1, transform: `translate(calc(-50% + ${card.x}), calc(-50% + ${card.y})) rotate(${card.rotate}deg)`, animationDelay: `${i * -1.6}s` }}
           dangerouslySetInnerHTML={{ __html: card.svg }}
         />
