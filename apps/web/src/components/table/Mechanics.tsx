@@ -124,7 +124,7 @@ export function PeekDialog({ open, pub, me, names, onClose, onPeek }: PeekDialog
 }
 
 export interface PeekResultProps {
-  readonly peek: { readonly seat: number; readonly slot: number; readonly card: Card | null } | null;
+  readonly peek: { readonly seat: number; readonly slot: number; readonly card: Card | null; readonly landed?: boolean } | null;
   readonly names: readonly string[];
   readonly colorBlind: boolean;
   readonly onClose: () => void;
@@ -144,7 +144,7 @@ export function PeekResult({ peek, names, colorBlind, onClose }: PeekResultProps
         {peek && (peek.card === null || peek.card < 0) && (
           <p className="flex items-center justify-center gap-1 text-sm text-muted" role="status">
             <Lock className="size-4" aria-hidden />
-            Decrypting with your session key…
+            {peek.landed === false ? "Waiting for your move to land on Sepolia, about one block…" : "Decrypting with your session key…"}
           </p>
         )}
       </DialogContent>

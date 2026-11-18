@@ -37,6 +37,7 @@ import { tableCode } from "@/lib/invite";
 import { friendlyError } from "./errors";
 import { RECEIPT_POLL_MS, RPC_PROXY_PATH, sepoliaTransport } from "./rpc";
 import { toGameEvents } from "./events";
+import { grantedHandle, lastPeek } from "./peek";
 import { type RevealedBots, provisionalResult } from "@/game/provisional";
 
 const POLL_MS = 2000;
@@ -83,6 +84,13 @@ function keeperLogs(logs: readonly Log[]): Log[] {
 
 function parseAction(raw: SignedAction & { table: string | bigint }): SignedAction {
   return { ...raw, table: BigInt(raw.table) };
+}
+
+interface PendingPeek {
+  readonly seat: number;
+  readonly slot: number;
+  readonly source: { readonly hash: Hex; readonly logIndex: number; readonly block: bigint; readonly session: Hex } | null;
+  readonly handle: Hex | null;
 }
 
 export interface ChainGame extends TableController {
@@ -140,7 +148,8 @@ export function useChainGame(id: bigint, colorBlind: boolean, watchOnly = false)
   const ownSecret = useRef<Hex | null>(null);
   const shownSecrets = useRef<readonly number[] | undefined>(undefined);
   const [verifying, setVerifying] = useState(false);
-  const pendingPeek = useRef<{ seat: number; slot: number } | null>(null);
+  const pendingPeek = useRef<PendingPeek | null>(null);
+  const resolvingPeek = useRef(false);
   const [secretColor, setSecretColor] = useState<number | null>(null);
   const [peek, setPeek] = useState<TableController["peek"]>(null);
   const [sonar, setSonar] = useState<TableController["sonar"]>(null);
@@ -161,7 +170,6 @@ export function useChainGame(id: bigint, colorBlind: boolean, watchOnly = false)
       if (!base) return;
       for (const e of events) {
         if (e.type === "RoundSettled") settled.current = { winner: e.winner, points: e.points, cheaters: e.cheaters, bonus: e.bonus };
-        if (e.type === "Peeked" && e.seat === mySeat.current) pendingPeek.current = { seat: e.target, slot: e.slot };
         if (e.type === "Sonared" && e.seat === mySeat.current) startSonar(e.target, e.color);
       }
       const projection = project(base.state, base.nonces, actions.current);
@@ -279,6 +287,27 @@ export function useChainGame(id: bigint, colorBlind: boolean, watchOnly = false)
     [clients, id, reconcile],
   );
 
+  /** The card a peek opened is named by the access grant in the transaction that mined it, so nothing is asked of the KMS before that transaction lands; a node that does not have the receipt yet is asked again on the next pass. */
+  const resolvePeek = useCallback(async () => {
+    const at = pendingPeek.current;
+    if (!at?.source || at.handle || resolvingPeek.current) return;
+    resolvingPeek.current = true;
+    try {
+      const { publicClient } = clients;
+      const receipt = await publicClient.getTransactionReceipt({ hash: at.source.hash });
+      const granted = grantedHandle(receipt.logs, at.source.logIndex, at.source.session);
+      const handle = granted ?? ((await publicClient.readContract({ address: TABLE_ADDRESS, abi: kryphoTableAbi, functionName: "handOf", args: [id, at.seat], blockNumber: at.source.block })) as readonly Hex[])[at.slot];
+      if (pendingPeek.current === at && handle) {
+        pendingPeek.current = { ...at, handle };
+        wake.current();
+      }
+    } catch {
+      setTimeout(() => wake.current(), DECRYPT_RETRY_MS);
+    } finally {
+      resolvingPeek.current = false;
+    }
+  }, [clients, id]);
+
   const poll = useCallback(async () => {
     const { publicClient } = clients;
     const block = await publicClient.getBlockNumber({ cacheTime: 0 });
@@ -298,13 +327,13 @@ export function useChainGame(id: bigint, colorBlind: boolean, watchOnly = false)
       return;
     }
     const peekAt = pendingPeek.current;
+    if (peekAt?.source && !peekAt.handle) void resolvePeek();
     const zero = Promise.resolve(undefined);
-    const [discardRaw, noncesRaw, ownRaw, secretRaw, peekRaw, pingRaw, queuesRaw] = await Promise.all([
+    const [discardRaw, noncesRaw, ownRaw, secretRaw, pingRaw, queuesRaw] = await Promise.all([
       read("discardOf", [id]),
       read("noncesOf", [id]),
       seat >= 0 ? read("handOf", [id, seat]) : zero,
       seat >= 0 ? read("secretOf", [id, seat]) : zero,
-      seat >= 0 && peekAt ? read("handOf", [id, peekAt.seat]) : zero,
       seat >= 0 ? read("sonarOf", [id, seat]) : zero,
       Promise.all(seats.map((_, i) => read("queueOf", [id, i]))),
     ]);
@@ -317,7 +346,7 @@ export function useChainGame(id: bigint, colorBlind: boolean, watchOnly = false)
       const slots = Number(seats[seat]?.slots ?? 0);
       const own = ownRaw as readonly Hex[];
       const secret = secretRaw as Hex;
-      const peekHandle = peekAt ? (peekRaw as readonly Hex[])[peekAt.slot] : undefined;
+      const peekHandle = peekAt?.handle ?? undefined;
       const ping = pingRaw as Hex;
       const sonarAt = pendingSonar.current;
       const fresh = sonarAt && !/^0x0+$/.test(ping) && ping !== sonarAt.stale ? ping : undefined;
@@ -340,7 +369,7 @@ export function useChainGame(id: bigint, colorBlind: boolean, watchOnly = false)
         pendingSonar.current = null;
       }
       if (peekAt && peekHandle && plain.current.has(peekHandle)) {
-        setPeek({ ...peekAt, card: plain.current.get(peekHandle) ?? null });
+        setPeek({ seat: peekAt.seat, slot: peekAt.slot, card: plain.current.get(peekHandle) ?? null, landed: true });
         pendingPeek.current = null;
       }
     }
@@ -351,11 +380,18 @@ export function useChainGame(id: bigint, colorBlind: boolean, watchOnly = false)
     const logs = from <= block ? await publicClient.getLogs({ address: TABLE_ADDRESS, fromBlock: from, toBlock: block }) : [];
     const past = Number(table.stage) >= 6 && !settled.current && !recovered.current ? await earlierResult(block) : [];
     lastBlock.current = block;
+    const peeked = seat >= 0 ? lastPeek(logs, id, seat) : null;
+    const session = seats[seat]?.session;
+    if (peeked && session) {
+      pendingPeek.current = { seat: peeked.seat, slot: peeked.slot, source: { hash: peeked.hash, logIndex: peeked.logIndex, block: peeked.block, session }, handle: null };
+      setPeek((shown) => (shown && shown.card === null ? { ...shown, landed: true } : shown));
+      void resolvePeek();
+    }
     readSecrets([...past, ...logs], seats);
     chain.current = { state, nonces, hand: seat >= 0 ? (ownRaw as readonly Hex[]) : [], queue: myQueue };
     actions.current = actions.current.filter((a) => a.nonce >= (nonces[a.seat] ?? 0));
     reconcile(toGameEvents(keeperLogs([...past, ...logs]), id));
-  }, [clients, burner, id, reconcile, watchOnly, ensurePermit, decryptOwn, earlierResult, readSecrets]);
+  }, [clients, burner, id, reconcile, watchOnly, ensurePermit, decryptOwn, earlierResult, readSecrets, resolvePeek]);
 
   useEffect(() => {
     let stopped = false;
@@ -409,8 +445,8 @@ export function useChainGame(id: bigint, colorBlind: boolean, watchOnly = false)
       projected.current = next.state;
       for (const e of next.events) if (e.type === "Sonared" && e.seat === mySeat.current) startSonar(e.target, e.color);
       for (const e of next.events) if (e.type === "Peeked" && e.seat === mySeat.current) {
-        pendingPeek.current = { seat: e.target, slot: e.slot };
-        setPeek({ seat: e.target, slot: e.slot, card: null });
+        pendingPeek.current = { seat: e.target, slot: e.slot, source: null, handle: null };
+        setPeek({ seat: e.target, slot: e.slot, card: null, landed: false });
       }
       enqueue({ state: next.state, events: next.events });
     },
