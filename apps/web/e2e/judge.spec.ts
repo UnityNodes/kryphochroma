@@ -10,11 +10,12 @@ async function seriousViolations(page: Page, exclude: readonly string[] = []) {
 
 test("landing points to play, practice and the privacy page", async ({ page }) => {
   await page.goto("/");
-  await expect(page.getByRole("heading", { name: "Kryphochroma" })).toBeVisible();
-  await expect(page.getByRole("link", { name: "Play on Sepolia", exact: true })).toHaveAttribute("href", "/new");
-  await expect(page.getByRole("link", { name: "Practice offline", exact: true })).toHaveAttribute("href", "/play");
+  await expect(page.getByRole("heading", { level: 1, name: "The card game nobody can peek at." })).toBeVisible();
+  await expect(page.getByRole("link", { name: "Play on Sepolia", exact: true }).first()).toHaveAttribute("href", "/new");
+  await expect(page.getByRole("link", { name: "Practice offline", exact: true }).first()).toHaveAttribute("href", "/play");
   await expect(page.getByRole("link", { name: "How it stays secret" }).first()).toHaveAttribute("href", "/secret");
-  await expect(page.getByRole("heading", { name: "Four moves that only work encrypted" })).toBeVisible();
+  await page.locator("#moves").scrollIntoViewIfNeeded();
+  await expect(page.getByRole("heading", { name: "Hidden information is the game." })).toBeVisible();
   expect(await seriousViolations(page)).toEqual([]);
 });
 
