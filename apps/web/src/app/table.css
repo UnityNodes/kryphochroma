@@ -232,6 +232,11 @@ header.kc-top{display:flex;align-items:center;justify-content:space-between;gap:
   .kc-wait-hint{max-width:calc(100vw - 48px)}
   .kc-wait-hint small{font-size:11.5px}
 }
+@media (max-width:380px){
+  header.kc-top{gap:8px;padding:8px}
+  .kc-chips{gap:4px}
+  .kc-chip{padding:0 7px}
+}
 @media (max-width:440px){
   .kc-brand b{display:none}
   .kc-actions{gap:8px 6px}
