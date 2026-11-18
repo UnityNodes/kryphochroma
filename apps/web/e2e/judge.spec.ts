@@ -15,7 +15,7 @@ test("landing points to play, practice and the privacy page", async ({ page }) =
   await expect(page.getByRole("link", { name: "Practice offline", exact: true }).first()).toHaveAttribute("href", "/play");
   await expect(page.getByRole("link", { name: "How it stays secret" }).first()).toHaveAttribute("href", "/secret");
   await page.locator("#moves").scrollIntoViewIfNeeded();
-  await expect(page.getByRole("heading", { name: "Hidden information is the game." })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Four moves for sealed cards" })).toBeVisible();
   expect(await seriousViolations(page)).toEqual([]);
 });
 

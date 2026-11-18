@@ -24,7 +24,7 @@ export function Footer() {
       <div className="br-foot__in">
         <div className="br-foot__lead">
           <img src={`${ASSET_BASE}/logo.svg`} alt="" width={40} height={40} />
-          <p>A shedding card game in the Crazy Eights family, built on Zama FHEVM.</p>
+          <p>A card game in the Crazy Eights family, with hands encrypted by Zama FHE.</p>
         </div>
         <ul className="br-foot__links">
           <li>

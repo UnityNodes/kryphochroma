@@ -16,7 +16,7 @@ export function LandingStage() {
       <div className="br-tag br-tag--spy">
         <div className="br-tag__box">
           <span className="br-tag__v">Slot 5</span>
-          <span className="br-tag__s">The table sees the slot. You see the card.</span>
+          <span className="br-tag__s">The table sees which slot, you see the card</span>
         </div>
       </div>
       <div className="br-tag br-tag--sonar">

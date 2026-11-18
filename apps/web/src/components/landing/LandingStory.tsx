@@ -68,7 +68,7 @@ export function Hero() {
         <div className="br-hero__low">
           <div className="br-hero__copy">
             <p className="br-hero__lead" data-in>
-              Hands, the deck and every bluff are FHE ciphertexts. The contract draws, deals and checks each move without seeing a card. Only you can decrypt yours.
+              A card game where every card is encrypted on chain. Not even the contract that deals them can look at your hand.
             </p>
             <PlayCtas />
           </div>
@@ -84,7 +84,7 @@ export function Game() {
       <div className="br-pin">
         <div className="br-col br-col--r">
           <h2 className="br-game__h" data-rv>
-            <span>The game</span> <span>in one breath</span>
+            <span>How a</span> <span>round goes</span>
           </h2>
           <p className="br-game__count" data-rv>
             <span className="br-game__num">138</span>
@@ -99,7 +99,7 @@ export function Game() {
             ))}
           </ul>
           <p className="br-game__run" data-rv>
-            Seven cards each. Match the top card by colour or number, empty your hand first, score what is left in the other hands. Skip, Reverse, Draw Two and wilds work as you would expect. No card to play: draw one. Down to one card: call Mono! or get caught and draw 2. A Wild +4 can be challenged, and one encrypted bit settles it.
+            Everyone starts with seven cards. On your turn you play one that matches the top card by colour or number, and if nothing fits you draw. Skip, Reverse, Draw Two and wilds do what you expect. Down to your last card you call Mono!, or you can be caught and draw two. A Wild +4 can be challenged: the contract answers yes or no without showing a hand. Whoever empties their hand first scores what the others still hold.
           </p>
         </div>
       </div>
@@ -112,10 +112,10 @@ export function Hidden() {
     <section className="br-hidden" id="moves" data-shot="2">
       <div className="br-hidden__in">
         <p className="br-eyebrow" data-rv>
-          Four moves that only work encrypted
+          Because every card is encrypted
         </p>
         <h2 className="br-hidden__h" data-rv>
-          <span>Hidden</span> <span>information</span> <span>is the game.</span>
+          <span>Four moves</span> <span>for sealed</span> <span>cards</span>
         </h2>
       </div>
     </section>
@@ -160,9 +160,9 @@ const MOVES: readonly MoveCopy[] = [
     side: "l",
     still: BACK_FACE,
     name: "Veil",
-    what: "Once per round, lay any card face down and name a number card that fits the pile. The next player believes you or doubts.",
-    stake: "A lie draws 4. A wrong doubt draws 2.",
-    chain: "On chain the real card stays encrypted. A doubt reveals one bit, true or false.",
+    what: "Once a round you can put any card face down and say it is a number card that fits the pile. The next player either takes your word or doubts it.",
+    stake: "A lie costs you 4 cards. A wrong doubt costs them 2.",
+    chain: "The real card stays encrypted on chain. A doubt opens a single bit: was the claim true.",
   },
   {
     shot: SPYGLASS_SHOT,
@@ -170,11 +170,11 @@ const MOVES: readonly MoveCopy[] = [
     side: "r",
     still: "blue-spyglass",
     name: "Spyglass",
-    what: "A coloured action card. Play it and look at one sealed card in a rival hand.",
-    stake: "Everyone sees which slot you looked at. Never the card.",
+    what: "An action card. When you play it you pick one sealed card in another player's hand and look at it.",
+    stake: "The table sees which card you picked, not what it is.",
     chain: (
       <>
-        <code>FHE.allow(card, yourSessionKey)</code> Your session key, and only yours, gets access to it.
+        <code>FHE.allow(card, yourSessionKey)</code> gives your session key access to that one card.
       </>
     ),
   },
@@ -184,9 +184,9 @@ const MOVES: readonly MoveCopy[] = [
     side: "l",
     still: BACK_FACE,
     name: "Sonar",
-    what: "Once per round, instead of your move, ask how many cards of one colour a rival holds.",
-    stake: "The table sees the ping. Only you see the number.",
-    chain: "The contract counts inside the encrypted hand. No card turns.",
+    what: "Once a round, instead of playing, you can ask how many cards of one colour another player holds.",
+    stake: "The others see that you asked, but not the answer.",
+    chain: "The contract counts inside the encrypted hand and no card is turned over.",
   },
   {
     shot: 6,
@@ -198,9 +198,9 @@ const MOVES: readonly MoveCopy[] = [
         <span>Secret</span> <span>colour</span>
       </>
     ),
-    what: "A colour dealt to you alone. Go out on a card of that colour and the round counts double.",
-    stake: "Nobody can block a colour they can not see.",
-    chain: "It is revealed with the hands at the end of the round.",
+    what: "At the deal you get a colour that only you know. If your last card is that colour, the round counts double.",
+    stake: "The others cannot tell which colour to keep from you.",
+    chain: "It is shown with the hands when the round ends.",
   },
 ];
 
@@ -211,24 +211,24 @@ export function Moves() {
 const STEPS: readonly Omit<StepProps, "order">[] = [
   {
     title: "Drawn by the contract",
-    text: "Every card is an encrypted random draw with the odds of a full 138 card deck. Nothing is shuffled. Nobody sees a card before its owner decrypts it, not even the server.",
-    note: "A table draws its 138 cards in the background, about 30 s, before anyone sits down.",
+    text: "There is no shuffled deck sitting anywhere. Each card is an encrypted random draw made by the contract, with the same odds as a 138 card deck, and it stays unread until its owner decrypts it. The server cannot read it either.",
+    note: "A table draws its cards in the background, in about 30 seconds, before anyone sits down.",
   },
   {
     title: "Dealt to one key",
-    text: "Each card handle is granted to one session key. Your tab decrypts your hand through the Zama relayer, with no wallet popup.",
+    text: "Every card is granted to the session key of the player who gets it. Your browser tab decrypts your hand through the Zama relayer, so there is no wallet popup.",
     note: (
       <>
-        <code>FHE.allow(handle, sessionKey)</code> A drawn card opens at once because your next two draws are already granted to you.
+        <code>FHE.allow(handle, sessionKey)</code> Your next two draws are granted in advance, which is why a drawn card opens right away.
       </>
     ),
   },
   {
-    title: "Revealed only by the rules",
-    text: "The first discard, a doubted veil and the hands at the end of a round each open with a KMS proof the contract checks.",
+    title: "Opened only when the rules say so",
+    text: "The first discard, a doubted veil and the hands at the end of a round are the only things that open. Each comes with a proof from the Zama KMS.",
     note: (
       <>
-        <code>FHE.checkSignatures</code> The contract checks the proof before anything opens.
+        <code>FHE.checkSignatures</code> The contract verifies that proof before it accepts the value.
       </>
     ),
   },

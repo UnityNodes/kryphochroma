@@ -432,7 +432,7 @@ body:has(.kc-landing) { background: #07130e; }
 }
 .kc-landing .br-hidden__h {
   font: 400 8vw/0.86 var(--br-disp);
-  font-size: calc(100cqw / 11.95);
+  font-size: calc(100cqw / 10.9);
   text-transform: uppercase;
   white-space: nowrap;
   color: var(--br-cream);
@@ -760,10 +760,11 @@ body:has(.kc-landing) { background: #07130e; }
 }
 .kc-landing .br-foot__lead img { flex: none; }
 .kc-landing .br-foot__lead p {
-  max-width: 15em;
-  font: 400 clamp(24px, 2.4vw, 34px)/1 var(--br-disp);
-  text-transform: uppercase;
-  color: var(--br-cream);
+  min-width: 0;
+  max-width: 28em;
+  font-size: 15px;
+  line-height: 1.5;
+  color: var(--br-cream-2);
 }
 .kc-landing .br-foot__links { min-width: 0; list-style: none; }
 .kc-landing .br-foot__links a {

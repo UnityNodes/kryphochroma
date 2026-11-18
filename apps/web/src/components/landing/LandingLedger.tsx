@@ -7,28 +7,28 @@ const LEAKED_WHEN = "As soon as it is on chain";
 
 const LEDGER = [
   { what: "Cards in a hand", who: "Owner only", when: "Played cards open with the move, the rest at round end" },
-  { what: "Deck order", who: "Nobody", when: "Never. Not to the contract, not to the operators" },
-  { what: "Veiled card", who: "Nobody", when: "One bit, and only if doubted" },
+  { what: "Deck order", who: "Nobody", when: "Never, not even to the contract or to us" },
+  { what: "Veiled card", who: "Nobody", when: "Only one bit, and only if someone doubts" },
   { what: "Spyglass target", who: "The spyglass player", when: "Never to the rest of the table" },
-  { what: "Sonar answer", who: "The player who pinged", when: "The table sees the ping, not the number" },
+  { what: "Sonar answer", who: "The player who pinged", when: "The others only see that you asked" },
   { what: "Secret colour", who: "Owner only", when: "At round end, with the hands" },
-  { what: "Had the colour at a Wild +4", who: "Nobody", when: "One bit, and only if challenged" },
-  { what: "Honesty of every move", who: "Nobody", when: "Once, at round end" },
+  { what: "Had the colour at a Wild +4", who: "Nobody", when: "Only one bit, and only on a challenge" },
+  { what: "Honesty of every move", who: "Nobody", when: "At round end" },
 ] as const;
 
 const WAYS = [
-  { title: "Quick game", text: "You and three bots at a table whose cards were drawn before you clicked. No wallet and no test ETH.", href: "/new", action: "Take a seat" },
+  { title: "Quick game", text: "You sit down with three bots at a table whose cards were drawn before you clicked. You need no wallet and no test ETH.", href: "/new", action: "Take a seat" },
   {
     title: "With friends",
     text: (
       <>
-        Open a table for 2 to 4 and share a link like <code>/j/teal-otter</code>. Play opens the moment the last seat is taken.
+        Open a table for two to four players and send them a link like <code>/j/teal-otter</code>. The game starts as soon as the last seat is taken.
       </>
     ),
     href: "/new",
     action: "Open a table",
   },
-  { title: "Practice offline", text: "The same rules against bots in your browser. Nothing goes on chain.", href: "/play", action: "Start practice" },
+  { title: "Practice offline", text: "The same rules against bots, entirely in your browser. Nothing is sent to the chain.", href: "/play", action: "Start practice" },
 ] as const;
 
 export function Ledger() {
@@ -39,7 +39,7 @@ export function Ledger() {
           <span>What stays</span> <span>secret</span>
         </h2>
         <div className="br-ledger__bar" data-rv>
-          <p>A ledger of who can read what. Flip it to see the same table on a contract with open state.</p>
+          <p>Who can read what during a game. Use the switch to see the same table on an ordinary contract, where all state is public.</p>
           <button type="button" className="br-switch" role="switch" aria-checked="false" aria-label="Show what an open contract would leak">
             <span className="br-switch__o br-switch__o--a">Sealed</span>
             <span className="br-switch__o br-switch__o--b">Open contract</span>
@@ -74,7 +74,7 @@ export function Ledger() {
             <strong>Public for everyone:</strong> whose turn it is, how many cards each seat holds, the discard pile, and that a veil, peek or ping happened.
           </p>
           <Link className="br-link" href="/secret">
-            See the same table as an open contract would leak it
+            See what an open contract would leak
             <ArrowUpRight aria-hidden="true" size={18} strokeWidth={1.5} />
           </Link>
         </div>
@@ -95,7 +95,7 @@ export function Ways() {
             height={1800}
             loading="lazy"
           />
-          <figcaption>The real table. This round is practice against local bots.</figcaption>
+          <figcaption>The table itself, here in a practice round against bots.</figcaption>
         </figure>
         <div className="br-ways__col">
           <h2 className="br-ways__h" data-rv>
@@ -113,7 +113,7 @@ export function Ways() {
         </div>
         <div className="br-fm" data-rv>
           <h3>Radio at the table</h3>
-          <p>Eleven free internet stations, from old time jazz to lo-fi and synthwave. Nothing plays until you press play.</p>
+          <p>Eleven free internet stations, from old time jazz to lo-fi and synthwave. It stays silent until you press play.</p>
         </div>
       </div>
     </section>
