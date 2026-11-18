@@ -1,6 +1,6 @@
 "use client";
 
-import { CARD_COLORS, sharedDefs } from "@kryphochroma/cards";
+import { CARD_COLORS, PALETTE, sharedDefs } from "@kryphochroma/cards";
 import { type Color, type Peek, canDraw, cardLabel, canSayMono, botCatchTarget, isPlayable, isSpyglass, isWild, legalMoves, veilClaims } from "@kryphochroma/rules";
 import { ArrowLeft, BadgeCheck, Box, Eye, EyeOff, House, Layers, Play, Radar, Shapes, Shuffle, Swords, Trophy, Volume2, VolumeX, WifiOff } from "lucide-react";
 import Link from "next/link";
@@ -508,16 +508,20 @@ export function TableView({ controller: game, colorBlind, onToggleShapes }: Tabl
 }
 
 function Logo() {
+  const [red, , teal] = CARD_COLORS;
   return (
-    <svg viewBox="0 0 40 40" aria-hidden>
-      {CARD_COLORS.map((c, i) => {
-        const span = (Math.PI * 2) / CARD_COLORS.length;
-        const a0 = i * span - Math.PI / 2;
-        const a1 = a0 + span;
-        return <path key={c.name} d={`M20 20L${20 + 17 * Math.cos(a0)} ${20 + 17 * Math.sin(a0)}A17 17 0 0 1 ${20 + 17 * Math.cos(a1)} ${20 + 17 * Math.sin(a1)}Z`} fill={c.base} />;
-      })}
-      <circle cx="20" cy="20" r="17" fill="none" stroke="var(--cream)" strokeWidth="2.5" />
-      <circle cx="20" cy="20" r="6" fill="var(--ink)" stroke="var(--cream)" strokeWidth="2" />
+    <svg viewBox="0 0 96 96" aria-hidden>
+      <g transform="rotate(40 60 34)">
+        <rect x="47" y="7" width="26" height="54" rx="6" fill="var(--cream)" />
+        <rect x="52" y="12" width="16" height="44" rx="2.5" fill={red?.base} />
+      </g>
+      <g transform="rotate(-40 60 62)">
+        <rect x="47" y="35" width="26" height="54" rx="6" fill="var(--cream)" />
+        <rect x="52" y="40" width="16" height="44" rx="2.5" fill={teal?.base} />
+      </g>
+      <rect x="12" y="8" width="30" height="80" rx="7" fill="var(--cream)" />
+      <rect x="18" y="14" width="18" height="68" rx="3" fill={PALETTE.ink} />
+      <circle cx="27" cy="48" r="4.5" fill="var(--brass)" />
     </svg>
   );
 }
