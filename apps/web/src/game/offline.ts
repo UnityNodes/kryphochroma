@@ -27,6 +27,20 @@ export function newOfflineGame(options: OfflineOptions): Transition {
   return initialState({ seats: options.seats, mode: "single", targetScore: 500, stackDrawTwo: options.stackDrawTwo }, options.seed);
 }
 
+/** Moves cards from the deck into one hand until it holds `size`. Only for looking at a crowded hand without playing for it: a test page asks for it, a game never does. */
+export function withHandSize(state: GameState, seat: number, size: number): GameState {
+  const hand = [...(state.hands[seat] ?? [])];
+  const deck = [...state.deck];
+  const held = () => hand.filter((card) => card !== null).length;
+  while (held() < size && deck.length > 0) {
+    const free = hand.indexOf(null);
+    if (free < 0) break;
+    hand[free] = deck.shift() ?? null;
+  }
+  const seats = state.pub.seats.map((s, i) => (i === seat ? { ...s, handSize: held(), slots: hand.map((card) => card !== null) } : s));
+  return { ...state, deck, hands: state.hands.map((h, i) => (i === seat ? hand : h)), pub: { ...state.pub, seats, deckCount: deck.length } };
+}
+
 export type AutoStep = { readonly kind: "auto"; readonly transition: Transition; readonly delayMs: number } | { readonly kind: "human" } | { readonly kind: "over" };
 
 export function nextAutoStep(state: GameState, think: () => number): AutoStep {

@@ -5,7 +5,7 @@ import { animate } from "motion";
 export const MS = { deal: 380, stagger: 70, play: 540, draw: 440 } as const;
 const ARC_PX = 50;
 const PEAK_SCALE = 1.12;
-const REDUCED_FACTOR = 0.25;
+export const REDUCED_FACTOR = 0.25;
 
 export type Anchors = Map<string, HTMLElement>;
 

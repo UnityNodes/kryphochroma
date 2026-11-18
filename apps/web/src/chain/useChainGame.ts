@@ -550,6 +550,7 @@ export function useChainGame(id: bigint, colorBlind: boolean, watchOnly = false)
     busy: queue.busy || sending,
     feed: queue.feed,
     anchors: queue.anchors,
+    playing: queue.playing,
     act,
     catchSeat,
     chips: seated ? [tableCode(id)] : [tableCode(id), "Watching"],

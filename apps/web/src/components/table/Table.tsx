@@ -2,7 +2,7 @@
 
 import { CARD_COLORS, sharedDefs } from "@kryphochroma/cards";
 import { type Color, type Peek, canDraw, cardLabel, canSayMono, botCatchTarget, isPlayable, isSpyglass, isWild, legalMoves, veilClaims } from "@kryphochroma/rules";
-import { ArrowLeft, BadgeCheck, Eye, EyeOff, House, Layers, Play, Radar, Shapes, Shuffle, Swords, Trophy, Volume2, VolumeX, WifiOff } from "lucide-react";
+import { ArrowLeft, BadgeCheck, Box, Eye, EyeOff, House, Layers, Play, Radar, Shapes, Shuffle, Swords, Trophy, Volume2, VolumeX, WifiOff } from "lucide-react";
 import Link from "next/link";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { toast } from "sonner";
@@ -16,6 +16,7 @@ import { useAutoPass } from "@/game/useAutoPass";
 import { useRadio } from "@/game/useRadio";
 import { useSound } from "@/game/useSound";
 import { useOfflineGame } from "@/game/useOfflineGame";
+import { useTableView } from "@/game/useTableView";
 import { cn } from "@/lib/utils";
 import { Center } from "./Center";
 import { RoundEndProgress, WaitHint, challengeNote, refillNote, sealedCardNote } from "./ChainProgress";
@@ -26,6 +27,8 @@ import { PeekDialog, PeekResult, SecretBadge, SecretChip, SonarDialog, SonarResu
 import { MonoBurst } from "./MonoBurst";
 import { RadioChip } from "./RadioChip";
 import { AvatarGlyph, avatarColor } from "@/components/profile/Avatar";
+import { Table3dSurface } from "@/components/table3d/Table3dSurface";
+import { modelOf } from "@/components/table3d/model";
 import { Seat } from "./Seat";
 import { tint } from "./tint";
 
@@ -125,6 +128,24 @@ export function TableView({ controller: game, colorBlind, onToggleShapes }: Tabl
   );
 
   const playable = useCallback((slot: number) => moves.some((m) => m.type === "play" && m.slot === slot), [moves]);
+  const { view, choose, fallBack } = useTableView();
+  const is3d = view === "3d";
+  const watching = Boolean(game.watching);
+  const model = useMemo(() => modelOf(state, HUMAN, watching, (slot) => mine && playable(slot)), [state, HUMAN, watching, mine, playable]);
+  const warned = useRef(false);
+  const onUnavailable = useCallback(() => {
+    fallBack();
+    if (warned.current) return;
+    warned.current = true;
+    toast.message("The 3D table could not start in this browser, showing the 2D table");
+  }, [fallBack]);
+  useEffect(() => {
+    if (!is3d) return;
+    document.documentElement.dataset.kcSurface = "3d";
+    return () => {
+      delete document.documentElement.dataset.kcSurface;
+    };
+  }, [is3d]);
 
   const onPlay = useCallback(
     (slot: number) => {
@@ -173,15 +194,15 @@ export function TableView({ controller: game, colorBlind, onToggleShapes }: Tabl
     const onKey = (e: KeyboardEvent) => {
       if (e.target instanceof HTMLInputElement || e.ctrlKey || e.metaKey || e.altKey || e.repeat) return;
       if (document.querySelector('[role="dialog"]')) return;
-      if ((e.key === "d" || e.key === "D") && mine) onDraw();
-      if ((e.key === "m" || e.key === "M") && canSayMono(pub, HUMAN)) run({ type: "mono" });
+      if ((e.code === "KeyD" || e.key === "d" || e.key === "D") && mine) onDraw();
+      if ((e.code === "KeyM" || e.key === "m" || e.key === "M") && canSayMono(pub, HUMAN)) run({ type: "mono" });
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
   });
 
   return (
-    <div className="kc-app">
+    <div className={cn("kc-app", is3d && "kc-app-3d")}>
       <div aria-hidden dangerouslySetInnerHTML={{ __html: sharedDefs() }} />
       <header className="kc-top">
         <Link href="/" className="kc-brand" aria-label="Kryphochroma, back to the menu">
@@ -215,6 +236,10 @@ export function TableView({ controller: game, colorBlind, onToggleShapes }: Tabl
             <Trophy aria-hidden />
             Round {pub.round + 1}
           </span>
+          <button type="button" className={cn("kc-chip", is3d && "kc-chip-on")} aria-pressed={is3d} aria-label="3D table" onClick={() => choose(is3d ? "2d" : "3d")}>
+            <Box aria-hidden />
+            <span className="kc-hide-s">{is3d ? "3D" : "2D"}</span>
+          </button>
           <button type="button" className={cn("kc-chip", colorBlind && "kc-chip-on")} aria-pressed={colorBlind} aria-label="Colour-blind shapes" onClick={onToggleShapes}>
             <Shapes aria-hidden />
             <span className="kc-hide-s">Shapes</span>
@@ -226,7 +251,8 @@ export function TableView({ controller: game, colorBlind, onToggleShapes }: Tabl
           <HowToPlay autoOpen={game.mode === "practice"} />
         </div>
       </header>
-      <main className="kc-table">
+      <main className={cn("kc-table", is3d && "kc-3d")}>
+        {is3d && <Table3dSurface model={model} playing={game.playing ?? null} shapes={colorBlind} me={HUMAN} onUnavailable={onUnavailable} />}
         <MonoBurst actor={burst.actor} stamp={burst.stamp} />
         <div className="kc-baize" aria-hidden />
         <div className="kc-print" aria-hidden>
@@ -239,6 +265,7 @@ export function TableView({ controller: game, colorBlind, onToggleShapes }: Tabl
           return (
             <Seat
               key={seat}
+              seat={seat}
               position={position}
               name={names[seat] ?? `Seat ${seat}`}
               color={SEAT_COLORS[seat] ?? "var(--y)"}
@@ -252,6 +279,7 @@ export function TableView({ controller: game, colorBlind, onToggleShapes }: Tabl
         })}
         {game.watching && pub.seats[HUMAN] && (
           <Seat
+            seat={HUMAN}
             position="bottom"
             name={names[HUMAN] ?? `Seat ${HUMAN}`}
             color={SEAT_COLORS[HUMAN] ?? "var(--y)"}
@@ -271,6 +299,7 @@ export function TableView({ controller: game, colorBlind, onToggleShapes }: Tabl
           note={challengeNote(game.sync, pub.stage, pub.veil !== null && pub.drawFour === null) ?? (game.watching ? null : (sealedCardNote(game.sync, hand.filter((c) => c !== null && c < 0).length, hand.filter((c) => c !== null).length) ?? (pub.stage === "Playing" ? refillNote(game.sync, pub.deckCount) : null)))}
           canDraw={mine && drawLabel === "Draw" && pub.drawFour === null && pub.pendingDraw === 0}
           colorBlind={colorBlind}
+          veiled={is3d && pub.veil ? `Veiled as ${cardLabel(pub.veil.claim)}` : null}
           onDraw={onDraw}
           deckRef={anchor(anchorKey.deck)}
           pileRef={anchor(anchorKey.pile)}

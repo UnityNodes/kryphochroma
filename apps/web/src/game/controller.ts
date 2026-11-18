@@ -1,6 +1,7 @@
 import type { GameState, Move } from "@kryphochroma/rules";
 import type { Anchors } from "./flight";
 import type { FeedLine } from "./offline";
+import type { PlayingTransition } from "./useTransitionQueue";
 
 export interface TableController {
   readonly mode: "practice" | "chain";
@@ -11,6 +12,7 @@ export interface TableController {
   readonly busy: boolean;
   readonly feed: readonly FeedLine[];
   readonly anchors: Anchors;
+  readonly playing?: PlayingTransition | null;
   readonly act: (move: Move) => Promise<string | null>;
   readonly catchSeat: (target: number) => void;
   readonly restart?: () => void;

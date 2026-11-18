@@ -20,12 +20,13 @@ export interface CenterProps {
   readonly note?: WaitNote | null;
   readonly canDraw: boolean;
   readonly colorBlind: boolean;
+  readonly veiled?: string | null;
   readonly onDraw: () => void;
   readonly deckRef: (el: HTMLButtonElement | null) => void;
   readonly pileRef: (el: HTMLDivElement | null) => void;
 }
 
-export function Center({ discard, color, deckCount, dir, status, note, canDraw, colorBlind, onDraw, deckRef, pileRef }: CenterProps) {
+export function Center({ discard, color, deckCount, dir, status, note, canDraw, colorBlind, veiled, onDraw, deckRef, pileRef }: CenterProps) {
   const start = Math.max(0, discard.length - PILE_SHOWN);
   const current = CARD_COLORS[color]?.base ?? "var(--r)";
   const top = discard[discard.length - 1];
@@ -70,6 +71,7 @@ export function Center({ discard, color, deckCount, dir, status, note, canDraw, 
                 {inPlay}
               </b>
               <span>in play</span>
+              {veiled && <span className="kc-veiled">{veiled}</span>}
             </span>
           )}
         </div>

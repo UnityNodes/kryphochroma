@@ -1,19 +1,26 @@
 "use client";
 
-import { type Move, RuleError, applyCatch, sonarCount } from "@kryphochroma/rules";
+import { type GameState, type Move, RuleError, applyCatch, sonarCount } from "@kryphochroma/rules";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { BOT_PROFILES } from "@kryphochroma/abi";
 import { useMyProfile } from "@/components/profile/useMyProfile";
 import type { TableController } from "./controller";
-import { HUMAN, SEAT_NAMES, humanMove, newOfflineGame, nextAutoStep } from "./offline";
+import { readDebug, seededHand } from "@/components/table3d/debug";
+import { HUMAN, SEAT_NAMES, humanMove, newOfflineGame, nextAutoStep, withHandSize } from "./offline";
 import { useTransitionQueue } from "./useTransitionQueue";
 
 const THINK_MIN_MS = 600;
 const THINK_SPREAD_MS = 900;
 
+function deal(seats: number, stackDrawTwo: boolean, seed: number): GameState {
+  const state = newOfflineGame({ seats, stackDrawTwo, seed }).state;
+  const size = typeof window === "undefined" ? null : seededHand(readDebug(window));
+  return size === null ? state : withHandSize(state, HUMAN, size);
+}
+
 export function useOfflineGame(seats: number, stackDrawTwo: boolean, colorBlind: boolean): TableController {
   const seed = useRef(Math.floor(Math.random() * 2 ** 31));
-  const initial = useRef(newOfflineGame({ seats, stackDrawTwo, seed: seed.current }).state);
+  const initial = useRef(deal(seats, stackDrawTwo, seed.current));
   const queue = useTransitionQueue(initial.current, HUMAN, SEAT_NAMES, colorBlind);
   const { shown: state, busy, enqueue, reset } = queue;
   const [peek, setPeek] = useState<TableController["peek"]>(null);
@@ -52,7 +59,7 @@ export function useOfflineGame(seats: number, stackDrawTwo: boolean, colorBlind:
 
   const restart = useCallback(() => {
     seed.current += 1;
-    reset(newOfflineGame({ seats, stackDrawTwo, seed: seed.current }).state);
+    reset(deal(seats, stackDrawTwo, seed.current));
   }, [seats, stackDrawTwo, reset]);
 
   const clearPeek = useCallback(() => setPeek(null), []);
@@ -67,6 +74,7 @@ export function useOfflineGame(seats: number, stackDrawTwo: boolean, colorBlind:
     busy,
     feed: queue.feed,
     anchors: queue.anchors,
+    playing: queue.playing,
     act,
     catchSeat,
     restart,

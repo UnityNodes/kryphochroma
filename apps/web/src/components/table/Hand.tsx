@@ -1,7 +1,8 @@
 "use client";
 
-import { type Card, cardLabel, colorOf, rankOf } from "@kryphochroma/rules";
+import { type Card, cardLabel } from "@kryphochroma/rules";
 import { useCallback, useLayoutEffect, useState } from "react";
+import { handOrder } from "@/game/handOrder";
 import { cn } from "@/lib/utils";
 import { CardBack, CardFace } from "./CardSvg";
 
@@ -47,10 +48,7 @@ export function Hand({ hand, mine, playable, colorBlind, onPlay, slotRef, boxRef
     [boxRef],
   );
 
-  const entries = hand
-    .map((card, slot) => ({ card, slot }))
-    .filter((e): e is { card: Card; slot: number } => e.card !== null)
-    .sort((a, b) => (a.card < 0 ? 1 : 0) - (b.card < 0 ? 1 : 0) || colorOf(a.card) - colorOf(b.card) || rankOf(a.card) - rankOf(b.card));
+  const entries = handOrder(hand);
   const n = entries.length;
   const step = n > 1 ? Math.max(0, Math.min(size.card * STEP_RATIO, (size.width - size.card * EDGE_RATIO) / (n - 1))) : 0;
   const spread = Math.min(MAX_SPREAD_DEG, TOTAL_SPREAD_DEG / Math.max(n, 1));
@@ -65,6 +63,7 @@ export function Hand({ hand, mine, playable, colorBlind, onPlay, slotRef, boxRef
         return (
           <button
             key={slot}
+            data-slot={slot}
             ref={(node) => slotRef(slot, node)}
             type="button"
             className={cn("kc-card", ok && "kc-ok", mine && !ok && "kc-no")}
