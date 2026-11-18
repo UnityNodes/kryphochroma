@@ -31,7 +31,9 @@ export function Seat({ seat, position, name, color, avatar, handSize, active, sa
           <b>{saidMono ? `${name} · Mono!` : name}</b>
           <span>
             <Lock aria-hidden />
-            {handSize} cards<span className="kc-long">&nbsp;· sealed</span>
+            {handSize}
+            <span className="kc-unit">&nbsp;cards</span>
+            <span className="kc-long">&nbsp;· sealed</span>
           </span>
         </div>
       </div>

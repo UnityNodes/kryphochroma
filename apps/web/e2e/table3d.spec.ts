@@ -1,6 +1,9 @@
 import { expect, test } from "@playwright/test";
 
+const SCENE_TIMEOUT = 60_000;
+
 test.use({ launchOptions: { args: ["--use-angle=swiftshader", "--enable-unsafe-swiftshader", "--ignore-gpu-blocklist"] } });
+test.describe.configure({ timeout: 150_000 });
 
 test("the 3d table plays a card through the hidden hand and switches back to 2d", async ({ page }) => {
   const errors: string[] = [];
@@ -18,7 +21,7 @@ test("the 3d table plays a card through the hidden hand and switches back to 2d"
   const chip = page.getByRole("button", { name: "3D table" });
   await expect(chip).toHaveAttribute("aria-pressed", "true");
   const canvas = page.locator(".kc-table canvas");
-  await expect(canvas).toBeVisible({ timeout: 30_000 });
+  await expect(canvas).toBeVisible({ timeout: SCENE_TIMEOUT });
 
   const status = page.locator(".kc-status");
   await expect(status).toHaveText(/Your turn|Play the drawn card or pass/, { timeout: 20_000 });
@@ -47,4 +50,48 @@ test("the 3d table plays a card through the hidden hand and switches back to 2d"
   await expect(canvas).toHaveCount(0);
   await expect(page.locator("button.kc-deck")).toBeVisible();
   await expect(hand.getByRole("button").first()).toBeVisible();
+});
+
+test("the 3d table falls back to 2d when the browser gives no graphics context", async ({ page }) => {
+  await page.addInitScript(() => {
+    window.localStorage.setItem("kc-howto-seen", "1");
+    const original = HTMLCanvasElement.prototype.getContext;
+    HTMLCanvasElement.prototype.getContext = function (this: HTMLCanvasElement, kind: string, ...rest: unknown[]) {
+      return kind.includes("webgl") ? null : Reflect.apply(original, this, [kind, ...rest]);
+    } as typeof original;
+  });
+  await page.goto("/play?view=3d&seats=2");
+  const chip = page.getByRole("button", { name: "3D table" });
+  await expect(chip).toHaveAttribute("aria-pressed", "false", { timeout: SCENE_TIMEOUT });
+  await expect(page.getByText("The 3D table could not start in this browser, showing the 2D table")).toBeVisible();
+  await expect(page.locator(".kc-table canvas")).toHaveCount(0);
+  await expect(page.locator("button.kc-deck")).toBeVisible();
+  await expect(page.locator(".kc-status")).toHaveText(/Your turn|Play the drawn card or pass/, { timeout: 20_000 });
+});
+
+test("the 3d table goes back to 2d when its graphics context is lost", async ({ page }) => {
+  await page.addInitScript(() => window.localStorage.setItem("kc-howto-seen", "1"));
+  await page.goto("/play?view=3d&seats=2");
+  const canvas = page.locator(".kc-table canvas");
+  await expect(canvas).toBeVisible({ timeout: SCENE_TIMEOUT });
+  await canvas.evaluate((el: HTMLCanvasElement) => {
+    const gl = el.getContext("webgl2") ?? el.getContext("webgl");
+    gl?.getExtension("WEBGL_lose_context")?.loseContext();
+  });
+  await expect(page.getByRole("button", { name: "3D table" })).toHaveAttribute("aria-pressed", "false", { timeout: 20_000 });
+  await expect(canvas).toHaveCount(0);
+  await expect(page.locator("button.kc-deck")).toBeVisible();
+});
+
+test("the stored view is used and the address beats it", async ({ page }) => {
+  await page.addInitScript(() => {
+    window.localStorage.setItem("kc-howto-seen", "1");
+    window.localStorage.setItem("kc-table-view", "3d");
+  });
+  await page.goto("/play?seats=2");
+  const chip = page.getByRole("button", { name: "3D table" });
+  await expect(chip).toHaveAttribute("aria-pressed", "true");
+  await page.goto("/play?seats=2&view=2d");
+  await expect(chip).toHaveAttribute("aria-pressed", "false");
+  await expect(page.locator("button.kc-deck")).toBeVisible();
 });

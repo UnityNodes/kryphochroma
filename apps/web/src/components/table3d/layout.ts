@@ -144,8 +144,8 @@ export function solveLayout(W: number, H: number, frame: Frame): Layout {
     return {
       ...base,
       table,
-      seatLeft: { x: -xs, z: -1.6, yaw: -PI / 2, maxLen: 1.9, sp: 0.3, plate: anchor(-xs + 0.92, -1.6, "l"), chair: null },
-      seatRight: { x: xs, z: -1.6, yaw: PI / 2, maxLen: 1.9, sp: 0.3, plate: anchor(xs - 0.92, -1.6, "r"), chair: null },
+      seatLeft: { x: -xs, z: -1.6, yaw: -PI / 2, maxLen: 1.9, sp: 0.3, plate: anchor(-xs + 0.86, -2.0, "l"), chair: null },
+      seatRight: { x: xs, z: -1.6, yaw: PI / 2, maxLen: 1.9, sp: 0.3, plate: anchor(xs - 0.86, -1.3, "r"), chair: null },
       seatFar: { x: 0, z: -4.0, yaw: PI, maxLen: 2.3, sp: 0.34, plate: farOnRail ? anchor(0, table.z0 - 0.12, "c", 0.18, true) : anchor(0, -2.86, "c"), chair: null },
       seatNear: { x: 0, z: 2.75, yaw: 0, maxLen: 2.3, sp: 0.34, plate: anchor(0, 3.9, "c"), chair: null },
       deck: { x: -0.95, z: 1.15, yaw: 0.1 },

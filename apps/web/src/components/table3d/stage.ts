@@ -22,10 +22,10 @@ import { linear } from "../landing/color";
 import { seeded } from "../landing/random";
 import { feltTexture } from "../landing/textures";
 import { type CardKit, createCardKit } from "./cards";
-import { CARD_T, CARD_TINTS, DECK_SLAB, DECK_SLABS, FLOOR_Y, LAMP_Y, ROOM_INK } from "./constants";
+import { CARD_H, CARD_T, CARD_TINTS, CARD_W, DECK_SLAB, DECK_SLABS, FLOOR_Y, LAMP_Y, ROOM_INK } from "./constants";
 import { chairGeometry, floorGeometry, tableGeometry } from "./furniture";
 import type { Layout, SeatSpot } from "./layout";
-import { RING_TEX_R, boardsTexture, chalkTexture, printTexture, woodTexture } from "./textures";
+import { RING_TEX_R, boardsTexture, chalkTexture, outlineTexture, printTexture, woodTexture } from "./textures";
 
 const LAMP_INTENSITY = 2.25;
 const KEY_INTENSITY = 1.39;
@@ -36,6 +36,7 @@ const BOUNCE_Y = -1.2;
 const RING_INK = 0.92;
 const RING_FADE_S = 0.45;
 const PRINT_INK = 0.46;
+const OUTLINE_INK = 0.5;
 const SOFT_SCALE = 0.8;
 const SOFT_PIXELS = 500000;
 const MAX_CHAIRS = 3;
@@ -123,7 +124,8 @@ function build(renderer: WebGLRenderer, canvas: HTMLCanvasElement, forceHq: bool
     stage.onDirty?.();
   };
   const print = printTexture(touch);
-  textures.push(feltTex, wood, boards, chalk, print);
+  const outline = outlineTexture();
+  textures.push(feltTex, wood, boards, chalk, print, outline);
 
   const felt = new Mesh(new BufferGeometry(), new MeshStandardMaterial({ color: linear("#235a47"), roughness: 1, metalness: 0, map: feltTex, bumpMap: feltTex, bumpScale: 0.006, vertexColors: true }));
   felt.receiveShadow = true;
@@ -152,6 +154,12 @@ function build(renderer: WebGLRenderer, canvas: HTMLCanvasElement, forceHq: bool
   printMesh.receiveShadow = true;
   printMesh.renderOrder = 1;
   scene.add(printMesh);
+
+  const emptyDeck = new Mesh(new PlaneGeometry(CARD_W, CARD_H), new MeshStandardMaterial({ map: outline, color: linear("#f4e6c8"), transparent: true, opacity: OUTLINE_INK, roughness: 1, metalness: 0, depthWrite: false, polygonOffset: true, polygonOffsetFactor: -2, polygonOffsetUnits: -2 }));
+  emptyDeck.receiveShadow = true;
+  emptyDeck.renderOrder = 1;
+  emptyDeck.visible = false;
+  scene.add(emptyDeck);
 
   const ringGeo = new PlaneGeometry(1, 1);
   const ringMesh = (): Mesh<PlaneGeometry, MeshStandardMaterial> => {
@@ -235,6 +243,8 @@ function build(renderer: WebGLRenderer, canvas: HTMLCanvasElement, forceHq: bool
       ringB.scale.set(ringScale, ringScale, 1);
       ringA.position.set(layout.pile.x, 0.004, layout.pile.z);
       ringB.position.set(layout.pile.x, 0.0045, layout.pile.z);
+      emptyDeck.position.set(layout.deck.x, 0.003, layout.deck.z);
+      emptyDeck.rotation.set(-Math.PI / 2, 0, layout.deck.yaw);
       base.position.x = layout.pile.x;
       base.position.z = layout.pile.z;
 
@@ -283,8 +293,9 @@ function build(renderer: WebGLRenderer, canvas: HTMLCanvasElement, forceHq: bool
       stage.dirty = true;
     },
     setDeck: (slabs: number) => {
-      if (stack.count === slabs) return;
+      if (stack.count === slabs && emptyDeck.visible === (slabs === 0)) return;
       stack.count = slabs;
+      emptyDeck.visible = slabs === 0;
       stage.dirty = true;
     },
     setPileBase: (height: number) => {

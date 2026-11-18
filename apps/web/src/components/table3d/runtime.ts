@@ -116,6 +116,7 @@ export function createRuntime(stage: Stage, dom: RuntimeDom, reduced: boolean, d
   let kick = 1;
   let swayUntil = 0;
   let slow = 0;
+  let frames = 0;
   let px = 0;
   let py = 0;
   let ptx = 0;
@@ -251,6 +252,10 @@ export function createRuntime(stage: Stage, dom: RuntimeDom, reduced: boolean, d
       const held = hand.get(move.slot);
       body = held ?? makeBody(scene, kit);
       hand.delete(move.slot);
+      const interrupted = body.flight;
+      body.flight = null;
+      interrupted?.done?.();
+      kick = 0;
       if (body.faceCard === null) setFace(body, kit, move.card, input.shapes);
       if (focusSlot === move.slot) focusSlot = null;
       if (held?.placed && seconds > 0) {
@@ -276,7 +281,6 @@ export function createRuntime(stage: Stage, dom: RuntimeDom, reduced: boolean, d
     if (covered) drop(covered);
     pile.set(index, body);
     view = beginMove(view, move, me());
-    kick = 0;
     if (!flying) {
       body.flight = null;
       body.placed = false;
@@ -482,8 +486,9 @@ export function createRuntime(stage: Stage, dom: RuntimeDom, reduced: boolean, d
       runMove(move);
       settleFrame();
       advance(moment.name === "draw" ? duration(move) : move.dur / 1000);
-      if (moment.name !== "reveal") return;
+      if (moment.name === "draw") return;
       settleFrame();
+      if (moment.name === "sealed") return;
       const body = hand.get(slot);
       if (!body) return;
       view = { ...view, hand: view.hand.map((card) => (card.slot === slot ? { ...card, card: cardOf(color, 5) } : card)) };
@@ -529,7 +534,11 @@ export function createRuntime(stage: Stage, dom: RuntimeDom, reduced: boolean, d
     if (debug && debug.freeze !== frozenKey) applyFreeze();
     if (debug && JSON.stringify([debug.camera ?? 0, debug.lift ?? 1, debug.bare ?? 0]) !== viewKey) applyView();
     const hover = forcedHover(debug);
-    if (hover !== null) focusSlot = targets?.fan[hover]?.slot ?? focusSlot;
+    const hovered = hover === null ? focusSlot : (targets?.fan[hover]?.slot ?? focusSlot);
+    if (hovered !== focusSlot) {
+      focusSlot = hovered;
+      force = true;
+    }
 
     time += dt;
     while (frozen === null && pending[0] && pending[0].at <= time - moveClock) {
@@ -548,7 +557,7 @@ export function createRuntime(stage: Stage, dom: RuntimeDom, reduced: boolean, d
     snap = false;
     stage.setRing(view.color, cut() || stage.soft);
     const ringBusy = stage.stepRing(dt);
-    const kicking = kick < 1;
+    const kicking = kick < 1 && !cut();
     if (kicking) kick = Math.min(1, kick + dt / KICK_S);
     if (busy) swayUntil = time + SWAY_HOLD_S;
     const sway = cut() || stage.lite ? 0 : clamp01((swayUntil - time) / 2);
@@ -560,6 +569,7 @@ export function createRuntime(stage: Stage, dom: RuntimeDom, reduced: boolean, d
       aim(active, cut() ? 0 : Math.sin(Math.PI * kick) * KICK);
       stage.sway(time, sway);
       stage.render();
+      frames++;
       if (targets) placeOverlay(overlay, active, targets, view.rivals.length, sealed);
       if (late && !stage.soft && frozen === null) {
         slow++;
@@ -620,6 +630,7 @@ export function createRuntime(stage: Stage, dom: RuntimeDom, reduced: boolean, d
         soft: stage.soft,
         lite: stage.lite,
         running: raf !== 0,
+        frames,
         pending: pending.length,
         playing: input.playing !== null,
         frozen: frozen?.name ?? null,

@@ -146,3 +146,27 @@ export function boardsTexture(): CanvasTexture {
   texture.anisotropy = 8;
   return texture;
 }
+
+/** The place of the deck, chalked on the baize. It shows only while the deck is empty and waiting for fresh cards, so the table never has a hole where the deck was. */
+export function outlineTexture(): CanvasTexture {
+  const width = 256;
+  const height = 384;
+  const inset = 12;
+  const radius = 26;
+  const { canvas, g } = canvasOf(width, height);
+  g.strokeStyle = "rgba(255,255,255,0.9)";
+  g.lineWidth = 7;
+  g.lineCap = "round";
+  g.setLineDash([20, 18]);
+  g.beginPath();
+  g.moveTo(inset + radius, inset);
+  g.arcTo(width - inset, inset, width - inset, height - inset, radius);
+  g.arcTo(width - inset, height - inset, inset, height - inset, radius);
+  g.arcTo(inset, height - inset, inset, inset, radius);
+  g.arcTo(inset, inset, width - inset, inset, radius);
+  g.closePath();
+  g.stroke();
+  const texture = new CanvasTexture(canvas);
+  texture.anisotropy = 4;
+  return texture;
+}
