@@ -1,4 +1,4 @@
-import { STATIONS } from "./radio";
+import { STATIONS } from "./stations";
 
 export interface RadioSettings {
   readonly on: boolean;

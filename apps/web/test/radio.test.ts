@@ -1,55 +1,31 @@
 import { describe, expect, it } from "vitest";
-import { initialState } from "@kryphochroma/rules";
-import { STATIONS, STEPS, clampTension, midiToHz, stepEvents, stepSeconds, tableTension } from "@/game/radio";
 import { DEFAULT_RADIO, loadRadio, saveRadio } from "@/game/radioSettings";
-
-const bar = (stationIndex: number, index: number, tension: number) =>
-  Array.from({ length: STEPS }, (_, step) => stepEvents(STATIONS[stationIndex]!, index, step, tension)).flat();
+import { STATIONS, mediaOrigins, stepStation } from "@/game/stations";
 
 describe("radio stations", () => {
-  it("every station has full sixteen step patterns and a chord per bar", () => {
-    for (const s of STATIONS) {
-      for (const pattern of [s.kick, s.snare, s.hat, s.bass]) expect(pattern).toHaveLength(STEPS);
-      expect(s.chords.length).toBeGreaterThan(0);
-      expect(new Set(STATIONS.map((x) => x.id)).size).toBe(STATIONS.length);
+  it("lists stations a page served over https can play, each with its source and licence", () => {
+    expect(STATIONS.length).toBeGreaterThanOrEqual(8);
+    expect(new Set(STATIONS.map((s) => s.id)).size).toBe(STATIONS.length);
+    for (const station of STATIONS) {
+      expect(new URL(station.url).protocol).toBe("https:");
+      expect(new URL(station.site).protocol).toBe("https:");
+      expect(station.name.length).toBeGreaterThan(0);
+      expect(station.genre.length).toBeGreaterThan(0);
+      expect(station.license.length).toBeGreaterThan(0);
     }
   });
 
-  it("is deterministic for the same bar and step", () => {
-    expect(bar(0, 3, 0.4)).toEqual(bar(0, 3, 0.4));
+  it("names every origin the content policy has to let audio from", () => {
+    const origins = mediaOrigins();
+    for (const station of STATIONS) expect(origins).toContain(new URL(station.url).origin);
+    for (const station of STATIONS) if (station.edge) expect(origins).toContain(station.edge);
+    expect(new Set(origins).size).toBe(origins.length);
   });
 
-  it("plays one pad chord at the downbeat and follows the progression", () => {
-    const first = bar(0, 0, 0).filter((e) => e.voice === "pad").map((e) => e.midi);
-    const second = bar(0, 1, 0).filter((e) => e.voice === "pad").map((e) => e.midi);
-    expect(first).toHaveLength(STATIONS[0]!.chords[0]!.length);
-    expect(first).not.toEqual(second);
-  });
-
-  it("gets busier and faster when the table is tense", () => {
-    const calm = Array.from({ length: 8 }, (_, b) => bar(1, b, 0)).flat().length;
-    const tense = Array.from({ length: 8 }, (_, b) => bar(1, b, 1)).flat().length;
-    expect(tense).toBeGreaterThan(calm);
-    expect(stepSeconds(STATIONS[1]!, 1)).toBeLessThan(stepSeconds(STATIONS[1]!, 0));
-  });
-
-  it("clamps tension and converts pitch", () => {
-    expect(clampTension(5)).toBe(1);
-    expect(clampTension(-1)).toBe(0);
-    expect(clampTension(Number.NaN)).toBe(0);
-    expect(midiToHz(69)).toBe(440);
-    expect(midiToHz(81)).toBe(880);
-  });
-});
-
-describe("table tension", () => {
-  it("is calm off turn, warmer on your turn and peaks on a last card", () => {
-    const { state } = initialState({ seats: 4, mode: "single", targetScore: 500, stackDrawTwo: false }, 3);
-    const pub = state.pub;
-    expect(tableTension({ ...pub, turn: 1 }, 0)).toBeLessThan(tableTension({ ...pub, turn: 0 }, 0));
-    const lastCard = { ...pub, seats: pub.seats.map((s, i) => (i === 2 ? { ...s, handSize: 1 } : s)) };
-    expect(tableTension(lastCard, 0)).toBe(1);
-    expect(tableTension({ ...pub, stage: "RoundOver" }, 0)).toBe(0);
+  it("steps through the dial and wraps at both ends", () => {
+    expect(stepStation(0, 1)).toBe(1);
+    expect(stepStation(STATIONS.length - 1, 1)).toBe(0);
+    expect(stepStation(0, -1)).toBe(STATIONS.length - 1);
   });
 });
 

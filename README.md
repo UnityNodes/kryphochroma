@@ -9,7 +9,7 @@ A five colour shedding card game where hiding is the game. Bluff with a veiled c
 - **Quick game**: no wallet and no test ETH needed. Your tab makes a session key and signs its seat, a relayer puts it on chain, and you sit down with three bots at a table whose cards were already drawn.
 - **With friends**: open a table for 2 to 4 players and send the invite link. Play opens by itself when the last seat is taken, or the host starts earlier and bots take the empty seats. Open tables are listed so anyone can join. A wallet is optional; it signs one `join` for the session key.
 - **Practice offline**: the same rules engine against local bots, no chain.
-- **Kryphochroma FM**: three radio stations composed live in your browser, no tracks. The beat speeds up when someone is down to one card.
+- **Radio**: eleven free internet stations at the table, from old time jazz to lo-fi and synthwave, streamed straight from their operators. Nothing plays until you press play.
 
 Built for the Zama Developer Program, Mainnet Season 5, Confidential Gaming.
 

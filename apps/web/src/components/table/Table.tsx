@@ -12,7 +12,6 @@ import { anchorKey } from "@/game/flight";
 import type { TableController } from "@/game/controller";
 import { SEAT_COLORS } from "@/game/offline";
 import { SOUND_FOR_ICON } from "@/game/sound";
-import { tableTension } from "@/game/radio";
 import { useAutoPass } from "@/game/useAutoPass";
 import { useRadio } from "@/game/useRadio";
 import { useSound } from "@/game/useSound";
@@ -159,7 +158,7 @@ export function TableView({ controller: game, colorBlind, onToggleShapes }: Tabl
   const monoHot = canSayMono(pub, HUMAN) && hand.some((c) => c !== null && isPlayable(pub, c));
   const catchable = botCatchTarget(pub, HUMAN);
   const meSeat = pub.seats[HUMAN];
-  const radio = useRadio(tableTension(pub, HUMAN));
+  const radio = useRadio();
   const canSonar = mine && !game.watching && !!meSeat && !meSeat.sonarUsed && pub.pendingDraw === 0 && pub.drawFour === null && pub.drawnSlot === null;
   const canVeil = mine && !!meSeat && !meSeat.veilUsed && meSeat.handSize >= 2 && pub.pendingDraw === 0 && pub.drawFour === null && passDue === null && veilClaims(pub).length > 0;
   const canDoubt = mine && pub.veil !== null && pub.veil.judge === HUMAN && pub.drawnSlot === null;

@@ -2,6 +2,7 @@ import { rpcUrls } from "@kryphochroma/abi";
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import type { NextConfig } from "next";
+import { mediaOrigins } from "./src/game/stations";
 
 const ZAMA_ORIGINS = ["https://relayer.testnet.zama.org", "https://*.s3.eu-west-1.amazonaws.com", "https://*.s3.amazonaws.com"];
 
@@ -23,6 +24,7 @@ const contentSecurityPolicy = [
   "style-src 'self' 'unsafe-inline'",
   "img-src 'self' data: blob:",
   "font-src 'self'",
+  `media-src 'self' ${mediaOrigins().join(" ")}`,
   `connect-src 'self' data: blob: ${rpcUrls(process.env.NEXT_PUBLIC_SEPOLIA_RPC_URL).map(originOf).join(" ")} ${ZAMA_ORIGINS.join(" ")}`,
   "worker-src 'self' blob:",
   "object-src 'none'",
