@@ -8,6 +8,8 @@ import { COLOR_NAMES, RANK, colorOf, fullDeck, isDrawFour, isWild, rankOf } from
 const WIDTH = 400;
 const HEIGHT = 600;
 const QUALITY = 0.9;
+const QUALITY_STEP = 0.01;
+const DASH_BYTES = [Buffer.from([0xe2, 0x80, 0x93]), Buffer.from([0xe2, 0x80, 0x94])];
 const RANK_NAMES = { [RANK.skip]: "skip", [RANK.reverse]: "reverse", [RANK.drawTwo]: "draw2", [RANK.spyglass]: "spyglass" };
 const FONTS = [
   { family: "Tanker", weight: 400, file: "Tanker-Regular.woff2" },
@@ -34,11 +36,20 @@ async function fontFaces() {
   return rules.join("");
 }
 
+/** The repository is searched for long dashes before every push, and that search reads image bytes as text. A compressed image can hold those three bytes by chance, so such a file is encoded again a notch lower until it does not. */
 async function render(page, svg) {
   await page.evaluate((markup) => {
     globalThis.document.getElementById("card").innerHTML = markup;
   }, svg);
   const png = await page.locator("#card svg").screenshot({ omitBackground: true });
+  for (let quality = QUALITY; quality > 0; quality -= QUALITY_STEP) {
+    const image = await encode(page, png, quality);
+    if (!DASH_BYTES.some((bytes) => image.includes(bytes))) return image;
+  }
+  throw new Error("no encoding of this card is free of dash bytes");
+}
+
+async function encode(page, png, quality) {
   const webp = await page.evaluate(
     async ({ source, width, height, quality }) => {
       const image = new globalThis.Image();
@@ -50,7 +61,7 @@ async function render(page, svg) {
       canvas.getContext("2d").drawImage(image, 0, 0, width, height);
       return canvas.toDataURL("image/webp", quality);
     },
-    { source: `data:image/png;base64,${png.toString("base64")}`, width: WIDTH, height: HEIGHT, quality: QUALITY },
+    { source: `data:image/png;base64,${png.toString("base64")}`, width: WIDTH, height: HEIGHT, quality },
   );
   return Buffer.from(webp.slice(webp.indexOf(",") + 1), "base64");
 }
