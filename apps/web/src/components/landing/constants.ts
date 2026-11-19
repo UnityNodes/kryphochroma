@@ -1,3 +1,6 @@
+import { CHAIR_REACH } from "../table3d/constants";
+import type { TableCut } from "../table3d/layout";
+
 export const ROOM_INK = "#07130e";
 export const ASSET_BASE = "/landing";
 export const BAND_QUERY = "(max-width: 860px)";
@@ -17,8 +20,9 @@ export const INTRO = 1.9;
 export const SLIDE = 1.56;
 export const NUDGE = 0.34;
 
-export const TABLE_X = 7.2;
-export const TABLE_Z = 5.0;
+export const TABLE_CUT: TableCut = { hx: 4.5, z0: -3.9, z1: 4.2, r: 1.3 };
+export const FOG_NEAR = 27;
+export const FOG_FAR = 60;
 export const LAMP_Y = 4.4;
 export const LAMP_INTENSITY = 2.1;
 export const VIOLET_INTENSITY = 5;
@@ -78,3 +82,9 @@ export const DECK_TOP = DECK.n * DECK.step;
 export const PILE = { x: 0.6, z: -0.5 } as const;
 export const VEIL = { x: -0.75, z: 0.9, yaw: 0.22 } as const;
 export const PRINT = { text: "KRYPHOCHROMA", x: 0, z: 0.94, w: 4.9, d: 1.36, ink: 0.46 } as const;
+
+export const CHAIRS = [
+  { x: -TABLE_CUT.hx - CHAIR_REACH, z: SEATS[0].z, yaw: Math.PI / 2 },
+  { x: SEATS[1].x, z: TABLE_CUT.z0 - CHAIR_REACH, yaw: 0 },
+  { x: TABLE_CUT.hx + CHAIR_REACH, z: SEATS[2].z, yaw: -Math.PI / 2 },
+] as const;

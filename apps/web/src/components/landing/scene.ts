@@ -1,9 +1,9 @@
 import {
   ACESFilmicToneMapping,
-  BoxGeometry,
   CircleGeometry,
   CylinderGeometry,
   DoubleSide,
+  Fog,
   HemisphereLight,
   LatheGeometry,
   LoadingManager,
@@ -25,13 +25,11 @@ import {
 } from "three";
 import { buildCardKit, buildDeckStack, faceOf, makeCard, place } from "./cards";
 import { linear } from "./color";
-import { BASE_ASPECT, CARD_T, DECK, DECK_TOP, DRAWN_FACE, FIRST_FACE, HAND_FACES, HAND_SIZE, LAMP_INTENSITY, LAMP_Y, PEEKED_FACE, PEEK_SEAT, PEEK_SLOT, PRINT, ROOM_INK, SEATS, TABLE_X, TABLE_Z } from "./constants";
+import { createFurniture } from "../table3d/furnish";
+import { BASE_ASPECT, CARD_T, CHAIRS, DECK, DECK_TOP, DRAWN_FACE, FIRST_FACE, FOG_FAR, FOG_NEAR, HAND_FACES, HAND_SIZE, LAMP_INTENSITY, LAMP_Y, PEEKED_FACE, PEEK_SEAT, PEEK_SLOT, PRINT, ROOM_INK, SEATS, TABLE_CUT } from "./constants";
 import { seeded } from "./random";
 import type { CardRig, Rig } from "./state";
-import { feltTexture, printTexture } from "./textures";
-
-const RAIL_W = 0.6;
-const RAIL_H = 0.2;
+import { printTexture } from "./textures";
 
 interface Lights {
   readonly spot: SpotLight;
@@ -59,7 +57,7 @@ function addLights(scene: Scene, shadowSize: number): Lights {
   scene.add(spot);
   scene.add(spot.target);
 
-  const violet = new SpotLight(linear("#9b4fc9"), 0, 14, 0.52, 1, 1);
+  const violet = new SpotLight(linear("#9b4fc9"), 0, 14, 0.6, 1, 1);
   violet.position.set(0.4, 4.2, 5.0);
   violet.target.position.set(0, 0, 2.7);
   scene.add(violet);
@@ -67,16 +65,10 @@ function addLights(scene: Scene, shadowSize: number): Lights {
   return { spot, violet };
 }
 
-function addTable(scene: Scene, textures: Texture[]): void {
-  const felt = feltTexture();
-  textures.push(felt);
-  const baize = new Mesh(
-    new PlaneGeometry(TABLE_X * 2, TABLE_Z * 2),
-    new MeshStandardMaterial({ color: linear("#235a47"), roughness: 1, metalness: 0, map: felt, bumpMap: felt, bumpScale: 0.006 }),
-  );
-  baize.rotation.x = -Math.PI / 2;
-  baize.receiveShadow = true;
-  scene.add(baize);
+function addTable(scene: Scene, textures: Texture[], withFloor: boolean): void {
+  const furniture = createFurniture(scene, textures, withFloor);
+  furniture.setCut(TABLE_CUT);
+  furniture.setChairs(CHAIRS);
 
   const name = printTexture();
   textures.push(name);
@@ -89,22 +81,6 @@ function addTable(scene: Scene, textures: Texture[]): void {
   print.receiveShadow = true;
   print.renderOrder = 1;
   scene.add(print);
-
-  const wood = new MeshStandardMaterial({ color: linear("#4f2f18"), roughness: 0.55, metalness: 0 });
-  const long = new BoxGeometry(TABLE_X * 2 + RAIL_W * 2, RAIL_H, RAIL_W);
-  const short = new BoxGeometry(RAIL_W, RAIL_H, TABLE_Z * 2);
-  const rails = [
-    { geometry: long, x: 0, z: TABLE_Z + RAIL_W / 2 },
-    { geometry: long, x: 0, z: -TABLE_Z - RAIL_W / 2 },
-    { geometry: short, x: TABLE_X + RAIL_W / 2, z: 0 },
-    { geometry: short, x: -TABLE_X - RAIL_W / 2, z: 0 },
-  ];
-  for (const { geometry, x, z } of rails) {
-    const rail = new Mesh(geometry, wood);
-    rail.position.set(x, RAIL_H / 2 - 0.03, z);
-    rail.receiveShadow = true;
-    scene.add(rail);
-  }
 }
 
 function addLamp(scene: Scene): void {
@@ -193,7 +169,8 @@ export function createRig(stage: HTMLElement, band: boolean, forceHq: boolean): 
 
     const camera = new PerspectiveCamera(30, BASE_ASPECT, 0.4, 60);
     const lights = addLights(scene, band || soft ? 1024 : 2048);
-    addTable(scene, textures);
+    scene.fog = new Fog(ROOM_INK, FOG_NEAR, FOG_FAR);
+    addTable(scene, textures, !soft);
     addLamp(scene);
     const cards = addCards(scene, renderer, manager, textures);
     stage.prepend(canvas);
