@@ -34,6 +34,17 @@ group("offline driver", () => {
     expect(nextAutoStep(state, () => 0).kind).toBe("human");
   });
 
+  it("settles a doubted veil on its own, even on the human's turn", () => {
+    const { state } = newOfflineGame({ seats: 2, stackDrawTwo: false, seed: 3 });
+    const doubted: GameState = { ...state, veilTrue: false, pub: { ...state.pub, turn: HUMAN, doubt: { by: 1, judge: HUMAN } } };
+    const step = nextAutoStep(doubted, () => 0);
+    expect(step.kind).toBe("auto");
+    if (step.kind !== "auto") return;
+    expect(step.transition.events).toContainEqual({ type: "VeilResolved", truth: false });
+    expect(step.transition.state.pub.doubt).toBeNull();
+    expect(step.transition.state.pub.seats[1]?.handSize).toBe((state.pub.seats[1]?.handSize ?? 0) + 4);
+  });
+
   it("describes events for the feed", () => {
     expect(describe({ type: "Played", seat: 1, slot: 0, card: 39, color: 2 })?.text).toBe("Mira played Teal 7");
     expect(describe({ type: "Drew", seat: 0, slot: 3 })?.sub).toBe("decrypted for you only");

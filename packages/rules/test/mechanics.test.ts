@@ -26,6 +26,15 @@ function expectRule(fn: () => unknown, code: string): void {
   throw new Error(`expected ${code}`);
 }
 
+function oneCardLeft(state: GameState, seat: number, card: number): GameState {
+  const slots = Array.from({ length: 24 }, (_, i) => i === 0);
+  return {
+    ...state,
+    hands: state.hands.map((hand, i) => (i === seat ? hand.map((_, k) => (k === 0 ? card : null)) : hand)),
+    pub: { ...state.pub, color: 1, topCard: Y(5), seats: state.pub.seats.map((x, i) => (i === seat ? { ...x, handSize: 1, slots } : x)) },
+  };
+}
+
 const twoSeats = (): GameState =>
   game([[V(13), WILD4, B(3), B(4), B(5), B(6), V(7)], [Y(1), Y(2), Y(3), Y(10), WILD, Y(6), Y(7)]], V(5));
 
@@ -125,13 +134,43 @@ describe("veil", () => {
     const veiled = applyVeil(twoSeats(), 0, 1, V(9)).state;
     expect(legalMoves(veiled.pub, 1, veiled.hands[1] ?? []).some((m) => m.type === "doubt")).toBe(true);
     const doubted = applyDoubt(veiled, 1);
-    expect(doubted.state.pub.stage).toBe("AwaitChallenge");
+    expect(doubted.state.pub.stage).toBe("Playing");
+    expect(doubted.state.pub.doubt).toEqual({ by: 0, judge: 1 });
+    expect(doubted.state.pub.veil).toBeNull();
     const resolved = applyChallenge(doubted.state);
     expect(resolved.events).toContainEqual({ type: "VeilResolved", truth: false });
     expect(resolved.state.pub.seats[0]?.handSize).toBe(10);
     expect(resolved.state.pub.turn).toBe(1);
     expect(resolved.state.pub.veil).toBeNull();
+    expect(resolved.state.pub.doubt).toBeNull();
     expect(resolved.state.pub.stage).toBe("Playing");
+  });
+
+  it("the judge plays on while the doubt is checked and the penalty lands when the bit arrives", () => {
+    const doubted = applyDoubt(applyVeil(twoSeats(), 0, 1, V(9)).state, 1).state;
+    const moves = legalMoves(doubted.pub, 1, doubted.hands[1] ?? []);
+    expect(moves.some((m) => m.type === "draw")).toBe(true);
+    expect(moves.some((m) => m.type === "veil" || m.type === "doubt")).toBe(false);
+    const played = applyPlay(doubted, 1, 4, WILD, 3).state;
+    expect(played.pub.turn).toBe(0);
+    expect(played.pub.doubt).toEqual({ by: 0, judge: 1 });
+    const resolved = applyChallenge(played);
+    expect(resolved.state.pub.seats[0]?.handSize).toBe(10);
+    expect(resolved.state.pub.turn).toBe(0);
+    expect(resolved.state.pub.doubt).toBeNull();
+  });
+
+  it("nobody veils or goes out while a doubt is open", () => {
+    const doubted = applyDoubt(applyVeil(twoSeats(), 0, 1, V(9)).state, 1).state;
+    const lastCard = oneCardLeft(doubted, 1, Y(9));
+    expectRule(() => applyPlay(lastCard, 1, 0, Y(9)), "DoubtPending");
+    expect(legalMoves(lastCard.pub, 1, lastCard.hands[1] ?? []).some((m) => m.type === "play")).toBe(false);
+    expect(chooseMove(lastCard.pub, 1, lastCard.hands[1] ?? [])).toBeNull();
+    const settled = applyChallenge(lastCard).state;
+    expect(settled.pub.seats[1]?.handSize).toBe(1);
+    expect(applyPlay(settled, 1, 0, Y(9)).state.pub.stage).toBe("Revealing");
+    const fresh = { ...doubted, pub: { ...doubted.pub, seats: doubted.pub.seats.map((x) => ({ ...x, veilUsed: false })) } };
+    expectRule(() => applyVeil(fresh, 1, 0, Y(9)), "VeilUsed");
   });
 
   it("a wrong doubt costs the judge two cards", () => {

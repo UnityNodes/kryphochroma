@@ -28,6 +28,12 @@ describe("keeper plan", () => {
     expect(nextKeeperAction({ ...base, stage: 5 }, 0n)).toEqual({ kind: "idle" });
   });
 
+  it("settles a doubted veil during play before anything else at the table", () => {
+    expect(nextKeeperAction({ ...base, veilJudge: 0x81 }, 500n)).toEqual({ kind: "resolveChallenge" });
+    expect(nextKeeperAction({ ...base, veilJudge: 1 }, 50n)).toEqual({ kind: "idle" });
+    expect(nextKeeperAction({ ...base, veilJudge: 255 }, 500n)).toEqual({ kind: "forceTimeout" });
+  });
+
   it("refills the deck of a running game before the pool shuffles", () => {
     const refill = { id: 9n, stage: 3, action: { kind: "refillStep" as const, remaining: 60 } };
     const lobby = { id: 2n, stage: 0, joined: 1, action: { kind: "setupStep" as const, remaining: 5 } };

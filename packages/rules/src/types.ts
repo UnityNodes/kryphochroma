@@ -28,6 +28,11 @@ export interface PendingVeil {
   readonly claim: Card;
 }
 
+export interface PendingDoubt {
+  readonly by: number;
+  readonly judge: number;
+}
+
 export interface Peek {
   readonly seat: number;
   readonly slot: number;
@@ -60,6 +65,7 @@ export interface PublicState {
   readonly drawnSlot: number | null;
   readonly drawFour: PendingDrawFour | null;
   readonly veil: PendingVeil | null;
+  readonly doubt: PendingDoubt | null;
   readonly pendingDraw: number;
   readonly monoWindow: number | null;
   readonly candidate: number | null;
@@ -144,6 +150,7 @@ export type RuleErrorCode =
   | "VeilUsed"
   | "BadSonar"
   | "NoVeil"
+  | "DoubtPending"
   | "BadPeek";
 
 export class RuleError extends Error {

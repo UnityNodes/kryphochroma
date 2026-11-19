@@ -89,6 +89,7 @@ function blankState(config: TableConfig, round: number, scores: readonly number[
       drawnSlot: null,
       drawFour: null,
       veil: null,
+      doubt: null,
       pendingDraw: 0,
       monoWindow: null,
       candidate: null,
@@ -168,6 +169,7 @@ function beginReveal(d: Draft, candidate: number): void {
   d.pub.candidate = candidate;
   d.pub.drawFour = null;
   d.pub.veil = null;
+  d.pub.doubt = null;
   d.pub.drawnSlot = null;
   d.pub.monoWindow = null;
   d.hadColor = null;
@@ -198,6 +200,7 @@ export function applyPlay(state: GameState, seat: number, slot: number, card: Ca
   const s = seatOf(d, seat);
   if (!Number.isInteger(slot) || slot < 0 || slot >= HAND_SLOTS || !s.slots[slot]) throw new RuleError("BadSlot");
   if (d.pub.drawnSlot !== null && slot !== d.pub.drawnSlot) throw new RuleError("MustPlayDrawnCard");
+  if (s.handSize === 1 && d.pub.doubt) throw new RuleError("DoubtPending");
   if (!isValidCard(card)) throw new RuleError("BadCard");
   if (!matches(card, d.pub.topCard, d.pub.color)) throw new RuleError("IllegalCard");
   if (isWild(card) && (chosenColor === undefined || !isColor(chosenColor))) throw new RuleError("BadColor");
@@ -266,7 +269,7 @@ export function applyVeil(state: GameState, seat: number, slot: number, claim: C
   requireTurn(d, seat);
   closeVeil(d, seat);
   const s = seatOf(d, seat);
-  if (s.veilUsed || s.handSize < 2) throw new RuleError("VeilUsed");
+  if (s.veilUsed || s.handSize < 2 || d.pub.doubt) throw new RuleError("VeilUsed");
   if (!Number.isInteger(slot) || slot < 0 || slot >= HAND_SLOTS || !s.slots[slot]) throw new RuleError("BadSlot");
   if (d.pub.drawnSlot !== null && slot !== d.pub.drawnSlot) throw new RuleError("MustPlayDrawnCard");
   if (!isValidCard(claim) || !isNumber(claim)) throw new RuleError("BadCard");
@@ -316,7 +319,8 @@ export function applyDoubt(state: GameState, seat: number): Transition {
   if (d.pub.drawnSlot !== null) throw new RuleError("NoVeil");
   d.pub.monoWindow = null;
   seatOf(d, seat).timeouts = 0;
-  d.pub.stage = "AwaitChallenge";
+  d.pub.doubt = { by: d.pub.veil.by, judge: seat };
+  d.pub.veil = null;
   d.events.push({ type: "VeilDoubted", seat });
   return finish(d);
 }
@@ -432,20 +436,20 @@ export function applyChallengeDrawFour(state: GameState, seat: number): Transiti
   return finish(d);
 }
 
+/** One resolver for both open bits, as on chain: a doubted veil goes first and settles while play goes on, a draw four challenge holds the table until its bit is known. */
 export function applyChallenge(state: GameState, bit?: boolean): Transition {
   const d = toDraft(state);
-  requireStage(d, "AwaitChallenge");
-  const veil = d.pub.veil;
-  if (veil && !d.pub.drawFour) {
+  const doubt = d.pub.doubt;
+  if (doubt) {
     const truth = bit ?? d.veilTrue;
     if (truth === null) throw new RuleError("BadReveal");
     d.events.push({ type: "VeilResolved", truth });
-    drawInto(d, truth ? veil.judge : veil.by, truth ? VEIL_TRUE_DRAW : VEIL_LIE_DRAW);
-    d.pub.veil = null;
+    drawInto(d, truth ? doubt.judge : doubt.by, truth ? VEIL_TRUE_DRAW : VEIL_LIE_DRAW);
+    d.pub.doubt = null;
     d.veilTrue = null;
-    d.pub.stage = "Playing";
     return finish(d);
   }
+  requireStage(d, "AwaitChallenge");
   const pending = d.pub.drawFour;
   const value = bit ?? d.hadColor;
   if (!pending || value === null) throw new RuleError("BadReveal");

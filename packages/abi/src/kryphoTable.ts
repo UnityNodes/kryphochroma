@@ -92,6 +92,11 @@ export const kryphoTableAbi = [
   },
   {
     "inputs": [],
+    "name": "DoubtPending",
+    "type": "error"
+  },
+  {
+    "inputs": [],
     "name": "DrawFourPending",
     "type": "error"
   },
@@ -938,19 +943,6 @@ export const kryphoTableAbi = [
       }
     ],
     "name": "acceptDrawFour",
-    "outputs": [],
-    "stateMutability": "nonpayable",
-    "type": "function"
-  },
-  {
-    "inputs": [
-      {
-        "internalType": "uint256",
-        "name": "id",
-        "type": "uint256"
-      }
-    ],
-    "name": "cancel",
     "outputs": [],
     "stateMutability": "nonpayable",
     "type": "function"

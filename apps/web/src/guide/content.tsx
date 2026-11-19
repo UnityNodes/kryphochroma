@@ -278,7 +278,7 @@ export const DOCS: readonly DocPage[] = [
       <>
         <H2 id="veil">Veil</H2>
         <P>Once per round, with two or more cards in hand, you can lay any card face down and name a number card that fits the pile. The pile shows the named card. The real card stays an encrypted handle, and the contract stores one encrypted bit: <C>FHE.eq(real card, named card)</C>.</P>
-        <P>The next player may press <b>Doubt</b> as their first action. Only then is the bit made publicly decryptable and settled with a KMS proof. A lie makes the veiler draw four; a true veil makes the doubter draw two. Any other first action accepts the veil and the bit is never revealed.</P>
+        <P>The next player may press <b>Doubt</b> as their first action. Only then is the bit made publicly decryptable and settled with a KMS proof. The table does not wait for it: the doubter plays on, and the penalty lands when the proof is in, usually within 20 seconds. A lie makes the veiler draw four; a true veil makes the doubter draw two. Until then nobody can play their last card or veil again, so the penalty always counts before the hands are scored. Any other first action accepts the veil and the bit is never revealed.</P>
         <Callout title="Why it needs FHE">On an open chain everyone could check the face down card at once, so a veil would be a plain lie. With FHE the only thing that can ever leak is one bit, and only when someone pays for the doubt.</Callout>
         <H2 id="spyglass">Spyglass</H2>
         <P>
@@ -419,7 +419,7 @@ browser <── user decrypt of own cards ── Zama relayer and KMS`}</Code>
             [<C key="3">start(id)</C>, "host", "Start drawing the cards, or deal at once if the table already has them"],
             [<C key="4">play(id, slot, card, color, seenHandle)</C>, "seat on turn", "Play a card; color carries the wild colour or the spyglass target"],
             [<C key="5">veil(id, slot, claim, seenHandle)</C>, "seat on turn", "Lay a card face down as a named number card"],
-            [<C key="6">doubtVeil(id)</C>, "next seat", "Doubt the veil; the keeper settles it with a proof"],
+            [<C key="6">doubtVeil(id)</C>, "next seat", "Doubt the veil; play goes on and the keeper settles it with a proof"],
             [<C key="10">sonar(id, target, color)</C>, "seat on turn", "Count one colour inside a rival hand; only the caller can decrypt the answer"],
             [<C key="7">relay(id, actions[])</C>, "anyone", "Submit a batch of signed actions"],
             [<C key="11">fillQueues(id)</C>, "anyone", "Give every seat its next two cards once play is open"],

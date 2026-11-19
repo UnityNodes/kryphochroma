@@ -46,7 +46,7 @@ export type AutoStep = { readonly kind: "auto"; readonly transition: Transition;
 export function nextAutoStep(state: GameState, think: () => number): AutoStep {
   const pub = state.pub;
   if (pub.stage === "MatchOver" || pub.stage === "RoundOver") return { kind: "over" };
-  if (pub.stage === "AwaitChallenge") return { kind: "auto", transition: applyChallenge(state), delayMs: 700 };
+  if (pub.stage === "AwaitChallenge" || pub.doubt) return { kind: "auto", transition: applyChallenge(state), delayMs: 700 };
   if (pub.stage === "Revealing") return { kind: "auto", transition: applyReveal(state), delayMs: 900 };
   for (let seat = 0; seat < pub.config.seats; seat++) {
     if (seat === HUMAN) continue;
@@ -99,7 +99,7 @@ export function describe(event: GameEvent, names: readonly string[] = SEAT_NAMES
     case "Veiled":
       return { icon: "lock", text: `${name(event.seat)} veiled a card as ${cardLabel(event.claim)}`, sub: "face down · encrypted · once per round" };
     case "VeilDoubted":
-      return { icon: "challenge", text: `${name(event.seat)} doubted the veil`, sub: "revealing exactly 1 bit" };
+      return { icon: "challenge", text: `${name(event.seat)} doubted the veil`, sub: "1 bit checked in the background · play goes on" };
     case "VeilResolved":
       return { icon: "lock", text: event.truth ? "The veil was true: the doubter draws 2" : "The veil was a bluff: the bluffer draws 4", sub: "FHE.eq · FHE.checkSignatures" };
     case "Peeked":

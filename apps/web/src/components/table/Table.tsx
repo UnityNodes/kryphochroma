@@ -1,7 +1,7 @@
 "use client";
 
 import { CARD_COLORS, PALETTE, sharedDefs } from "@kryphochroma/cards";
-import { type Color, type Peek, canDraw, cardLabel, canSayMono, botCatchTarget, isPlayable, isSpyglass, isWild, legalMoves, veilClaims } from "@kryphochroma/rules";
+import { type Color, type Peek, canDraw, cardLabel, canSayMono, botCatchTarget, isPlayable, isSpyglass, isWild, lastCardWaits, legalMoves, veilClaims } from "@kryphochroma/rules";
 import { ArrowLeft, BadgeCheck, Box, Eye, EyeOff, House, Layers, Play, Radar, Shapes, Shuffle, Swords, Trophy, Volume2, VolumeX, WifiOff } from "lucide-react";
 import Link from "next/link";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
@@ -19,7 +19,7 @@ import { useOfflineGame } from "@/game/useOfflineGame";
 import { useTableView } from "@/game/useTableView";
 import { cn } from "@/lib/utils";
 import { Center } from "./Center";
-import { RoundEndProgress, WaitHint, challengeNote, refillNote, sealedCardNote } from "./ChainProgress";
+import { RoundEndProgress, WaitHint, challengeNote, lastCardNote, refillNote, sealedCardNote } from "./ChainProgress";
 import { Feed } from "./Feed";
 import { Hand } from "./Hand";
 import { HowToPlay } from "./HowToPlay";
@@ -41,6 +41,7 @@ const ERROR_TEXT: Record<string, string> = {
   MustStackOrTake: "Stack a draw two or take the cards",
   CannotPass: "Draw a card before passing",
   VeilUsed: "You already veiled a card this round",
+  DoubtPending: "Your last card waits for the veil check",
   NoVeil: "There is no veil to doubt",
   BadPeek: "Pick a card in an opponent's hand",
   BadSonar: "Sonar works once per round, on a rival, for one of the five colours",
@@ -183,9 +184,10 @@ export function TableView({ controller: game, colorBlind, onToggleShapes }: Tabl
   const meSeat = pub.seats[HUMAN];
   const radio = useRadio();
   const canSonar = mine && !game.watching && !!meSeat && !meSeat.sonarUsed && pub.pendingDraw === 0 && pub.drawFour === null && pub.drawnSlot === null;
-  const canVeil = mine && !!meSeat && !meSeat.veilUsed && meSeat.handSize >= 2 && pub.pendingDraw === 0 && pub.drawFour === null && passDue === null && veilClaims(pub).length > 0;
+  const canVeil = mine && !!meSeat && !meSeat.veilUsed && meSeat.handSize >= 2 && pub.pendingDraw === 0 && pub.drawFour === null && pub.doubt === null && passDue === null && veilClaims(pub).length > 0;
   const canDoubt = mine && pub.veil !== null && pub.veil.judge === HUMAN && pub.drawnSlot === null;
-  const status = canDoubt && pub.veil ? `${names[pub.veil.by] ?? "Someone"} veiled a card as ${cardLabel(pub.veil.claim)}: doubt it or play on` : passDue !== null ? "Drawn card does not fit, passing on…" : statusText(pub.stage, pub.turn, game.watching ? -1 : HUMAN, names, busy, drawn, pub.drawFour !== null, pub.pendingDraw, !canDraw(pub, HUMAN));
+  const lastWaits = mine && !game.watching && lastCardWaits(pub, HUMAN, hand);
+  const status = canDoubt && pub.veil ? `${names[pub.veil.by] ?? "Someone"} veiled a card as ${cardLabel(pub.veil.claim)}: doubt it or play on` : lastWaits ? "Your last card waits for the veil check" : passDue !== null ? "Drawn card does not fit, passing on…" : statusText(pub.stage, pub.turn, game.watching ? -1 : HUMAN, names, busy, drawn, pub.drawFour !== null, pub.pendingDraw, !canDraw(pub, HUMAN));
   const seats = pub.config.seats;
   const opponents = POSITIONS[seats] ?? [];
   const result = pub.lastResult;
@@ -296,7 +298,7 @@ export function TableView({ controller: game, colorBlind, onToggleShapes }: Tabl
           deckCount={pub.deckCount}
           dir={pub.dir}
           status={status}
-          note={challengeNote(game.sync, pub.stage, pub.veil !== null && pub.drawFour === null) ?? (game.watching ? null : (sealedCardNote(game.sync, hand.filter((c) => c !== null && c < 0).length, hand.filter((c) => c !== null).length) ?? (pub.stage === "Playing" ? refillNote(game.sync, pub.deckCount) : null)))}
+          note={challengeNote(game.sync, pub.stage) ?? lastCardNote(game.sync, lastWaits) ?? (game.watching ? null : (sealedCardNote(game.sync, hand.filter((c) => c !== null && c < 0).length, hand.filter((c) => c !== null).length) ?? (pub.stage === "Playing" ? refillNote(game.sync, pub.deckCount) : null)))}
           canDraw={mine && drawLabel === "Draw" && pub.drawFour === null && pub.pendingDraw === 0}
           colorBlind={colorBlind}
           veiled={is3d && pub.veil ? `Veiled as ${cardLabel(pub.veil.claim)}` : null}

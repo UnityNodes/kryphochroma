@@ -1,4 +1,4 @@
-import { DECK_SIZE, FILL_CHUNK, NO_CARD, NO_SEAT, REFILL_AT, REFILL_MAX, SETUP_STEPS, STAGE } from "@kryphochroma/abi";
+import { DECK_SIZE, DOUBTED, FILL_CHUNK, NO_CARD, NO_SEAT, REFILL_AT, REFILL_MAX, SETUP_STEPS, STAGE } from "@kryphochroma/abi";
 
 export interface TableView {
   readonly stage: number;
@@ -15,6 +15,7 @@ export interface TableView {
   readonly refillSize?: number;
   readonly refillStep?: number;
   readonly queuesFilled?: boolean;
+  readonly veilJudge?: number;
 }
 
 export type KeeperAction =
@@ -44,6 +45,10 @@ function refillAction(table: TableView): KeeperAction {
 
 const stageName = (stage: number): string => STAGE[stage] ?? "Unknown";
 const needsStarter = (table: TableView): boolean => Number(table.topCard ?? NO_CARD) === NO_CARD;
+const doubtOpen = (table: TableView): boolean => {
+  const judge = Number(table.veilJudge ?? NO_SEAT);
+  return judge !== NO_SEAT && (judge & DOUBTED) !== 0;
+};
 
 export function nextKeeperAction(table: TableView, nowSeconds: bigint, poolOwner?: string): KeeperAction {
   switch (stageName(table.stage)) {
@@ -64,6 +69,7 @@ export function nextKeeperAction(table: TableView, nowSeconds: bigint, poolOwner
       if (table.candidate === NO_SEAT) return { kind: "idle" };
       return table.revealPrepared < table.joined ? { kind: "prepareReveal", remaining: table.joined - table.revealPrepared } : { kind: "finishReveal" };
     case "Playing":
+      if (doubtOpen(table)) return { kind: "resolveChallenge" };
       if (table.queuesFilled === false) return { kind: "fillQueues" };
       return nowSeconds > table.turnDeadline ? { kind: "forceTimeout" } : refillAction(table);
     default:

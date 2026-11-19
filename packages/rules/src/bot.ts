@@ -11,7 +11,7 @@ import {
   rankOf,
 } from "./cards.js";
 import { catchableSeat } from "./engine.js";
-import { legalMoves, veilClaims } from "./moves.js";
+import { lastCardWaits, legalMoves, veilClaims } from "./moves.js";
 import type { Hand, Move, PublicState } from "./types.js";
 
 export interface BotOptions {
@@ -91,7 +91,7 @@ function safeClaim(pub: PublicState, hand: Hand, favourite: Color): Card | undef
 
 function veilMove(pub: PublicState, seat: number, hand: Hand): Move | null {
   const me = pub.seats[seat];
-  if (!me || me.veilUsed || me.handSize < 2 || pub.pendingDraw > 0 || pub.drawnSlot !== null) return null;
+  if (!me || me.veilUsed || me.handSize < 2 || pub.pendingDraw > 0 || pub.drawnSlot !== null || pub.doubt) return null;
   let slot = -1;
   let worst = -1;
   hand.forEach((card, i) => {
@@ -118,6 +118,7 @@ export function chooseMove(pub: PublicState, seat: number, hand: Hand, options: 
   const moves = legalMoves(pub, seat, hand);
   if (moves.some((m) => m.type === "mono")) return { type: "mono" };
   if (pub.turn !== seat || pub.stage !== "Playing") return null;
+  if (lastCardWaits(pub, seat, hand)) return null;
   if (moves.some((m) => m.type === "doubt") && veilIsImpossible(pub, hand)) return { type: "doubt" };
   if (pub.drawFour) {
     const held = hand.filter((card) => card !== null && !isWild(card) && colorOf(card) === pub.drawFour?.prevColor);

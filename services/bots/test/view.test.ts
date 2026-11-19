@@ -1,6 +1,6 @@
 import { chooseMove, initialState } from "@kryphochroma/rules";
 import { describe, expect, it } from "vitest";
-import { type ChainSeat, type ChainTable, chainDeckCount, toPublicState } from "@kryphochroma/abi";
+import { type ChainSeat, type ChainTable, chainDeckCount, toPublicState, veilAndDoubt } from "@kryphochroma/abi";
 
 describe("chain view", () => {
   it("rebuilds the engine public state from contract reads", () => {
@@ -46,6 +46,12 @@ describe("chain view", () => {
     expect(chainDeckCount({ deckPtr: 108, deckEnd: 108, refillSize: 30, refillStep: 2 })).toBe(0);
     expect(chainDeckCount({ deckPtr: 108, deckEnd: 108, refillSize: 30, refillStep: 3 })).toBe(30);
     expect(chainDeckCount({ deckPtr: 3, deckEnd: 30 })).toBe(27);
+  });
+
+  it("tells an open veil from a doubted one by the high bit on the judge seat", () => {
+    expect(veilAndDoubt({ veilBy: 255, veilJudge: 255, topCard: 7 })).toEqual({ veil: null, doubt: null });
+    expect(veilAndDoubt({ veilBy: 0, veilJudge: 1, topCard: 7 })).toEqual({ veil: { by: 0, judge: 1, claim: 7 }, doubt: null });
+    expect(veilAndDoubt({ veilBy: 2, veilJudge: 0x83, topCard: 7 })).toEqual({ veil: null, doubt: { by: 2, judge: 3 } });
   });
 
   it("returns null before play starts", () => {

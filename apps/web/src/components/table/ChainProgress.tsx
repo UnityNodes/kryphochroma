@@ -85,10 +85,19 @@ export function sealedCardNote(sync: ChainSync | null | undefined, sealed: numbe
 
 const BIT_WHY = "Zama's coprocessor works the bit out under encryption, the KMS decrypts that one bit in public and the contract checks its signatures. Usually 15 to 40 s; no card is shown to anyone.";
 
-export function challengeNote(sync: ChainSync | null | undefined, stage: string, veilDoubted: boolean): WaitNote | null {
+export function challengeNote(sync: ChainSync | null | undefined, stage: string): WaitNote | null {
   if (!sync || stage !== "AwaitChallenge") return null;
-  if (veilDoubted) return { title: "Checking the veil", why: `One encrypted yes or no decides it: was the veiled card what it claimed to be? ${BIT_WHY}`, phase: "bit" };
   return { title: "Checking the Wild +4", why: `One encrypted yes or no decides it: had the player held the colour in play? ${BIT_WHY}`, phase: "bit" };
+}
+
+/** A doubted veil no longer stops the table; the one seat it holds up is a player down to their last card, who may not go out before the penalty is dealt. */
+export function lastCardNote(sync: ChainSync | null | undefined, waits: boolean): WaitNote | null {
+  if (!sync || !waits) return null;
+  return {
+    title: "Your last card waits for the veil check",
+    why: "Nobody can go out while a doubted veil is open, so its penalty counts before the hands are scored. The KMS opens that one bit while the game goes on, usually within 20 s.",
+    phase: "doubt",
+  };
 }
 
 export function refillNote(sync: ChainSync | null | undefined, deckCount: number): WaitNote | null {

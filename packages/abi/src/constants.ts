@@ -1,6 +1,7 @@
 export const STAGE = ["Lobby", "Shuffling", "Dealing", "Playing", "AwaitChallenge", "Revealing", "RoundOver", "MatchOver"] as const;
 export type ChainStage = (typeof STAGE)[number];
 export const NO_SEAT = 255;
+export const DOUBTED = 0x80;
 export const NO_CARD = 255;
 export const JOIN_GAS_LIMIT = 16_700_000n;
 export const DECK_SIZE = 138;

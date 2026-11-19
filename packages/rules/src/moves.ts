@@ -28,8 +28,10 @@ export function legalMoves(pub: PublicState, seat: number, hand: Hand): Move[] {
     });
     return [...moves, { type: "take" }];
   }
+  const me = pub.seats[seat];
+  const waits = pub.doubt !== null && me?.handSize === 1;
   hand.forEach((card, slot) => {
-    if (card === null) return;
+    if (card === null || waits) return;
     if (pub.drawnSlot !== null && slot !== pub.drawnSlot) return;
     if (!matches(card, pub.topCard, pub.color)) return;
     if (isWild(card)) {
@@ -40,8 +42,7 @@ export function legalMoves(pub: PublicState, seat: number, hand: Hand): Move[] {
       moves.push({ type: "play", slot, card });
     }
   });
-  const me = pub.seats[seat];
-  if (me && !me.veilUsed && me.handSize >= 2) {
+  if (me && !me.veilUsed && me.handSize >= 2 && pub.doubt === null) {
     const claims = veilClaims(pub);
     hand.forEach((card, slot) => {
       if (card === null || (pub.drawnSlot !== null && slot !== pub.drawnSlot)) return;
@@ -72,6 +73,11 @@ export function veilClaims(pub: PublicState): Card[] {
     }
   }
   return claims;
+}
+
+/** A seat down to one card can not go out while a doubted veil is still being checked, so the penalty is dealt before the hands are scored. */
+export function lastCardWaits(pub: PublicState, seat: number, hand: Hand): boolean {
+  return pub.doubt !== null && pub.turn === seat && pub.seats[seat]?.handSize === 1 && hand.some((card) => card !== null && matches(card, pub.topCard, pub.color));
 }
 
 export function isPlayable(pub: PublicState, card: Card): boolean {

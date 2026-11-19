@@ -50,6 +50,10 @@ function playRound(start: GameState, pick: Picker, cheaters: readonly number[] =
     steps += 1;
   };
   while (steps < STEP_CAP) {
+    if (state.pub.doubt && (steps % 3 === 0 || state.pub.stage === "AwaitChallenge")) {
+      run(applyChallenge(state));
+      continue;
+    }
     if (state.pub.stage === "AwaitChallenge") {
       run(applyChallenge(state));
       continue;
@@ -76,6 +80,10 @@ function playRound(start: GameState, pick: Picker, cheaters: readonly number[] =
     const move = cheaters.includes(turn)
       ? chooseMove(state.pub, turn, state.hands[turn] ?? [], { cheat: true })
       : pick(state, turn);
+    if (!move && state.pub.doubt) {
+      run(applyChallenge(state));
+      continue;
+    }
     if (!move) throw new Error("no move for the seat on turn");
     run(applyMove(state, turn, move));
     checkInvariants(state);

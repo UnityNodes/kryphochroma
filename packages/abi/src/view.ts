@@ -1,4 +1,4 @@
-import { DECK_SIZE, FILL_CHUNK, NO_SEAT } from "./constants.js";
+import { DECK_SIZE, DOUBTED, FILL_CHUNK, NO_SEAT } from "./constants.js";
 import { type Color, HAND_SLOTS, type PublicSeat, type PublicState, type Stage } from "@kryphochroma/rules";
 
 export interface ChainTable {
@@ -45,6 +45,15 @@ export function chainDeckCount(table: Pick<ChainTable, "deckPtr" | "deckEnd" | "
 
 const orNull = (value: number): number | null => (value === NO_SEAT ? null : value);
 
+/** The contract marks a doubted veil by setting the high bit on its judge seat, so an open veil and an open doubt share the two seat fields. */
+export function veilAndDoubt(table: Pick<ChainTable, "veilBy" | "veilJudge" | "topCard">): Pick<PublicState, "veil" | "doubt"> {
+  const by = Number(table.veilBy ?? NO_SEAT);
+  const judge = Number(table.veilJudge ?? NO_SEAT);
+  if (by === NO_SEAT || judge === NO_SEAT) return { veil: null, doubt: null };
+  if ((judge & DOUBTED) !== 0) return { veil: null, doubt: { by, judge: judge & ~DOUBTED } };
+  return { veil: { by, judge, claim: table.topCard }, doubt: null };
+}
+
 export function toPublicState(table: ChainTable, seats: readonly ChainSeat[], discard: readonly number[]): PublicState | null {
   const stage = STAGES[table.stage];
   if (!stage) return null;
@@ -58,8 +67,6 @@ export function toPublicState(table: ChainTable, seats: readonly ChainSeat[], di
     veilUsed: Boolean(s.veilUsed),
     sonarUsed: Boolean(s.sonarUsed),
   }));
-  const veilBy = table.veilBy ?? NO_SEAT;
-  const veilJudge = table.veilJudge ?? NO_SEAT;
   return {
     config: {
       seats: table.joined,
@@ -78,7 +85,7 @@ export function toPublicState(table: ChainTable, seats: readonly ChainSeat[], di
     seats: publicSeats,
     drawnSlot: orNull(table.drawnSlot),
     drawFour: table.drawFourBy === NO_SEAT ? null : { by: table.drawFourBy, prevColor: table.prevColor as Color },
-    veil: Number(veilBy) === NO_SEAT ? null : { by: Number(veilBy), judge: Number(veilJudge), claim: table.topCard },
+    ...veilAndDoubt(table),
     pendingDraw: table.pendingDraw,
     monoWindow: orNull(table.monoWindow),
     candidate: orNull(table.candidate),
