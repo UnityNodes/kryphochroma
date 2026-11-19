@@ -2,6 +2,7 @@ import { BookOpen, Dices, EyeOff, Lock, Palette, Play, ScanEye } from "lucide-re
 import type { Metadata } from "next";
 import Link from "next/link";
 import { LeakDemo } from "@/components/secret/LeakDemo";
+import { Disclaimer } from "@/components/site/Disclaimer";
 import { SiteHeader } from "@/components/site/SiteHeader";
 
 export const metadata: Metadata = {
@@ -115,6 +116,7 @@ export default function SecretPage() {
             Read the docs
           </Link>
         </div>
+        <Disclaimer className="text-xs text-cream/70" />
       </main>
     </div>
   );

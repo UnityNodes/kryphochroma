@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { Disclaimer } from "@/components/site/Disclaimer";
 import { ASSET_BASE } from "./constants";
 import { PlayCtas } from "./LandingStory";
 
@@ -38,6 +39,7 @@ export function Footer() {
           </li>
         </ul>
       </div>
+      <Disclaimer className="br-foot__note" />
     </footer>
   );
 }

@@ -762,6 +762,13 @@ body:has(.kc-landing) { background: #07130e; }
   color: var(--br-cream-2);
 }
 .kc-landing .br-foot__links { min-width: 0; list-style: none; }
+.kc-landing .br-foot__note {
+  max-width: 1500px;
+  margin: 32px auto 0;
+  font-size: 13px;
+  line-height: 1.5;
+  color: var(--br-cream-2);
+}
 .kc-landing .br-foot__links a {
   display: inline-flex;
   align-items: center;

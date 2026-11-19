@@ -189,6 +189,10 @@ To run the whole stack against Sepolia, copy `.env.example` to `.env`, fill in t
 | `services/bots` | keeper, background card draws, relay hub, seat relayer and bots |
 | `infra/` | systemd units and Caddy site |
 
+## Disclaimer
+
+This project is not audited, endorsed or operated by Zama. Use at your own risk.
+
 ## License
 
 MIT

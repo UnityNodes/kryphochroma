@@ -2,6 +2,7 @@
 
 import { CircleHelp } from "lucide-react";
 import Link from "next/link";
+import { Disclaimer } from "@/components/site/Disclaimer";
 import { useEffect, useState } from "react";
 import { Dialog, DialogContent, DialogDescription, DialogTitle } from "@/components/ui/dialog";
 
@@ -68,6 +69,7 @@ export function HowToPlay({ autoOpen }: { readonly autoOpen?: boolean }) {
               How it stays secret
             </Link>
           </p>
+          <Disclaimer className="text-xs text-cream/70" />
         </DialogContent>
       </Dialog>
     </>

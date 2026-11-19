@@ -1,4 +1,5 @@
 import type { Metadata } from "next";
+import { Disclaimer } from "@/components/site/Disclaimer";
 import { SiteHeader } from "@/components/site/SiteHeader";
 import { DOCS } from "@/guide/content";
 import { type NavGroup, Sidebar } from "@/guide/Sidebar";
@@ -21,6 +22,7 @@ export default function DocsLayout({ children }: { readonly children: React.Reac
         <Sidebar groups={GROUPS} />
         {children}
       </div>
+      <Disclaimer className="mx-auto max-w-[1280px] px-4 pb-10 text-xs text-cream/70 sm:px-6 lg:px-8" />
     </div>
   );
 }
