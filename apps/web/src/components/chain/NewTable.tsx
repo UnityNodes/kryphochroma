@@ -16,9 +16,7 @@ import { PageShell } from "@/components/site/PageShell";
 import { WalletBar } from "@/components/wallet/WalletBar";
 import { useFunder } from "@/components/wallet/useFunder";
 import { tablePath } from "@/lib/invite";
-import { useTableView } from "@/game/useTableView";
 import { AiPanel, FlowProgress, FriendsPanel, JoinPanel, type OpenTable, PracticeStrip } from "./NewTableParts";
-import { ViewPicker } from "./ViewPicker";
 
 type Flow = "quick" | "friends" | "bots";
 
@@ -58,7 +56,6 @@ export function NewTable() {
   const funderState = useFunder();
   const me = useMyProfile();
   const openTables = useOpenTables();
-  const tableView = useTableView();
   const [seats, setSeats] = useState(4);
   const [stack, setStack] = useState(false);
   const [flow, setFlow] = useState<Flow>("quick");
@@ -182,29 +179,15 @@ export function NewTable() {
             <WalletBar disabled={running} />
           </div>
         </div>
-        <section className="grid gap-4" aria-labelledby="step-view">
-          <h2 id="step-view" className="kc-step font-display text-3xl leading-none">
-            <span>1</span>Pick your table
-          </h2>
-          <div className="max-w-[760px]">
-            <ViewPicker view={tableView.view} onChoose={tableView.choose} />
-          </div>
-          <p className="text-sm text-cream/60">You can switch any time with the 2D and 3D chip at the table.</p>
-        </section>
-        <section className="grid gap-4" aria-labelledby="step-who">
-          <h2 id="step-who" className="kc-step font-display text-3xl leading-none">
-            <span>2</span>Pick who you play with
-          </h2>
-          <div className="grid grid-cols-1 items-stretch gap-6 lg:grid-cols-3">
-            <AiPanel onPlay={quick} disabled={disabled}>
-              {!ownFlow && <FlowProgress status={status} />}
-            </AiPanel>
-            <FriendsPanel seats={seats} onSeats={setSeats} stack={stack} onStack={setStack} onFriends={friends} onBots={withBots} locked={running} disabled={disabled}>
-              {ownFlow && <FlowProgress status={status} />}
-            </FriendsPanel>
-            <JoinPanel tables={openTables} disabled={running} onJoin={(path) => router.push(path)} />
-          </div>
-        </section>
+        <div className="grid grid-cols-1 items-stretch gap-6 lg:grid-cols-3">
+          <AiPanel onPlay={quick} disabled={disabled}>
+            {!ownFlow && <FlowProgress status={status} />}
+          </AiPanel>
+          <FriendsPanel seats={seats} onSeats={setSeats} stack={stack} onStack={setStack} onFriends={friends} onBots={withBots} locked={running} disabled={disabled}>
+            {ownFlow && <FlowProgress status={status} />}
+          </FriendsPanel>
+          <JoinPanel tables={openTables} disabled={running} onJoin={(path) => router.push(path)} />
+        </div>
         <PracticeStrip />
       </div>
     </PageShell>

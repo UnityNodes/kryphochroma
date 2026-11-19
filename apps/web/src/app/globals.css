@@ -336,20 +336,6 @@
   padding: 6px 6px 10px;
 }
 
-.kc-step {
-  display: flex;
-  align-items: baseline;
-  gap: 12px;
-  color: var(--color-cream);
-}
-
-.kc-step > span {
-  font-family: var(--font-display);
-  font-size: 15px;
-  color: var(--color-brass);
-  letter-spacing: 0.06em;
-}
-
 .kc-mode {
   display: flex;
   flex-direction: column;

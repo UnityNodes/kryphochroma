@@ -36,6 +36,10 @@ test("the privacy page shows what an open contract would leak", async ({ page })
 
 test("a practice game teaches the rules, plays a move and keeps the table accessible", async ({ page }) => {
   await page.goto("/play?seats=2");
+  const prompt = page.getByRole("dialog", { name: "How do you want to see the table?" });
+  await expect(prompt).toBeVisible();
+  await page.keyboard.press("Escape");
+  await expect(prompt).toBeHidden();
   const howTo = page.getByRole("dialog", { name: "How to play" });
   await expect(howTo).toBeVisible();
   await page.keyboard.press("Escape");
@@ -80,21 +84,28 @@ test("a new table can start as a guest without a wallet", async ({ page }) => {
   expect(await seriousViolations(page)).toEqual([]);
 });
 
-test("the table view is picked before the game and the table opens in it", async ({ page }) => {
+test("a table code or invite link opens the table it names", async ({ page }) => {
   await page.goto("/new");
-  const picker = page.getByRole("radiogroup", { name: "How the table looks" });
-  await expect(picker.getByRole("radio", { name: /2D table/ })).toHaveAttribute("aria-checked", "true");
-  await picker.getByRole("radio", { name: /3D table/ }).click();
-  await expect(picker.getByRole("radio", { name: /3D table/ })).toHaveAttribute("aria-checked", "true");
-  expect(await page.evaluate(() => window.localStorage.getItem("kc-table-view"))).toBe("3d");
-  await page.reload();
-  await expect(page.getByRole("radiogroup", { name: "How the table looks" }).getByRole("radio", { name: /3D table/ })).toHaveAttribute("aria-checked", "true");
   await page.getByLabel("Table code or invite link").fill("not a code");
   await page.getByRole("button", { name: "Join", exact: true }).click();
   await expect(page.locator("#table-code-error")).toContainText("not a table code");
   await page.getByLabel("Table code or invite link").fill("https://kryphochroma.unitynodes.com/j/red-otter");
   await page.getByRole("button", { name: "Join", exact: true }).click();
   await expect(page).toHaveURL(/\/j\/red-otter$/);
+});
+
+test("the game asks for 2D or 3D when it opens, once per table", async ({ page }) => {
+  await page.addInitScript(() => window.localStorage.setItem("kc-howto-seen", "1"));
+  await page.goto("/play");
+  const prompt = page.getByRole("dialog", { name: "How do you want to see the table?" });
+  await expect(prompt).toBeVisible();
+  await prompt.getByRole("radio", { name: /3D table/ }).click();
+  await expect(prompt).toBeHidden();
+  expect(await page.evaluate(() => window.localStorage.getItem("kc-table-view"))).toBe("3d");
+  await expect(page.getByRole("button", { name: "3D table" })).toHaveAttribute("aria-pressed", "true");
+  await page.reload();
+  await expect(page.locator(".kc-status")).toBeVisible();
+  await expect(page.getByRole("dialog", { name: "How do you want to see the table?" })).toHaveCount(0);
 });
 
 test("the docs open on every page with navigation", async ({ page }) => {
@@ -109,7 +120,10 @@ test("the docs open on every page with navigation", async ({ page }) => {
 });
 
 test("a practice table offers the veil and can go back to the menu", async ({ page }) => {
-  await page.addInitScript(() => window.localStorage.setItem("kc-howto-seen", "1"));
+  await page.addInitScript(() => {
+    window.localStorage.setItem("kc-howto-seen", "1");
+    window.sessionStorage.setItem("kc-view-asked:/play", "1");
+  });
   await page.goto("/play?seats=2");
   await expect(page.locator(".kc-status")).toHaveText(/Your turn|Play the drawn card|doubt it/, { timeout: 20_000 });
   await expect(page.getByTitle(/Your secret colour/).filter({ visible: true }).first()).toBeVisible();

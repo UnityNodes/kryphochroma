@@ -17,12 +17,14 @@ import { useRadio } from "@/game/useRadio";
 import { useSound } from "@/game/useSound";
 import { useOfflineGame } from "@/game/useOfflineGame";
 import { useTableView } from "@/game/useTableView";
+import { useViewPrompt } from "@/game/useViewPrompt";
 import { cn } from "@/lib/utils";
 import { Center } from "./Center";
 import { RoundEndProgress, WaitHint, challengeNote, lastCardNote, refillNote, sealedCardNote } from "./ChainProgress";
 import { Feed } from "./Feed";
 import { Hand } from "./Hand";
 import { HowToPlay } from "./HowToPlay";
+import { ViewPrompt } from "./ViewPrompt";
 import { PeekDialog, PeekResult, SecretBadge, SecretChip, SonarDialog, SonarResult, VeilDialog } from "./Mechanics";
 import { MonoBurst } from "./MonoBurst";
 import { RadioChip } from "./RadioChip";
@@ -130,6 +132,7 @@ export function TableView({ controller: game, colorBlind, onToggleShapes }: Tabl
 
   const playable = useCallback((slot: number) => moves.some((m) => m.type === "play" && m.slot === slot), [moves]);
   const { view, choose, fallBack } = useTableView();
+  const viewPrompt = useViewPrompt();
   const is3d = view === "3d";
   const watching = Boolean(game.watching);
   const model = useMemo(() => modelOf(state, HUMAN, watching, (slot) => mine && playable(slot)), [state, HUMAN, watching, mine, playable]);
@@ -250,7 +253,7 @@ export function TableView({ controller: game, colorBlind, onToggleShapes }: Tabl
             {sound.muted ? <VolumeX aria-hidden /> : <Volume2 aria-hidden />}
           </button>
           <RadioChip radio={radio} />
-          <HowToPlay autoOpen={game.mode === "practice"} />
+          <HowToPlay autoOpen={game.mode === "practice" && viewPrompt.settled} />
         </div>
       </header>
       <main className={cn("kc-table", is3d && "kc-3d")}>
@@ -385,6 +388,7 @@ export function TableView({ controller: game, colorBlind, onToggleShapes }: Tabl
           </div>
         </div>
       </main>
+      <ViewPrompt open={viewPrompt.asking} view={view} onChoose={choose} onClose={viewPrompt.answered} />
       <Dialog open={pickingSlot !== null} onOpenChange={(open) => !open && setPickingSlot(null)}>
         <DialogContent className="kc-box" showCloseButton={false}>
           <DialogTitle>Pick a colour</DialogTitle>

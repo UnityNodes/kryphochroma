@@ -28,7 +28,7 @@ export function ViewPicker({ view, onChoose, compact = false }: { readonly view:
               {on && (
                 <span className="kc-view-pick-badge">
                   <Check aria-hidden />
-                  Chosen
+                  Current
                 </span>
               )}
             </span>

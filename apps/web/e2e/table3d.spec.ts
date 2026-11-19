@@ -87,6 +87,7 @@ test("the stored view is used and the address beats it", async ({ page }) => {
   await page.addInitScript(() => {
     window.localStorage.setItem("kc-howto-seen", "1");
     window.localStorage.setItem("kc-table-view", "3d");
+    window.sessionStorage.setItem("kc-view-asked:/play", "1");
   });
   await page.goto("/play?seats=2");
   const chip = page.getByRole("button", { name: "3D table" });

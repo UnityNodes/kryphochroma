@@ -2,7 +2,6 @@ import { ArrowUpRight } from "lucide-react";
 import Link from "next/link";
 import type { ReactNode } from "react";
 import { BACK_FACE, SPYGLASS_SHOT, VEIL_SHOT, cardUrl } from "./constants";
-import { HeroView } from "./HeroView";
 
 const FALLBACK_ROW = ["sun-4", "red-7", "teal-9", BACK_FACE, BACK_FACE, BACK_FACE] as const;
 const COLOURS = ["Red", "Sun", "Teal", "Blue", "Violet"] as const;
@@ -72,7 +71,6 @@ export function Hero() {
               A card game where every card is encrypted on chain. Not even the contract that deals them can look at your hand.
             </p>
             <PlayCtas />
-            <HeroView />
           </div>
         </div>
       </div>
