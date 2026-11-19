@@ -1,4 +1,4 @@
-import { BACK_RAISE, CARD_T, CHAIR_IN, GAP_MAX, GAP_OPEN, PLATE_ROOM, PORTRAIT_ASPECT, RAIL_W, RIVAL_SPACING, STRIP_MIN } from "./constants";
+import { BACK_RAISE, CARD_T, CHAIR_REACH, GAP_MAX, GAP_OPEN, PLATE_ROOM, PORTRAIT_ASPECT, RIVAL_SPACING, STRIP_MIN } from "./constants";
 
 const PI = Math.PI;
 
@@ -133,7 +133,7 @@ export function solveLayout(W: number, H: number, frame: Frame): Layout {
     radius,
     per: Math.floor(maxSpan / STRIP_MIN) + 1,
   };
-  const reachIn = RAIL_W - CHAIR_IN;
+  const reachIn = CHAIR_REACH;
   const base = { W, H, portrait, fov, focal, cardPx, cam, look, fan, chairs: !portrait };
 
   if (portrait) {

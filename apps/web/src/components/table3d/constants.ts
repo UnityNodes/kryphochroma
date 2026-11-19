@@ -10,6 +10,7 @@ export const RAIL_W = 1.115;
 export const RAIL_TOP = 0.35;
 export const FLOOR_Y = -12;
 export const CHAIR_IN = 3.0;
+export const CHAIR_REACH = RAIL_W - CHAIR_IN;
 export const PLATE_ROOM = 40;
 export const PORTRAIT_ASPECT = 0.82;
 

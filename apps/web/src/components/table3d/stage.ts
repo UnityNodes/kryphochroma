@@ -1,6 +1,5 @@
 import {
   ACESFilmicToneMapping,
-  BufferGeometry,
   Fog,
   HemisphereLight,
   InstancedMesh,
@@ -11,7 +10,6 @@ import {
   PCFSoftShadowMap,
   PerspectiveCamera,
   PlaneGeometry,
-  PointLight,
   Scene,
   SpotLight,
   type Texture,
@@ -20,26 +18,21 @@ import {
 } from "three";
 import { linear } from "../landing/color";
 import { seeded } from "../landing/random";
-import { feltTexture } from "../landing/textures";
 import { type CardKit, createCardKit } from "./cards";
-import { CARD_H, CARD_T, CARD_TINTS, CARD_W, DECK_SLAB, DECK_SLABS, FLOOR_Y, LAMP_Y, ROOM_INK } from "./constants";
-import { chairGeometry, floorGeometry, tableGeometry } from "./furniture";
+import { CARD_H, CARD_T, CARD_TINTS, CARD_W, DECK_SLAB, DECK_SLABS, LAMP_Y, ROOM_INK } from "./constants";
+import { createFurniture } from "./furnish";
 import type { Layout, SeatSpot } from "./layout";
-import { RING_TEX_R, boardsTexture, chalkTexture, outlineTexture, printTexture, woodTexture } from "./textures";
+import { RING_TEX_R, chalkTexture, outlineTexture, printTexture } from "./textures";
 
 const LAMP_INTENSITY = 2.25;
 const KEY_INTENSITY = 1.39;
 const KEY_REACH = 20;
-const BOUNCE_INTENSITY = 0.75;
-const BOUNCE_REACH = 44;
-const BOUNCE_Y = -1.2;
 const RING_INK = 0.92;
 const RING_FADE_S = 0.45;
 const PRINT_INK = 0.46;
 const OUTLINE_INK = 0.5;
 const SOFT_SCALE = 0.8;
 const SOFT_PIXELS = 500000;
-const MAX_CHAIRS = 3;
 const MAX_RATIO = { phone: 1.25, desktop: 1.75 } as const;
 
 export interface Stage {
@@ -109,14 +102,7 @@ function build(renderer: WebGLRenderer, canvas: HTMLCanvasElement, forceHq: bool
   key.shadow.normalBias = 0.01;
   scene.add(key, key.target);
 
-  /** Nothing outside the table is inside the lamp's cone. What a room shows there is the light the baize throws back, so one unshadowed light sits under the felt plane: it reaches the rail's inner face, the chairs and the floor, and can not touch the felt or a card lying on it. */
-  const bounce = new PointLight(linear("#ffd9a6"), BOUNCE_INTENSITY, BOUNCE_REACH, 1.2);
-  scene.add(bounce);
-
-  const feltTex = feltTexture();
-  feltTex.repeat.set(1, 1);
-  const wood = woodTexture();
-  const boards = boardsTexture();
+  const furniture = createFurniture(scene, textures, !soft);
   const chalk = chalkTexture();
   const stage: { dirty: boolean; onDirty: (() => void) | null } = { dirty: true, onDirty: null };
   const touch = () => {
@@ -125,29 +111,7 @@ function build(renderer: WebGLRenderer, canvas: HTMLCanvasElement, forceHq: bool
   };
   const print = printTexture(touch);
   const outline = outlineTexture();
-  textures.push(feltTex, wood, boards, chalk, print, outline);
-
-  const felt = new Mesh(new BufferGeometry(), new MeshStandardMaterial({ color: linear("#235a47"), roughness: 1, metalness: 0, map: feltTex, bumpMap: feltTex, bumpScale: 0.006, vertexColors: true }));
-  felt.receiveShadow = true;
-  const woodMat = new MeshStandardMaterial({ map: wood, roughness: 0.38, metalness: 0 });
-  const rail = new Mesh(new BufferGeometry(), woodMat);
-  rail.castShadow = true;
-  rail.receiveShadow = true;
-  const inlay = new Mesh(new BufferGeometry(), new MeshStandardMaterial({ color: linear("#b48c3c"), roughness: 0.3, metalness: 0.6 }));
-  inlay.receiveShadow = true;
-  const floor = new Mesh(new BufferGeometry(), new MeshStandardMaterial({ map: boards, roughness: 0.66, metalness: 0, vertexColors: true }));
-  floor.position.y = FLOOR_Y;
-  floor.visible = !soft;
-  scene.add(felt, rail, inlay, floor);
-
-  const chair = chairGeometry();
-  const chairWood = new InstancedMesh(chair.wood, new MeshStandardMaterial({ map: wood, color: linear("#ece6e0"), roughness: 0.42, metalness: 0, vertexColors: true }), MAX_CHAIRS);
-  const chairPad = new InstancedMesh(chair.pad, new MeshStandardMaterial({ color: linear("#24110d"), roughness: 0.55, metalness: 0, vertexColors: true }), MAX_CHAIRS);
-  for (const mesh of [chairWood, chairPad]) {
-    mesh.frustumCulled = false;
-    mesh.count = 0;
-    scene.add(mesh);
-  }
+  textures.push(chalk, print, outline);
 
   const printMesh = new Mesh(new PlaneGeometry(1, 1), new MeshStandardMaterial({ map: print, transparent: true, opacity: PRINT_INK, roughness: 1, metalness: 0, depthWrite: false, polygonOffset: true, polygonOffsetFactor: -2, polygonOffsetUnits: -2 }));
   printMesh.rotation.x = -Math.PI / 2;
@@ -190,7 +154,6 @@ function build(renderer: WebGLRenderer, canvas: HTMLCanvasElement, forceHq: bool
   scene.add(base);
 
   const swayBase = { x: 0, z: 0 };
-  let tableKey = "";
   let phoneNow = phone;
 
   const self: Stage = Object.assign(stage, {
@@ -217,18 +180,7 @@ function build(renderer: WebGLRenderer, canvas: HTMLCanvasElement, forceHq: bool
       swayBase.z = layout.lamp.z;
       self.sway(0, 0);
 
-      const cut = layout.table;
-      const cutKey = [cut.hx, cut.z0, cut.z1, cut.r].join();
-      if (cutKey !== tableKey) {
-        tableKey = cutKey;
-        const made = tableGeometry(cut);
-        for (const mesh of [felt, rail, inlay, floor]) mesh.geometry.dispose();
-        felt.geometry = made.felt;
-        rail.geometry = made.wood;
-        inlay.geometry = made.brass;
-        floor.geometry = floorGeometry(cut);
-      }
-      bounce.position.set(0, BOUNCE_Y, (cut.z0 + cut.z1) / 2 - 0.4);
+      furniture.setCut(layout.table);
 
       const fan = layout.fan;
       key.position.set(fan.origin.x - 2.4, fan.origin.y + fan.normal.y * 6.2 + fan.up.y * 4.2, fan.origin.z + fan.normal.z * 6.2 + fan.up.z * 4.2);
@@ -273,23 +225,8 @@ function build(renderer: WebGLRenderer, canvas: HTMLCanvasElement, forceHq: bool
       renderer.setSize(width, height, false);
       stage.dirty = true;
     },
-    /** Chairs stand only where somebody sits: an empty side of the table shows its rail and the dark behind it. */
     setChairs: (seats: readonly SeatSpot[]) => {
-      const dummy = new Object3D();
-      let count = 0;
-      for (const seat of seats) {
-        if (!seat.chair || count >= MAX_CHAIRS) continue;
-        dummy.position.set(seat.chair.x, FLOOR_Y, seat.chair.z);
-        dummy.rotation.set(0, seat.chair.yaw, 0);
-        dummy.updateMatrix();
-        chairWood.setMatrixAt(count, dummy.matrix);
-        chairPad.setMatrixAt(count, dummy.matrix);
-        count++;
-      }
-      chairWood.count = count;
-      chairPad.count = count;
-      chairWood.instanceMatrix.needsUpdate = true;
-      chairPad.instanceMatrix.needsUpdate = true;
+      furniture.setChairs(seats.flatMap((seat) => (seat.chair ? [seat.chair] : [])));
       stage.dirty = true;
     },
     setDeck: (slabs: number) => {
@@ -335,11 +272,7 @@ function build(renderer: WebGLRenderer, canvas: HTMLCanvasElement, forceHq: bool
       spot.target.position.set(swayBase.x + Math.sin(time * 0.8) * 0.07 * amount, 0, swayBase.z + Math.cos(time * 0.63) * 0.05 * amount);
     },
     showFurniture: (on: boolean) => {
-      rail.visible = on;
-      inlay.visible = on;
-      floor.visible = on && !soft;
-      chairWood.visible = on;
-      chairPad.visible = on;
+      furniture.show(on);
       stage.dirty = true;
     },
     /** Called when frames keep coming late on a real GPU: the second shadow map and the extra pixels go first, the table stays. */
