@@ -19,7 +19,6 @@ body:has(.kc-landing) { background: #07130e; }
   --br-blue: #3b5ba5;
   --br-violet: #9b4fc9;
   --br-gx: clamp(16px, 3.4vw, 52px);
-  --br-band: 42vh;
   --br-e-out: cubic-bezier(0.23, 1, 0.32, 1);
   --br-e-io: cubic-bezier(0.77, 0, 0.175, 1);
   --br-disp: "Tanker", "Impact", "Arial Narrow", sans-serif;
@@ -35,10 +34,6 @@ body:has(.kc-landing) { background: #07130e; }
   -webkit-font-smoothing: antialiased;
   -webkit-tap-highlight-color: transparent;
 }
-@supports (height: 1svh) {
-  .kc-landing { --br-band: 42svh; }
-}
-.kc-landing.no-gl { --br-band: 0px; }
 
 .kc-landing *,
 .kc-landing *::before,
@@ -809,13 +804,17 @@ body:has(.kc-landing) { background: #07130e; }
 
 
 @media (max-width: 860px) {
-  .kc-landing { font-size: 16px; }
+  .kc-landing {
+    font-size: 16px;
+    --br-frame: linear-gradient(180deg, rgba(5, 12, 9, 0.9) 0%, rgba(5, 12, 9, 0.6) 12%, rgba(5, 12, 9, 0) 29%, rgba(5, 12, 9, 0) 56%, rgba(5, 12, 9, 0.6) 68%, rgba(5, 12, 9, 0.9) 78%, rgba(5, 12, 9, 0.96) 100%);
+    --br-foot-pad: max(26px, env(safe-area-inset-bottom, 0px));
+  }
 
-  .kc-landing .br-stage { height: var(--br-band); z-index: 2; }
-  .kc-landing .br-scrim { display: none; }
-  .kc-landing .br-solid,
-  .kc-landing .br-foot { z-index: 3; }
-  .kc-landing.is-still .br-stage { height: var(--br-band); }
+  .kc-landing .br-stage { height: 100vh; height: 100lvh; }
+  .kc-landing .br-scrim { width: 100%; }
+  .kc-landing .br-scrim--l { background: rgba(5, 12, 9, 0.92); }
+  .kc-landing .br-scrim--r { background: var(--br-frame); }
+  .kc-landing.is-still .br-hero { background: var(--br-frame); }
 
   .kc-landing .br-tag__box { max-width: 170px; }
   .kc-landing .br-tag__k { font-size: 10.5px; }
@@ -847,15 +846,9 @@ body:has(.kc-landing) { background: #07130e; }
   .kc-landing .br-nav button,
   .kc-landing .br-nav a { min-height: 48px; color: var(--br-cream); font-size: 16px; }
 
-  .kc-landing .br-hero {
-    z-index: auto;
-    min-height: 0;
-    padding-top: max(84px, calc(var(--br-band) - 58px));
-    padding-bottom: 44px;
-  }
-  .kc-landing .br-hero__mark { position: relative; z-index: 3; }
+  .kc-landing .br-hero { padding-top: 78px; padding-bottom: var(--br-foot-pad); }
   .kc-landing .br-hero__title { max-width: none; font-size: clamp(44px, 13.2vw, 64px); line-height: 0.88; }
-  .kc-landing .br-hero__low { grid-template-columns: minmax(0, 1fr); gap: 26px; margin-top: 18px; }
+  .kc-landing .br-hero__low { grid-template-columns: minmax(0, 1fr); gap: 26px; }
   .kc-landing .br-hero__lead { margin-top: 12px; font-size: 15.5px; }
   .kc-landing .br-cta { gap: 10px; margin-top: 18px; }
   .kc-landing .br-hero .br-btn {
@@ -868,21 +861,20 @@ body:has(.kc-landing) { background: #07130e; }
 
   .kc-landing .br-track { height: 170vh; height: 170svh; }
   .kc-landing .br-pin {
-    top: var(--br-band);
-    display: block;
-    height: calc(100vh - var(--br-band));
-    height: calc(100svh - var(--br-band));
-    padding-top: 20px;
-    padding-bottom: 0;
+    display: flex;
+    align-items: stretch;
+    padding-top: 74px;
+    padding-bottom: var(--br-foot-pad);
     overflow: hidden;
   }
+  .kc-landing .br-col { display: flex; flex-direction: column; width: 100%; }
   .kc-landing .br-move--veil .br-col,
   .kc-landing .br-move--spy .br-col,
-  .kc-landing .br-move--colour .br-col { padding-top: 0; padding-bottom: 0; }
+  .kc-landing .br-move--colour .br-col { align-self: stretch; padding-top: 0; padding-bottom: 0; }
 
   .kc-landing .br-game__h { font-size: 11vw; font-size: calc(100cqw / 8.6); }
   .kc-landing .br-game__h span { display: inline; }
-  .kc-landing .br-game__count { gap: 12px; margin-top: 14px; }
+  .kc-landing .br-game__count { gap: 12px; margin-top: 12px; }
   .kc-landing .br-game__num { font-size: 84px; }
   .kc-landing .br-game__of { font-size: 26px; }
   .kc-landing .br-chips {
@@ -892,9 +884,9 @@ body:has(.kc-landing) { background: #07130e; }
     letter-spacing: 0.06em;
   }
   .kc-landing .br-chip { margin-right: 5px; }
-  .kc-landing .br-game__run { margin-top: 12px; font-size: 14.5px; line-height: 1.5; }
+  .kc-landing .br-game__run { margin-top: auto; font-size: 14.5px; line-height: 1.5; }
 
-  .kc-landing .br-hidden { min-height: 74vh; align-items: flex-end; padding-bottom: 12vh; }
+  .kc-landing .br-hidden { min-height: 100vh; min-height: 100svh; align-items: flex-end; padding-bottom: 9vh; }
   .kc-landing .br-eyebrow { font-size: 12px; }
   .kc-landing .br-hidden__h { font-size: 20vw; font-size: calc(100cqw / 4.72); white-space: normal; }
   .kc-landing .br-hidden__h span { display: block; }
@@ -904,7 +896,7 @@ body:has(.kc-landing) { background: #07130e; }
   .kc-landing .br-move--sonar .br-move__name { font-size: min(calc(100cqw / 2.32), 15vh); }
   .kc-landing .br-move--spy .br-move__name { font-size: min(calc(100cqw / 3.46), 15vh); }
   .kc-landing .br-move--colour .br-move__name { font-size: min(calc(100cqw / 2.68), 11.5vh); }
-  .kc-landing .br-move__what { margin-top: 14px; font-size: 15.5px; }
+  .kc-landing .br-move__what { margin-top: auto; font-size: 15.5px; }
   .kc-landing .br-move__stake { margin-top: 12px; font-size: 22px; }
   .kc-landing .br-move__chain { margin-top: 10px; font-size: 13.5px; line-height: 1.5; }
 
@@ -956,11 +948,12 @@ body:has(.kc-landing) { background: #07130e; }
   .kc-landing .br-close {
     min-height: 100vh;
     min-height: 100svh;
-    padding-top: calc(var(--br-band) + 30px);
-    padding-bottom: 12vh;
+    justify-content: flex-end;
+    padding-top: 12vh;
+    padding-bottom: calc(var(--br-foot-pad) + 40px);
   }
-  .kc-landing .br-close__a { font-size: 27vw; font-size: calc(100cqw / 3.5); }
-  .kc-landing .br-close__b { font-size: 16vw; font-size: calc(100cqw / 5.95); white-space: normal; }
+  .kc-landing .br-close__a { font-size: 27vw; font-size: min(calc(100cqw / 3.5), 13svh); }
+  .kc-landing .br-close__b { font-size: 16vw; font-size: min(calc(100cqw / 5.95), 7.6svh); white-space: normal; }
   .kc-landing .br-close__b span { display: block; }
   .kc-landing .br-close .br-btn {
     flex: 1 1 0;
@@ -972,6 +965,9 @@ body:has(.kc-landing) { background: #07130e; }
   .kc-landing .br-foot__in { grid-template-columns: minmax(0, 1fr); }
 
   .kc-landing.is-still .br-pin { min-height: 0; padding-top: 7vh; padding-bottom: 7vh; }
+  .kc-landing.is-still .br-hidden { min-height: 0; padding-top: 9vh; padding-bottom: 4vh; }
+  .kc-landing.is-still .br-move__what,
+  .kc-landing.is-still .br-game__run { margin-top: 14px; }
   .kc-landing.is-still .br-move__still { display: none; }
   .kc-landing.is-still .br-close { padding-top: 12vh; }
 }

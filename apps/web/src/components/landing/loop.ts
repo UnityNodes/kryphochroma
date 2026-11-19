@@ -1,10 +1,10 @@
 import { updateCards } from "./choreography";
-import { BAND_ASPECT, BASE_ASPECT, INTRO, LAMP_INTENSITY, SOFT_SCALE, STABLE_MS, STALE_MS, VIOLET_INTENSITY } from "./constants";
+import { BASE_ASPECT, INTRO, LAMP_INTENSITY, PORTRAIT_ASPECT, SOFT_SCALE, STABLE_MS, STALE_MS, VIOLET_INTENSITY } from "./constants";
 import { forcedHover, forcedIntro, forcedShot, forcesHq, readDebug } from "./debug";
 import { seg, smooth } from "./ease";
 import { handPlaneHit, pickHandAt } from "./layout";
 import { updateOverlay } from "./overlay";
-import { fitFov, framePose } from "./pose";
+import { PORTRAIT, WIDE, fitFov, framePose } from "./pose";
 import { type Rig, type Room, SHOT_KEYS } from "./state";
 
 const IDLE_STEP = 0.0003;
@@ -27,7 +27,7 @@ function aimCamera(room: Room, rig: Rig): void {
   const camera = rig.camera;
   camera.position.set(frame.px + room.px * 0.14, frame.py + room.py * 0.05, frame.pz);
   camera.lookAt(frame.tx, frame.ty, frame.tz);
-  camera.fov = fitFov(frame.fov, room.W / room.H, room.band ? BAND_ASPECT : BASE_ASPECT);
+  camera.fov = fitFov(frame.fov, room.W / room.H, room.portrait ? PORTRAIT_ASPECT : BASE_ASPECT);
   camera.setViewOffset(room.W, room.H, -frame.ox * room.W, -frame.oy * room.H, room.W, room.H);
   camera.updateMatrixWorld();
 }
@@ -49,7 +49,7 @@ function easeHover(room: Room, rig: Rig, dt: number): void {
     room.pdirty = false;
     room.held = room.hover;
     room.hover = -1;
-    if (!room.band && room.pin) room.hover = pickHand(room, rig);
+    if (!room.portrait && room.pin) room.hover = pickHand(room, rig);
   }
   const forced = forcedHover(readDebug(window));
   if (forced !== null) room.hover = forced;
@@ -70,7 +70,7 @@ export function draw(room: Room, rig: Rig, elapsed: number, dt: number, scroll: 
   const closeProgress = room.still ? 0 : close;
   const t = room.still || room.soft ? INTRO : elapsed;
   const closing = closeProgress > 0.0005;
-  framePose(room.cur, shot, closing, closeProgress, room.band);
+  framePose(room.cur, shot, closing, closeProgress, room.portrait ? PORTRAIT : WIDE);
   const k = room.soft ? 1 : 1 - Math.exp(-dt * 5);
   room.px += (room.ptx - room.px) * k;
   room.py += (room.pty - room.py) * k;
@@ -93,10 +93,10 @@ export function resize(room: Room): void {
   const width = room.stageEl.clientWidth;
   const height = room.stageEl.clientHeight;
   if (width < 2 || height < 2) return;
-  room.band = room.mq.matches;
+  room.portrait = room.mq.matches;
   room.W = width;
   room.H = height;
-  let ratio = Math.min(window.devicePixelRatio || 1, room.band ? 1.25 : 1.75);
+  let ratio = Math.min(window.devicePixelRatio || 1, room.portrait ? 1.25 : 1.75);
   if (room.soft) {
     if (width * height > 500000) ratio = SOFT_SCALE;
   } else if (room.lite) {

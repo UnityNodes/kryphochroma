@@ -3,7 +3,7 @@ import type { TableCut } from "../table3d/layout";
 
 export const ROOM_INK = "#07130e";
 export const ASSET_BASE = "/landing";
-export const BAND_QUERY = "(max-width: 860px)";
+export const PORTRAIT_QUERY = "(max-width: 860px)";
 
 export function cardUrl(name: string): string {
   return `${ASSET_BASE}/cards/${name}.webp`;
@@ -28,7 +28,7 @@ export const LAMP_INTENSITY = 2.1;
 export const VIOLET_INTENSITY = 5;
 
 export const BASE_ASPECT = 1.6;
-export const BAND_ASPECT = 1.25;
+export const PORTRAIT_ASPECT = 0.46;
 export const MAX_FOV = 64;
 export const SOFT_SCALE = 0.8;
 export const STABLE_MS = 60;

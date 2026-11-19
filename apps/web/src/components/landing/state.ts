@@ -79,7 +79,7 @@ export interface Room {
   rig: Rig | null;
   overlay: Overlay | null;
   still: boolean;
-  band: boolean;
+  portrait: boolean;
   ready: boolean;
   onstage: boolean;
   docHidden: boolean;

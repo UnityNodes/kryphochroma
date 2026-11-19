@@ -1,5 +1,5 @@
 import { Raycaster, Vector2, Vector3 } from "three";
-import { BAND_QUERY, INTRO, READY_TIMEOUT_MS } from "./constants";
+import { INTRO, PORTRAIT_QUERY, READY_TIMEOUT_MS } from "./constants";
 import { forcesHq, readDebug } from "./debug";
 import { need } from "./dom";
 import { draw, startLoop, tick } from "./loop";
@@ -19,7 +19,7 @@ function createRoom(root: HTMLElement, reduced: boolean): Room {
     root,
     stageEl: need(root, ".br-stage"),
     reduced,
-    mq: window.matchMedia(BAND_QUERY),
+    mq: window.matchMedia(PORTRAIT_QUERY),
     prog: { s0: 0, s1: 0, s2: 0, s3: 0, s4: 0, s5: 0, s6: 0, s7: 0, c: 0 },
     cur: blankFrame(),
     slot: { x: 0, z: 0, yaw: 0 },
@@ -33,7 +33,7 @@ function createRoom(root: HTMLElement, reduced: boolean): Room {
     rig: null,
     overlay: null,
     still: reduced,
-    band: false,
+    portrait: false,
     ready: false,
     onstage: true,
     docHidden: document.hidden,
@@ -70,8 +70,8 @@ function createRoom(root: HTMLElement, reduced: boolean): Room {
 }
 
 function buildScene(room: Room): boolean {
-  room.band = room.mq.matches;
-  const rig = createRig(room.stageEl, room.band, forcesHq(readDebug(window)));
+  room.portrait = room.mq.matches;
+  const rig = createRig(room.stageEl, room.portrait, forcesHq(readDebug(window)));
   if (!rig) return false;
   room.rig = rig;
   room.soft = rig.soft;

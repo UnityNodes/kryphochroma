@@ -145,7 +145,7 @@ function disposeParts(renderer: WebGLRenderer, canvas: HTMLCanvasElement, scene:
 }
 
 /** Every mount draws on a canvas of its own. A canvas whose context was thrown away on unmount can not be given a new one, and in development React mounts the page twice. */
-export function createRig(stage: HTMLElement, band: boolean, forceHq: boolean): Rig | null {
+export function createRig(stage: HTMLElement, portrait: boolean, forceHq: boolean): Rig | null {
   const canvas = document.createElement("canvas");
   canvas.className = "br-canvas";
   let renderer: WebGLRenderer;
@@ -168,7 +168,7 @@ export function createRig(stage: HTMLElement, band: boolean, forceHq: boolean): 
     renderer.setClearColor(ROOM_INK, 1);
 
     const camera = new PerspectiveCamera(30, BASE_ASPECT, 0.4, 60);
-    const lights = addLights(scene, band || soft ? 1024 : 2048);
+    const lights = addLights(scene, portrait || soft ? 1024 : 2048);
     scene.fog = new Fog(ROOM_INK, FOG_NEAR, FOG_FAR);
     addTable(scene, textures, !soft);
     addLamp(scene);

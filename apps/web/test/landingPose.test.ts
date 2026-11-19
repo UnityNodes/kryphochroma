@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { CLOSING, POSES, SHOT_COUNT, blankFrame, fitFov, framePose } from "@/components/landing/pose";
+import { CLOSING, PORTRAIT, POSES, SHOT_COUNT, WIDE, blankFrame, fitFov, framePose } from "@/components/landing/pose";
 
 const at = (index: number) => {
   const pose = POSES[index];
@@ -7,9 +7,9 @@ const at = (index: number) => {
   return pose;
 };
 
-const frameAt = (shot: number, closing = 0, band = false) => {
+const frameAt = (shot: number, closing = 0, set = WIDE) => {
   const frame = blankFrame();
-  framePose(frame, shot, closing > 0, closing, band);
+  framePose(frame, shot, closing > 0, closing, set);
   return frame;
 };
 
@@ -93,16 +93,22 @@ describe("camera pose", () => {
     expect(end.pz).toBeCloseTo(CLOSING.pz + CLOSING.dz * 0.5, 6);
   });
 
-  it("drops the sideways offset and the scrims on the phone band", () => {
-    const wide = frameAt(1.5);
-    const band = frameAt(1.5, 0, true);
-    expect(wide.ox).not.toBe(0);
-    expect(wide.scrimR).toBe(1);
-    expect(band.ox).toBe(0);
-    expect(band.oy).toBe(0);
-    expect(band.scrimL).toBe(0);
-    expect(band.scrimR).toBe(0);
-    expect(band.px).toBeCloseTo(wide.px, 6);
+  it("gives an upright phone shots of its own: centred, lifted, framed top and bottom", () => {
+    expect(PORTRAIT.poses).toHaveLength(SHOT_COUNT);
+    for (let shot = 0; shot < SHOT_COUNT; shot++) {
+      const frame = frameAt(shot + 0.5, 0, PORTRAIT);
+      expect(frame.ox).toBe(0);
+      expect(Math.abs(frame.oy)).toBeLessThan(0.2);
+      expect(frame.scrimR).toBe(1);
+      expect(frame.fov).toBeGreaterThan(at(shot).fov);
+    }
+    const closing = frameAt(3.2, 1, PORTRAIT);
+    expect(closing.fov).toBe(PORTRAIT.closing.fov);
+    expect(closing.ox).toBe(0);
+  });
+
+  it("keeps the camera clear of the rail and under the lamp cord on a phone", () => {
+    for (const pose of PORTRAIT.poses) expect(pose.py).toBeGreaterThan(0.9);
   });
 });
 
