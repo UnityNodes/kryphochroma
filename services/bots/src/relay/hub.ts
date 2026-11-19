@@ -16,8 +16,9 @@ import {
   project,
   projectChain,
   toContractAction,
+  ACTION_KIND,
 } from "@kryphochroma/abi";
-import { type Card, type GameEvent, type GameState, type Move, botCatchTarget, chooseMove } from "@kryphochroma/rules";
+import { type Card, type GameEvent, type GameState, HAND_SLOTS, type Move, botCatchTarget, chooseMove } from "@kryphochroma/rules";
 import { ZamaSDK } from "@zama-fhe/sdk";
 import { sepolia as zamaSepolia } from "@zama-fhe/sdk/chains";
 import { node } from "@zama-fhe/sdk/node";
@@ -340,7 +341,13 @@ export function createRelay(deps: RelayDeps) {
     const first = pending.indexOf(batch[0] as SignedAction);
     const end = first + batch.length;
     const dealt = (upTo: number) => project(hub.chain as GameState, hub.chainNonces, pending.slice(0, upTo)).events.filter((e) => e.type === "Drew").length;
-    return { batch, gas: pipelinedGas(batch.length, dealt(end) - dealt(first), endsRound(id, pending.slice(0, end)), RELAY_GAS) };
+    const counted = (index: number) => {
+      const action = pending[index];
+      if (action?.kind !== ACTION_KIND.sonar) return 0;
+      return project(hub.chain as GameState, hub.chainNonces, pending.slice(0, index)).state.pub.seats[action.slot]?.handSize ?? HAND_SLOTS;
+    };
+    const sonarCards = batch.reduce((sum, _, k) => sum + counted(first + k), 0);
+    return { batch, gas: pipelinedGas(batch.length, dealt(end) - dealt(first), endsRound(id, pending.slice(0, end)), RELAY_GAS, sonarCards) };
   }
 
   async function settle(id: bigint, hash: Hex, batch: readonly SignedAction[], gasLimit: bigint): Promise<void> {

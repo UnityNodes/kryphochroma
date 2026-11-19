@@ -41,6 +41,12 @@ describe("relay pipeline", () => {
     expect(pipelinedGas(10, 20, false, 16_000_000n)).toBe(16_000_000n);
   });
 
+  it("adds the cost of a sonar count for every card in the hand it counts", () => {
+    expect(pipelinedGas(1, 0, false, 16_000_000n, 7)).toBe(800_000n + 7n * 130_000n);
+    expect(pipelinedGas(1, 0, false, 16_000_000n, 7)).toBeGreaterThan(836_858n);
+    expect(pipelinedGas(3, 1, false, 16_000_000n, 24)).toBe(300_000n + 1_500_000n + 800_000n + 24n * 130_000n);
+  });
+
   it("gives the batch that ends a round the full limit", () => {
     expect(pipelinedGas(1, 0, true, 16_000_000n)).toBe(16_000_000n);
   });

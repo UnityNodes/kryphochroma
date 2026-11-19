@@ -2,6 +2,7 @@ export const MAX_PIPELINE = 16;
 const PIPED_ACTION_GAS = 500_000n;
 const PIPED_CARD_GAS = 800_000n;
 const PIPED_BASE_GAS = 300_000n;
+const PIPED_SONAR_CARD_GAS = 130_000n;
 
 interface Keyed {
   readonly seat: number;
@@ -17,9 +18,9 @@ export function nextBatch<T extends Keyed>(pending: readonly T[], sent: Readonly
   return pending.slice(after, after + max);
 }
 
-/** A batch behind one in flight cannot be estimated against the chain, which does not hold the earlier moves yet, so it gets a bound from its moves and the cards they deal: a dealt card costs a hand grant, a colour shift and a queue top up, and a batch that runs out of gas reverts and drags every batch behind it. */
-export function pipelinedGas(actions: number, cards: number, endsRound: boolean, cap: bigint): bigint {
+/** A batch behind one in flight cannot be estimated against the chain, which does not hold the earlier moves yet, so it gets a bound from its moves and the cards they deal: a dealt card costs a hand grant, a colour shift and a queue top up, and a sonar costs a compare, a select and an add for every card in the hand it counts. A batch that runs out of gas reverts and drags every batch behind it. */
+export function pipelinedGas(actions: number, cards: number, endsRound: boolean, cap: bigint, sonarCards = 0): bigint {
   if (endsRound) return cap;
-  const gas = PIPED_BASE_GAS + BigInt(actions) * PIPED_ACTION_GAS + BigInt(cards) * PIPED_CARD_GAS;
+  const gas = PIPED_BASE_GAS + BigInt(actions) * PIPED_ACTION_GAS + BigInt(cards) * PIPED_CARD_GAS + BigInt(sonarCards) * PIPED_SONAR_CARD_GAS;
   return gas > cap ? cap : gas;
 }
