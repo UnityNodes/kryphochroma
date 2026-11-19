@@ -72,18 +72,26 @@ function copiesOf(card: Card): number {
   return rankOf(card) === 0 ? 1 : 2;
 }
 
+function copiesLeft(claim: Card, faceUp: readonly Card[], hand: Hand): number {
+  return copiesOf(claim) - faceUp.filter((c) => c === claim).length - hand.filter((c) => c === claim).length;
+}
+
 export function veilIsImpossible(pub: PublicState, hand: Hand): boolean {
   const claim = pub.veil?.claim;
   if (claim === undefined) return false;
-  const seen = pub.discard.slice(0, -1).filter((c) => c === claim).length + hand.filter((c) => c === claim).length;
-  return seen >= copiesOf(claim);
+  return copiesLeft(claim, pub.discard.slice(0, -1), hand) <= 0;
+}
+
+/** Every bot doubts a claim it can prove false, and a doubt freezes the table for two blocks and a KMS round trip, so a bot only claims a card that still has a copy nobody has seen, and prefers one that exists twice. */
+function safeClaim(pub: PublicState, hand: Hand, favourite: Color): Card | undefined {
+  const open = veilClaims(pub).filter((claim) => copiesLeft(claim, pub.discard, hand) > 0);
+  const rank = (claim: Card): number => copiesLeft(claim, pub.discard, hand) * 2 + (colorOf(claim) === favourite ? 1 : 0);
+  return open.reduce<Card | undefined>((best, claim) => (best === undefined || rank(claim) > rank(best) ? claim : best), undefined);
 }
 
 function veilMove(pub: PublicState, seat: number, hand: Hand): Move | null {
   const me = pub.seats[seat];
   if (!me || me.veilUsed || me.handSize < 2 || pub.pendingDraw > 0 || pub.drawnSlot !== null) return null;
-  const claims = veilClaims(pub);
-  if (claims.length === 0) return null;
   let slot = -1;
   let worst = -1;
   hand.forEach((card, i) => {
@@ -93,8 +101,7 @@ function veilMove(pub: PublicState, seat: number, hand: Hand): Move | null {
     }
   });
   if (slot < 0 || worst < 20) return null;
-  const favourite = favouriteColor(hand, slot);
-  const claim = claims.find((c) => colorOf(c) === favourite) ?? claims[0];
+  const claim = safeClaim(pub, hand, favouriteColor(hand, slot));
   return claim === undefined ? null : { type: "veil", slot, claim };
 }
 
