@@ -69,14 +69,32 @@ test("a practice game teaches the rules, plays a move and keeps the table access
 
 test("a new table can start as a guest without a wallet", async ({ page }) => {
   await page.goto("/new");
-  await expect(page.getByRole("heading", { level: 1, name: "Pick a table" })).toBeVisible();
+  await expect(page.getByRole("heading", { level: 1, name: "How do you want to play?" })).toBeVisible();
   await expect(page.getByRole("link", { name: "Kryphochroma home" })).toHaveAttribute("href", "/");
   await expect(page.getByRole("link", { name: "Back to Home" })).toHaveAttribute("href", "/");
   await expect(page.getByRole("button", { name: /Deal me in/ })).toBeEnabled();
-  await expect(page.getByRole("button", { name: /With friends/ }).first()).toBeEnabled();
-  await expect(page.getByRole("button", { name: /With bots/ })).toBeEnabled();
-  await expect(page.getByRole("heading", { name: "Open tables" })).toBeVisible();
+  await expect(page.getByRole("button", { name: /Get an invite link/ })).toBeEnabled();
+  await expect(page.getByRole("button", { name: /Fill empty seats with bots/ })).toBeEnabled();
+  await expect(page.getByRole("heading", { name: "Join a table" })).toBeVisible();
+  await expect(page.getByRole("link", { name: "Practice offline" })).toHaveAttribute("href", "/play");
   expect(await seriousViolations(page)).toEqual([]);
+});
+
+test("the table view is picked before the game and the table opens in it", async ({ page }) => {
+  await page.goto("/new");
+  const picker = page.getByRole("radiogroup", { name: "How the table looks" });
+  await expect(picker.getByRole("radio", { name: /2D table/ })).toHaveAttribute("aria-checked", "true");
+  await picker.getByRole("radio", { name: /3D table/ }).click();
+  await expect(picker.getByRole("radio", { name: /3D table/ })).toHaveAttribute("aria-checked", "true");
+  expect(await page.evaluate(() => window.localStorage.getItem("kc-table-view"))).toBe("3d");
+  await page.reload();
+  await expect(page.getByRole("radiogroup", { name: "How the table looks" }).getByRole("radio", { name: /3D table/ })).toHaveAttribute("aria-checked", "true");
+  await page.getByLabel("Table code or invite link").fill("not a code");
+  await page.getByRole("button", { name: "Join", exact: true }).click();
+  await expect(page.locator("#table-code-error")).toContainText("not a table code");
+  await page.getByLabel("Table code or invite link").fill("https://kryphochroma.unitynodes.com/j/red-otter");
+  await page.getByRole("button", { name: "Join", exact: true }).click();
+  await expect(page).toHaveURL(/\/j\/red-otter$/);
 });
 
 test("the docs open on every page with navigation", async ({ page }) => {

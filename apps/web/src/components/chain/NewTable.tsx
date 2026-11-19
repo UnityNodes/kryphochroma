@@ -16,7 +16,9 @@ import { PageShell } from "@/components/site/PageShell";
 import { WalletBar } from "@/components/wallet/WalletBar";
 import { useFunder } from "@/components/wallet/useFunder";
 import { tablePath } from "@/lib/invite";
-import { FlowProgress, type OpenTable, OpenTablesPanel, OwnTablePanel, QuickPanel } from "./NewTableParts";
+import { useTableView } from "@/game/useTableView";
+import { AiPanel, FlowProgress, FriendsPanel, JoinPanel, type OpenTable, PracticeStrip } from "./NewTableParts";
+import { ViewPicker } from "./ViewPicker";
 
 type Flow = "quick" | "friends" | "bots";
 
@@ -56,6 +58,7 @@ export function NewTable() {
   const funderState = useFunder();
   const me = useMyProfile();
   const openTables = useOpenTables();
+  const tableView = useTableView();
   const [seats, setSeats] = useState(4);
   const [stack, setStack] = useState(false);
   const [flow, setFlow] = useState<Flow>("quick");
@@ -164,14 +167,14 @@ export function NewTable() {
 
   return (
     <PageShell>
-      <div className="mx-auto grid w-full max-w-[1200px] grid-cols-1 gap-8 px-4 pt-8 pb-16 sm:px-6 lg:pt-12">
+      <div className="mx-auto grid w-full max-w-[1200px] grid-cols-1 gap-10 px-4 pt-8 pb-16 sm:px-6 lg:pt-12">
         <div className="flex flex-wrap items-end justify-between gap-x-8 gap-y-5">
           <div className="grid max-w-2xl gap-3">
-            <h1 className="font-display text-6xl leading-[.88] text-brass sm:text-7xl">Pick a table</h1>
+            <h1 className="font-display text-6xl leading-[.88] text-balance text-brass sm:text-7xl">How do you want to play?</h1>
             <p className="max-w-[58ch] text-base leading-relaxed text-cream/75">
               {wallet
                 ? "Your wallet signs one join for a session key that lives only in this tab. The session key plays the moves and can never touch your funds."
-                : "You play with a key that lives only in this tab. No wallet needed: our relayer pays for your seat, and a table of your own gets a little Sepolia test ETH from us."}
+                : "No wallet needed. You play with a key that lives only in this tab, and our relayer pays for your moves."}
             </p>
           </div>
           <div className="flex flex-wrap items-center gap-2">
@@ -179,17 +182,30 @@ export function NewTable() {
             <WalletBar disabled={running} />
           </div>
         </div>
-        <div className="grid grid-cols-1 items-start gap-8 lg:grid-cols-[minmax(0,1.4fr)_minmax(0,1fr)]">
-          <div className="grid gap-8">
-            <QuickPanel onPlay={quick} disabled={disabled}>
-              {!ownFlow && <div className="mt-6"><FlowProgress status={status} /></div>}
-            </QuickPanel>
-            <OwnTablePanel seats={seats} onSeats={setSeats} stack={stack} onStack={setStack} onFriends={friends} onBots={withBots} locked={running} disabled={disabled}>
-              {ownFlow && <FlowProgress status={status} />}
-            </OwnTablePanel>
+        <section className="grid gap-4" aria-labelledby="step-view">
+          <h2 id="step-view" className="kc-step font-display text-3xl leading-none">
+            <span>1</span>Pick your table
+          </h2>
+          <div className="max-w-[760px]">
+            <ViewPicker view={tableView.view} onChoose={tableView.choose} />
           </div>
-          <OpenTablesPanel tables={openTables} onOpen={friends} disabled={disabled} />
-        </div>
+          <p className="text-sm text-cream/60">You can switch any time with the 2D and 3D chip at the table.</p>
+        </section>
+        <section className="grid gap-4" aria-labelledby="step-who">
+          <h2 id="step-who" className="kc-step font-display text-3xl leading-none">
+            <span>2</span>Pick who you play with
+          </h2>
+          <div className="grid grid-cols-1 items-stretch gap-6 lg:grid-cols-3">
+            <AiPanel onPlay={quick} disabled={disabled}>
+              {!ownFlow && <FlowProgress status={status} />}
+            </AiPanel>
+            <FriendsPanel seats={seats} onSeats={setSeats} stack={stack} onStack={setStack} onFriends={friends} onBots={withBots} locked={running} disabled={disabled}>
+              {ownFlow && <FlowProgress status={status} />}
+            </FriendsPanel>
+            <JoinPanel tables={openTables} disabled={running} onJoin={(path) => router.push(path)} />
+          </div>
+        </section>
+        <PracticeStrip />
       </div>
     </PageShell>
   );

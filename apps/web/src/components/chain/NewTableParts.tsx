@@ -2,11 +2,11 @@
 
 import { SETUP_STEPS } from "@kryphochroma/abi";
 import { cardBack } from "@kryphochroma/cards";
-import { ArrowRight, Bot, Check, Loader2, Users, Zap } from "lucide-react";
+import { ArrowRight, Bot, Check, GraduationCap, KeyRound, Loader2, Users, Zap } from "lucide-react";
 import Link from "next/link";
-import type { ReactNode } from "react";
+import { type FormEvent, type ReactNode, useState } from "react";
 import { CardFan } from "@/components/site/CardFan";
-import { tableCode, tablePath } from "@/lib/invite";
+import { tableCode, tableIdFromCode, tablePath } from "@/lib/invite";
 import { cn } from "@/lib/utils";
 
 export interface OpenTable {
@@ -60,27 +60,31 @@ export function FlowProgress({ status }: { readonly status: FlowStatus }) {
   );
 }
 
-export function QuickPanel({ onPlay, disabled, children }: { readonly onPlay: () => void; readonly disabled: boolean; readonly children: ReactNode }) {
+export function AiPanel({ onPlay, disabled, children }: { readonly onPlay: () => void; readonly disabled: boolean; readonly children: ReactNode }) {
   return (
-    <section className="kc-panel kc-felt relative overflow-hidden p-6 sm:p-8" aria-labelledby="quick-title">
-      <div className="grid items-center gap-6 sm:grid-cols-[minmax(0,1fr)_200px] lg:grid-cols-[minmax(0,1fr)_240px]">
-        <div className="grid gap-4">
-          <h2 id="quick-title" className="font-display text-5xl leading-[.9] text-cream sm:text-6xl">
-            Quick game
+    <section className="kc-panel kc-felt kc-mode relative overflow-hidden" aria-labelledby="ai-title">
+      <p className="kc-mode-head">
+        <Bot aria-hidden />
+        Fastest start
+      </p>
+      <div className="grid items-center gap-4 sm:grid-cols-[minmax(0,1fr)_150px]">
+        <div className="grid gap-3">
+          <h2 id="ai-title" className="font-display text-5xl leading-[.9] text-cream">
+            Play the AI
           </h2>
-          <p className="max-w-[40ch] text-base leading-relaxed text-cream/80">You and three bots at a table whose cards were drawn on chain before you clicked. No waiting for the draw.</p>
-          <div className="flex flex-wrap items-center gap-x-5 gap-y-3 pt-1">
-            <button type="button" className="kc-btn kc-btn-brass h-14 px-7 text-2xl" onClick={onPlay} disabled={disabled}>
-              <Zap aria-hidden />
-              Deal me in
-            </button>
-            <span className="flex items-center gap-2 text-sm text-cream/75">
-              <span className="size-2 rounded-[1px] bg-teal" aria-hidden />
-              Tables ready now
-            </span>
-          </div>
+          <p className="max-w-[38ch] text-base leading-relaxed text-cream/80">You and three bots at a table whose cards are already drawn on chain. You are dealt in seconds.</p>
         </div>
-        <CardFan cards={QUICK_FAN} className="order-first mx-auto aspect-[4/3] w-48 sm:order-none sm:w-full" cardClassName="w-[46%]" />
+        <CardFan cards={QUICK_FAN} className="order-first mx-auto aspect-[4/3] w-36 sm:order-none sm:w-full" cardClassName="w-[46%]" />
+      </div>
+      <div className="kc-mode-go">
+        <button type="button" className="kc-btn kc-btn-brass h-14 w-full justify-center px-7 text-2xl" onClick={onPlay} disabled={disabled}>
+          <Zap aria-hidden />
+          Deal me in
+        </button>
+        <span className="flex items-center justify-center gap-2 text-sm text-cream/75">
+          <span className="size-2 rounded-[1px] bg-teal" aria-hidden />
+          Tables ready now
+        </span>
       </div>
       {children}
     </section>
@@ -97,7 +101,7 @@ function SeatDots({ count, filled = count, className }: { readonly count: number
   );
 }
 
-export interface OwnTableProps {
+export interface FriendsPanelProps {
   readonly seats: number;
   readonly onSeats: (n: number) => void;
   readonly stack: boolean;
@@ -109,45 +113,43 @@ export interface OwnTableProps {
   readonly children: ReactNode;
 }
 
-export function OwnTablePanel({ seats, onSeats, stack, onStack, onFriends, onBots, locked, disabled, children }: OwnTableProps) {
+export function FriendsPanel({ seats, onSeats, stack, onStack, onFriends, onBots, locked, disabled, children }: FriendsPanelProps) {
   return (
-    <section className="kc-panel grid grid-cols-1 gap-6 p-6 sm:p-8" aria-labelledby="own-title">
-      <div className="grid gap-1.5">
-        <h2 id="own-title" className="font-display text-4xl leading-none text-brass">
-          Your own table
+    <section className="kc-panel kc-mode" aria-labelledby="friends-title">
+      <p className="kc-mode-head">
+        <Users aria-hidden />
+        Your own table
+      </p>
+      <div className="grid gap-2">
+        <h2 id="friends-title" className="font-display text-5xl leading-[.9] text-cream">
+          Play with friends
         </h2>
-        <p className="text-sm text-cream/70">Pick the seats, then fill them with friends or bots.</p>
+        <p className="text-base leading-relaxed text-cream/75">Open a table, send the link. Seats nobody takes can go to bots.</p>
       </div>
-      <div className="grid grid-cols-3 gap-3" role="radiogroup" aria-label="Players at your table">
+      <div className="grid grid-cols-3 gap-2" role="radiogroup" aria-label="Players at your table">
         {SEAT_CHOICES.map((n) => (
-          <button key={n} type="button" role="radio" aria-checked={seats === n} className="kc-seat-pick" onClick={() => onSeats(n)} disabled={locked}>
-            <span className="font-display text-4xl leading-none">{n}</span>
+          <button key={n} type="button" role="radio" aria-checked={seats === n} className="kc-seat-pick min-h-0 py-3" onClick={() => onSeats(n)} disabled={locked}>
+            <span className="font-display text-3xl leading-none">{n}</span>
             <SeatDots count={n} />
             <span className="text-xs font-semibold">players</span>
           </button>
         ))}
       </div>
-      <label className="flex cursor-pointer items-start gap-3 rounded-md border border-cream/15 p-4 transition-colors hover:bg-cream/5">
+      <label className="flex cursor-pointer items-start gap-3 text-sm">
         <input type="checkbox" checked={stack} onChange={(e) => onStack(e.target.checked)} disabled={locked} className="kc-switch mt-0.5" />
-        <span className="grid gap-1">
+        <span className="grid gap-0.5">
           <span className="font-semibold text-cream">Stack draw two cards</span>
-          <span className="text-sm text-cream/65">A +2 can answer a +2. Ready tables use the standard rule, so a stacking table draws its cards after you open it, about half a minute.</span>
+          <span className="text-cream/60">A +2 can answer a +2. Such a table draws its cards after you open it, about half a minute.</span>
         </span>
       </label>
-      <div className="grid gap-3 sm:grid-cols-2">
-        <button type="button" className="kc-option" onClick={onFriends} disabled={disabled}>
+      <div className="kc-mode-go">
+        <button type="button" className="kc-btn kc-btn-brass h-12 w-full justify-center text-lg" onClick={onFriends} disabled={disabled}>
           <Users aria-hidden />
-          <span>
-            <b>With friends</b>
-            <small>Get an invite link to share</small>
-          </span>
+          Get an invite link
         </button>
-        <button type="button" className="kc-option" onClick={onBots} disabled={disabled}>
+        <button type="button" className="kc-btn h-12 w-full justify-center" onClick={onBots} disabled={disabled}>
           <Bot aria-hidden />
-          <span>
-            <b>With bots</b>
-            <small>Empty seats go to bots, start now</small>
-          </span>
+          Fill empty seats with bots
         </button>
       </div>
       {children}
@@ -155,49 +157,116 @@ export function OwnTablePanel({ seats, onSeats, stack, onStack, onFriends, onBot
   );
 }
 
-export function OpenTablesPanel({ tables, onOpen, disabled }: { readonly tables: readonly OpenTable[]; readonly onOpen: () => void; readonly disabled: boolean }) {
+function CodeForm({ disabled, onJoin }: { readonly disabled: boolean; readonly onJoin: (path: string) => void }) {
+  const [code, setCode] = useState("");
+  const [wrong, setWrong] = useState(false);
+  const submit = (event: FormEvent) => {
+    event.preventDefault();
+    const typed = code.trim().replace(/^.*\/j\//, "").replace(/\s+/g, "-");
+    const id = tableIdFromCode(typed);
+    if (id === null) return setWrong(true);
+    setWrong(false);
+    onJoin(tablePath(id));
+  };
   return (
-    <section className="kc-panel grid grid-cols-1 content-start gap-5 p-6 sm:p-8 lg:sticky lg:top-24" aria-labelledby="open-title">
-      <div className="flex items-baseline justify-between gap-3">
-        <h2 id="open-title" className="font-display text-4xl leading-none text-brass">
-          Open tables
-        </h2>
-        <span className="flex items-center gap-2 text-xs font-semibold text-cream/70">
-          <span className="size-2 rounded-[1px] bg-teal" aria-hidden />
-          Live
-        </span>
+    <form className="grid gap-2" onSubmit={submit}>
+      <label htmlFor="table-code" className="text-sm font-semibold text-cream">
+        Table code or invite link
+      </label>
+      <div className="flex gap-2">
+        <input
+          id="table-code"
+          className="kc-code"
+          value={code}
+          onChange={(e) => setCode(e.target.value)}
+          placeholder="red-otter"
+          autoComplete="off"
+          autoCapitalize="none"
+          spellCheck={false}
+          aria-invalid={wrong}
+          aria-describedby={wrong ? "table-code-error" : undefined}
+        />
+        <button type="submit" className="kc-btn kc-btn-brass h-12 px-5" disabled={disabled || code.trim() === ""}>
+          Join
+        </button>
       </div>
-      {tables.length === 0 ? (
-        <div className="grid justify-items-center gap-4 rounded-md border-2 border-dashed border-cream/20 px-5 py-8 text-center">
-          <SeatDots count={4} filled={0} className="text-cream/40" />
-          <p className="max-w-[30ch] text-sm text-cream/75">Nobody is waiting for players right now. Open a table and send the link to a friend.</p>
-          <button type="button" className="kc-btn" onClick={onOpen} disabled={disabled}>
-            <Users aria-hidden />
-            Open with friends
-          </button>
-        </div>
-      ) : (
-        <ul className="grid gap-2">
-          {tables.map((t) => (
-            <li key={t.id}>
-              <Link href={tablePath(t.id)} className="group flex items-center gap-4 rounded-md border border-cream/15 px-4 py-3 transition-colors hover:border-brass/60 hover:bg-brass/5">
-                <span className="grid min-w-0 flex-1 gap-1">
-                  <b className="truncate font-display text-2xl leading-none font-normal tracking-wide text-cream">{tableCode(t.id)}</b>
-                  <span className="flex items-center gap-2 text-xs text-cream/65">
-                    <SeatDots count={t.seats} filled={t.joined} className="text-brass" />
-                    {t.joined} of {t.seats} seats
-                  </span>
-                </span>
-                <span className="kc-chip kc-chip-on min-h-11 px-4">
-                  Join
-                  <ArrowRight className="transition-transform group-hover:translate-x-0.5" aria-hidden />
-                </span>
-              </Link>
-            </li>
-          ))}
-        </ul>
+      {wrong && (
+        <p id="table-code-error" role="alert" className="text-sm text-cream">
+          That is not a table code. It looks like two words, for example red-otter.
+        </p>
       )}
-      <p className="text-xs leading-relaxed text-cream/55">Anyone can sit down as a guest with a key made in their tab, or with a wallet on Sepolia.</p>
+    </form>
+  );
+}
+
+export function JoinPanel({ tables, disabled, onJoin }: { readonly tables: readonly OpenTable[]; readonly disabled: boolean; readonly onJoin: (path: string) => void }) {
+  return (
+    <section className="kc-panel kc-mode" aria-labelledby="join-title">
+      <p className="kc-mode-head">
+        <KeyRound aria-hidden />
+        Got an invite
+      </p>
+      <div className="grid gap-2">
+        <h2 id="join-title" className="font-display text-5xl leading-[.9] text-cream">
+          Join a table
+        </h2>
+        <p className="text-base leading-relaxed text-cream/75">Type the code a friend sent you, or sit down at a table that waits for players.</p>
+      </div>
+      <CodeForm disabled={disabled} onJoin={onJoin} />
+      <div className="grid gap-2">
+        <p className="flex items-center justify-between text-sm font-semibold text-cream">
+          Waiting for players
+          <span className="flex items-center gap-2 text-xs font-semibold text-cream/65">
+            <span className="size-2 rounded-[1px] bg-teal" aria-hidden />
+            Live
+          </span>
+        </p>
+        {tables.length === 0 ? (
+          <p className="rounded-md border border-dashed border-cream/20 px-4 py-4 text-sm text-cream/65">No open tables right now. Open one with friends and send the link.</p>
+        ) : (
+          <ul className="grid gap-2">
+            {tables.map((t) => (
+              <li key={t.id}>
+                <Link href={tablePath(t.id)} className="group flex items-center gap-3 rounded-md border border-cream/15 px-3 py-2.5 transition-colors hover:border-brass/60 hover:bg-brass/5">
+                  <span className="grid min-w-0 flex-1 gap-1">
+                    <b className="truncate font-display text-xl leading-none font-normal tracking-wide text-cream">{tableCode(t.id)}</b>
+                    <span className="flex items-center gap-2 text-xs text-cream/65">
+                      <SeatDots count={t.seats} filled={t.joined} className="text-brass" />
+                      {t.joined} of {t.seats} seats
+                    </span>
+                  </span>
+                  <span className="kc-chip kc-chip-on min-h-11 px-4">
+                    Join
+                    <ArrowRight className="transition-transform group-hover:translate-x-0.5" aria-hidden />
+                  </span>
+                </Link>
+              </li>
+            ))}
+          </ul>
+        )}
+      </div>
+    </section>
+  );
+}
+
+export function PracticeStrip() {
+  return (
+    <section className="kc-panel flex flex-wrap items-center gap-x-6 gap-y-4 px-6 py-5" aria-labelledby="practice-title">
+      <GraduationCap className="size-8 shrink-0 text-brass" aria-hidden />
+      <div className="grid min-w-[16rem] flex-1 gap-1">
+        <h2 id="practice-title" className="font-display text-3xl leading-none text-cream">
+          New to the game?
+        </h2>
+        <p className="text-sm text-cream/70">Practice offline against bots in this tab. Nothing goes on chain and nothing waits for a block.</p>
+      </div>
+      <div className="flex flex-wrap gap-2">
+        <Link href="/play" className="kc-btn h-12 px-5">
+          Practice offline
+        </Link>
+        <Link href="/docs" className="kc-btn h-12 px-5">
+          How to play
+        </Link>
+      </div>
     </section>
   );
 }
