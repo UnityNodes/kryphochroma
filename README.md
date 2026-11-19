@@ -85,20 +85,23 @@ flowchart LR
 | `KryphoHand` library (dealing, draw queues, proofs) | [`0x8d71DB364FCE0F0a4472EfEC6B5Bdc1fBfc21AeD`](https://sepolia.etherscan.io/address/0x8d71DB364FCE0F0a4472EfEC6B5Bdc1fBfc21AeD) |
 | Deployment | [`0x42e7cf…5eec9`](https://sepolia.etherscan.io/tx/0x42e7cf30f59d173b3552472ad242c7f663d331db0da7e6d10232548f3505eec9), block 12167981 |
 
-A full round on the previous deployment (the same game, except that a doubted veil still held the table until its bit was opened), table 5: four seats, four veils, ten spyglass peeks, four sonar pings, Mono, a seat taken over after three timeouts, two deck refills and the reveal.
+A full round on this deployment, table 9: four seats, four veils, one of them doubted and settled while 30 more moves were played, a spyglass peek, three sonar pings, Mono, a seat taken over after three timeouts and the reveal.
 
 | Step | Transaction |
 |---|---|
-| Table created | [`0xda44ab…9f36`](https://sepolia.etherscan.io/tx/0xda44abf1e8a4004c2e43e27e94d53fdca36f0549c986bc6185c5a7b22ca39f36) |
-| First of 12 draw steps | [`0xaba31c…a530`](https://sepolia.etherscan.io/tx/0xaba31c5193888683a03e2aaf783c7025e09703249b002a71bd00f9abec05a530) |
-| Last seat joins, hands dealt, play begins | [`0x1b96e3…2e27`](https://sepolia.etherscan.io/tx/0x1b96e3b7f9bc55ea880b7e187a007fc38adc64c2b2480896f4d4382fe0562e27) |
-| Batch of signed moves with a veil | [`0x9762cc…3d96`](https://sepolia.etherscan.io/tx/0x9762cc022e0530f1052a3620cfee767588b6c195a0ada9275bc25e91b77f3d96) |
-| Batch with a spyglass peek | [`0xad9bd8…6f12`](https://sepolia.etherscan.io/tx/0xad9bd892572c7b8613cd508777e493b7f81acba1e35b217ba253f2b7d9d66f12) |
-| Batch with a sonar ping | [`0x849544…af5e`](https://sepolia.etherscan.io/tx/0x8495449621afd9cd3ad1be578d46bf9cf5d148f26f93b0717cc06fb47717af5e) |
-| Third timeout, the takeover bot gets the seat | [`0xd09f1a…1868`](https://sepolia.etherscan.io/tx/0xd09f1ae5de6cc110c70a07e1975b658608f0c098abe578b76a083494ebac1868) |
-| Deck switches to freshly drawn cards | [`0x04fd2a…6327`](https://sepolia.etherscan.io/tx/0x04fd2a2895e76304f2dc625f97f18b968a98cb2eb3732e45b84463039ea46327) |
-| Reveal started | [`0xc5aaab…5ec7`](https://sepolia.etherscan.io/tx/0xc5aaabc9eae2304ad36da42ffc98e9f6a3b0fd83fca3d22e1502fc3d3c345ec7) |
-| Round settled with secret colours | [`0xa0f136…25c4`](https://sepolia.etherscan.io/tx/0xa0f1361f13a33cf5bf7924f1aaee3523e924abe68bb4416d145985b2c32425c4) |
+| Table created | [`0xafc0b9…897e`](https://sepolia.etherscan.io/tx/0xafc0b92441117d73b572c41b7ceb29af6be6b47fc32bd131ef33d52ccb83897e) |
+| First of 12 draw steps | [`0x541d1f…46a4`](https://sepolia.etherscan.io/tx/0x541d1f2397df63eb0dd9c34f7103332d01999ea2c4be54e1e5e36afdf40f46a4) |
+| Last seat joins, hands dealt, play begins | [`0x432fe9…f1c5`](https://sepolia.etherscan.io/tx/0x432fe9c728249f88bb809ba0132c9d01785cd24ff03059c5aaac95c3f9f6f1c5) |
+| Batch of signed moves with three veils | [`0x117e18…fc16`](https://sepolia.etherscan.io/tx/0x117e18caf66bc156dad21ceb09fbdf4a5470fd05244da38c9e964d954ccefc16) |
+| A veil is doubted, play goes on | [`0x1db428…0507`](https://sepolia.etherscan.io/tx/0x1db428a8436f149786bb9851379e66f8181ba08f9dadfaed83fd81c659570507) |
+| The doubted bit is opened 30 moves later, the bluffer draws 4 | [`0x23054e…547a`](https://sepolia.etherscan.io/tx/0x23054ec3851ff460b6a96450164e5df9ea6d4c88a06dc76516cefecac821547a) |
+| Batch with a sonar ping | [`0x766028…8a49`](https://sepolia.etherscan.io/tx/0x7660288ee33eabb63a9a233808818cf64063b32291a3f5d3178aee256df68a49) |
+| Third timeout, the takeover bot gets the seat | [`0x84fed4…e02a`](https://sepolia.etherscan.io/tx/0x84fed45c9b34893d5b6e8d0bf83626dcf182b725aacc899b15bf77fd651ee02a) |
+| Batch with a spyglass peek | [`0x1663da…0f10`](https://sepolia.etherscan.io/tx/0x1663da267092f029b25691ba2fe499e9db49d47c0a6daa3d271a613217d20f10) |
+| Reveal started | [`0x2f030e…a3f8`](https://sepolia.etherscan.io/tx/0x2f030e1bf4462fc62501d5b6c19c5a00077d78405af190e32b9eb208e130a3f8) |
+| Round settled with secret colours | [`0x12d847…d341`](https://sepolia.etherscan.io/tx/0x12d8472fc783da9143339fd89a411f1db7f7eedea421e408563169274858d341) |
+
+The deck refill, which a short round does not reach, is in table 5 on the previous deployment: [`0x04fd2a…6327`](https://sepolia.etherscan.io/tx/0x04fd2a2895e76304f2dc625f97f18b968a98cb2eb3732e45b84463039ea46327).
 
 `pnpm --filter @kryphochroma/bots exec tsx scripts/round-trail.ts <table id>` prints the same trail for any table.
 
