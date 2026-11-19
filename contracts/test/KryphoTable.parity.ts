@@ -120,7 +120,7 @@ async function compare(table: Awaited<ReturnType<typeof deployTable>>, id: bigin
     topCard: pub.topCard,
     color: pub.color,
     deckCount: pub.deckCount,
-    veil: [pub.veil?.by ?? NONE, pub.veil?.judge ?? NONE],
+    veil: pub.veil ? [pub.veil.by, pub.veil.judge] : pub.doubt ? [pub.doubt.by, pub.doubt.judge | 0x80] : [NONE, NONE],
     drawnSlot: pub.drawnSlot ?? NONE,
     pendingDraw: pub.pendingDraw,
     monoWindow: pub.monoWindow ?? NONE,
@@ -183,14 +183,20 @@ async function playGame(setup: GameSetup, players: Signer[]): Promise<{ steps: n
     pending = [];
     await compare(table, id, shadow, `after relay batch at step ${steps}`);
   };
+  const settle = async () => {
+    await flush();
+    const { clearValue, checkSignaturesArgs } = await fhevm.helpers.decryptPublicBoolWithSignatures({ ebool: hex(await table.hadColorOf(id)) });
+    expect(clearValue).to.equal(state.pub.doubt ? state.veilTrue : state.hadColor);
+    await (await table.resolveChallenge(id, checkSignaturesArgs.abiEncodedCleartexts, checkSignaturesArgs.decryptionProof)).wait();
+    state = applyChallenge(state).state;
+    shadow = state;
+    await compare(table, id, state, `settle at step ${steps}`);
+  };
   while (steps < 400) {
     steps++;
     const stage = state.pub.stage;
-    if (stage === "AwaitChallenge") {
-      const { clearValue, checkSignaturesArgs } = await fhevm.helpers.decryptPublicBoolWithSignatures({ ebool: hex(await table.hadColorOf(id)) });
-      expect(clearValue).to.equal(state.pub.veil && !state.pub.drawFour ? state.veilTrue : state.hadColor);
-      await (await table.resolveChallenge(id, checkSignaturesArgs.abiEncodedCleartexts, checkSignaturesArgs.decryptionProof)).wait();
-      state = applyChallenge(state).state;
+    if (stage === "AwaitChallenge" || (state.pub.doubt && steps % 3 === 0)) {
+      await settle();
     } else if (stage === "Revealing") {
       await flush();
       const openedInRelay = Number((await table.getTable(id)).revealPrepared);
@@ -228,6 +234,10 @@ async function playGame(setup: GameSetup, players: Signer[]): Promise<{ steps: n
         state = next.state;
       } else {
         const move = chooseMove(state.pub, turn, state.hands[turn] ?? [], { cheat: setup.cheaters.includes(turn) });
+        if (!move && state.pub.doubt) {
+          await settle();
+          continue;
+        }
         if (!move) throw new Error("no move");
         const next = applyMove(state, turn, move);
         if (next.events.some((e) => e.type === "Reshuffled")) return { steps, finished: false, state };

@@ -114,6 +114,7 @@ interface IKryphoTable {
     error BadPeek();
     error BadSonar();
     error QueuesFilled();
+    error DoubtPending();
 
     event TableCreated(uint256 indexed id, address indexed creator, Config config);
     event Joined(uint256 indexed id, uint8 seat, address indexed player, address session);

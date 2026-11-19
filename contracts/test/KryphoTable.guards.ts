@@ -165,16 +165,6 @@ describe("KryphoTable guards", function () {
     await expect(table.nextRound(id)).to.be.revertedWithCustomError(table, "WrongStage");
   });
 
-  it("lets only the creator cancel a table in the lobby", async function () {
-    const table = await deployTable(ethers, ethers.ZeroAddress);
-    await (await table.createTable(config)).wait();
-    const id = await table.tableCount();
-    await expect(table.connect(s[1]!).cancel(id)).to.be.revertedWithCustomError(table, "NotCreator");
-    await expect(table.cancel(id)).to.emit(table, "TableCancelled");
-    await expect(table.join(id, s[0]!.address)).to.be.revertedWithCustomError(table, "WrongStage");
-    await expect(table.cancel(id)).to.be.revertedWithCustomError(table, "WrongStage");
-  });
-
   it("lets a player leave the lobby, hands the host role on and closes an empty table", async function () {
     const table = await deployTable(ethers, ethers.ZeroAddress);
     await (await table.connect(s[0]!).createTable({ ...config, seats: 4 })).wait();
@@ -524,7 +514,7 @@ describe("KryphoTable guards", function () {
     await expect(table.connect(s[turn]!).sonar(id, other, color)).to.be.revertedWithCustomError(table, "BadSonar");
   });
 
-  it("settles a doubted veil with one revealed bit and refuses a forged proof", async function () {
+  it("settles a doubted veil with one revealed bit while the judge plays on, and refuses a forged or replayed proof", async function () {
     const { table, id } = await ready([s[0]!, s[1]!]);
     while (Number((await table.getTable(id)).stage) === 2) {
       const { checkSignaturesArgs } = await starter(table, id);
@@ -542,7 +532,12 @@ describe("KryphoTable guards", function () {
     expect((await table.getSeat(id, turn)).veilUsed).to.equal(true);
     await expect(table.connect(s[turn]!).doubtVeil(id)).to.be.revertedWithCustomError(table, "NotYourTurn");
     await (await table.connect(s[judge]!).doubtVeil(id)).wait();
-    expect(Number((await table.getTable(id)).stage)).to.equal(4);
+    const doubted = await table.getTable(id);
+    expect([Number(doubted.stage), Number(doubted.turn), Number(doubted.veilBy), Number(doubted.veilJudge)]).to.deep.equal([3, judge, turn, judge | 0x80]);
+    await expect(table.connect(s[judge]!).doubtVeil(id)).to.be.revertedWithCustomError(table, "NoVeil");
+    const judgeSeen = (await table.handOf(id, judge))[0]!;
+    await expect(table.connect(s[judge]!).veil(id, 0, claim, judgeSeen)).to.be.revertedWithCustomError(table, "VeilUsed");
+    await (await table.connect(s[judge]!).draw(id)).wait();
     const { clearValue, checkSignaturesArgs } = await fhevm.helpers.decryptPublicBoolWithSignatures({ ebool: hex(await table.hadColorOf(id)) });
     expect(clearValue).to.equal(truth);
     const forged = ethers.AbiCoder.defaultAbiCoder().encode(["bool"], [!clearValue]);
@@ -552,6 +547,7 @@ describe("KryphoTable guards", function () {
     const after = [Number((await table.getSeat(id, turn)).handSize), Number((await table.getSeat(id, judge)).handSize)];
     expect(after).to.deep.equal(truth ? [before[0], before[1]! + 2] : [before[0]! + 4, before[1]]);
     const end = await table.getTable(id);
-    expect([Number(end.stage), Number(end.turn), Number(end.veilBy)]).to.deep.equal([3, judge, 255]);
+    expect([Number(end.stage), Number(end.turn), Number(end.veilBy), Number(end.veilJudge), Number(end.drawnSlot) !== 255]).to.deep.equal([3, judge, 255, 255, true]);
+    await expect(table.resolveChallenge(id, checkSignaturesArgs.abiEncodedCleartexts, checkSignaturesArgs.decryptionProof)).to.be.revertedWithCustomError(table, "WrongStage");
   });
 });

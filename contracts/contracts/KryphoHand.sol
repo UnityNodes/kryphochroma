@@ -52,6 +52,13 @@ library KryphoHand {
         FHE.checkSignatures(handles, cleartexts, proof);
     }
 
+    function verifyOne(bytes32 handle, bytes calldata cleartexts, bytes calldata proof) public returns (uint256) {
+        bytes32[] memory handles = new bytes32[](1);
+        handles[0] = handle;
+        FHE.checkSignatures(handles, cleartexts, proof);
+        return uint256(bytes32(cleartexts[0:32]));
+    }
+
     function swapRefill(IKryphoTable.Table storage t, uint256 id) public returns (bool) {
         return _swapRefill(t, id);
     }

@@ -18,10 +18,8 @@ contract KryphoTable is IKryphoTable, ZamaEthereumConfig {
     uint8 internal constant HAND_START = 7;
     uint8 internal constant NONE = type(uint8).max;
     uint8 internal constant MAX_TIMEOUTS = 3;
-    uint8 internal constant REFILL_AT = 48;
     uint32 internal constant MIN_TURN_TIMEOUT = 30;
     uint32 internal constant MAX_TURN_TIMEOUT = 1 days;
-    uint8 internal constant REFILL_MAX = 60;
     uint256 internal constant SESSION_STIPEND = 10_000;
     uint256 internal constant REVEAL_HANDLE_GAS = 300_000;
     uint256 internal constant REVEAL_RESERVE_GAS = 300_000;
@@ -43,6 +41,7 @@ contract KryphoTable is IKryphoTable, ZamaEthereumConfig {
     uint8 internal constant KIND_JOIN = 11;
     uint8 internal constant VEIL_TRUE_DRAW = 2;
     uint8 internal constant VEIL_LIE_DRAW = 4;
+    uint8 internal constant DOUBTED = 0x80;
 
     bytes32 public immutable DOMAIN_SEPARATOR;
     address public immutable TAKEOVER;
@@ -56,6 +55,7 @@ contract KryphoTable is IKryphoTable, ZamaEthereumConfig {
     mapping(uint256 => euint8[24][4]) internal _handColors;
     mapping(uint256 => ebool[4]) internal _honest;
     mapping(uint256 => ebool) internal _hadColor;
+    mapping(uint256 => ebool) internal _veilTruth;
     mapping(uint256 => uint8[]) internal _discard;
     mapping(uint256 => bytes32[]) internal _revealHandles;
     mapping(uint256 => uint32[4]) internal _nonces;
@@ -172,13 +172,6 @@ contract KryphoTable is IKryphoTable, ZamaEthereumConfig {
         if (t.joined == t.config.seats) _begin(id, t);
     }
 
-    function cancel(uint256 id) external {
-        Table storage t = _requireStage(id, Stage.Lobby);
-        if (msg.sender != t.creator) revert NotCreator();
-        t.stage = Stage.MatchOver;
-        emit TableCancelled(id);
-    }
-
     function leave(uint256 id) external {
         Table storage t = _requireStage(id, Stage.Lobby);
         (bool wasHost, address next) = KryphoLobby.leave(_seats, id, t.joined, msg.sender, t.creator);
@@ -224,24 +217,9 @@ contract KryphoTable is IKryphoTable, ZamaEthereumConfig {
         if (!early) t.stage = Stage.Dealing;
     }
 
-    /** A running deck is topped up with freshly drawn cards, never with the discard pile: cards are independent draws, so nothing has to be shuffled and no played card comes back in a known order. */
     function refillStep(uint256 id) external {
         Table storage t = _requireStage(id, Stage.Playing);
-        uint8 size = t.refillSize;
-        if (size == 0) {
-            bool front = t.deckPtr >= KryphoDeck.DECK_SIZE - t.deckEnd;
-            uint8 room = front ? t.deckPtr : KryphoDeck.DECK_SIZE - t.deckEnd;
-            size = room < REFILL_MAX ? room : REFILL_MAX;
-            if (size == 0 || t.deckEnd - t.deckPtr > REFILL_AT) revert ShuffleNotDone();
-            t.refillSize = size;
-            t.refillAt = front ? 0 : t.deckEnd;
-        }
-        uint8 step = t.refillStep;
-        uint8 fills = KryphoDeck.fillSteps(size);
-        if (step >= fills) revert ShuffleNotDone();
-        KryphoDeck.fillStep(_deck, id, step, t.refillAt, size);
-        t.refillStep = step + 1;
-        emit ShuffleProgress(id, step + 1, fills);
+        KryphoDeck.refill(_deck, t, id);
         if (t.deckPtr >= t.deckEnd) KryphoHand.swapRefill(t, id);
     }
 
@@ -281,9 +259,7 @@ contract KryphoTable is IKryphoTable, ZamaEthereumConfig {
         bool lobby = t.stage == Stage.Lobby && t.setupStep == SETUP_STEPS;
         if (!lobby && t.stage != Stage.Dealing) revert WrongStage(Stage.Dealing, t.stage);
         if (t.topCard != NONE) revert BadCard();
-        bytes32[] memory handles = _starterHandles(id, t);
-        KryphoHand.verify(handles, cleartexts, proof);
-        uint8 card = uint8(uint256(bytes32(cleartexts[0:32])));
+        uint8 card = uint8(KryphoHand.verifyOne(_starterHandles(id, t)[0], cleartexts, proof));
         t.deckEnd--;
         _discard[id].push(card);
         if (!card.isNumber()) return _exposeStarter(id, t);
@@ -319,6 +295,7 @@ contract KryphoTable is IKryphoTable, ZamaEthereumConfig {
         uint8 seat = _requireTurn(id, t);
         if (t.pendingDraw > 0 && !card.isDrawTwo()) revert MustStackOrTake();
         Seat storage s = _takeFromHand(id, t, seat, slot, seenHandle);
+        if (s.handSize == 1 && _doubtOpen(t)) revert DoubtPending();
         if (!card.isValid()) revert BadCard();
         if (!card.matches(t.topCard, t.color)) revert IllegalCard();
         if (card.isWild() && chosenColor >= CardLib.WILD_COLOR) revert BadColor();
@@ -349,11 +326,11 @@ contract KryphoTable is IKryphoTable, ZamaEthereumConfig {
         if (t.drawFourBy != NONE || t.pendingDraw > 0) revert DrawPending();
         uint8 seat = _requireTurn(id, t);
         Seat storage s = _takeFromHand(id, t, seat, slot, seenHandle);
-        if (s.veilUsed || s.handSize < 2) revert VeilUsed();
+        if (s.veilUsed || s.handSize < 2 || _doubtOpen(t)) revert VeilUsed();
         if (!claim.isNumber() || claim.colorOf() >= CardLib.WILD_COLOR) revert BadCard();
         if (!claim.matches(t.topCard, t.color)) revert IllegalCard();
         ebool truth = FHE.eq(_hands[id][seat][slot], claim);
-        _hadColor[id] = truth;
+        _veilTruth[id] = truth;
         FHE.allowThis(truth);
         s.veilUsed = true;
         _layDown(t, s, slot, _discard[id], claim);
@@ -365,6 +342,7 @@ contract KryphoTable is IKryphoTable, ZamaEthereumConfig {
         t.veilJudge = t.turn;
     }
 
+    /** A doubt no longer stops the table: the veil's own bit is opened by the KMS while the judge plays on, and resolveChallenge hands out the penalty when the proof arrives. Nobody may go out or veil again until then, so the penalty always lands before the hands are scored. */
     function doubtVeil(uint256 id) public {
         Table storage t = _requireStage(id, Stage.Playing);
         uint8 seat = t.turn;
@@ -372,8 +350,8 @@ contract KryphoTable is IKryphoTable, ZamaEthereumConfig {
         if (t.veilJudge != seat || t.drawnSlot != NONE) revert NoVeil();
         t.monoWindow = NONE;
         _seats[id][seat].timeouts = 0;
-        t.stage = Stage.AwaitChallenge;
-        FHE.makePubliclyDecryptable(_hadColor[id]);
+        t.veilJudge = seat | DOUBTED;
+        FHE.makePubliclyDecryptable(_veilTruth[id]);
         emit VeilDoubted(id, seat);
     }
 
@@ -475,20 +453,21 @@ contract KryphoTable is IKryphoTable, ZamaEthereumConfig {
         emit DrawFourChallenged(id, seat);
     }
 
+    /** One entry for both open bits, a doubted veil first. Its penalty lands whenever the proof comes in, during play or while a draw four challenge waits; a doubt is never open once the round ends, because going out is blocked until it is settled and every reset closes the veil. */
     function resolveChallenge(uint256 id, bytes calldata cleartexts, bytes calldata proof) external {
-        Table storage t = _requireStage(id, Stage.AwaitChallenge);
-        bytes32[] memory handles = new bytes32[](1);
-        handles[0] = FHE.toBytes32(_hadColor[id]);
-        KryphoHand.verify(handles, cleartexts, proof);
-        bool hadColor = uint256(bytes32(cleartexts[0:32])) != 0;
-        t.stage = Stage.Playing;
-        if (t.veilBy != NONE) {
-            emit VeilResolved(id, hadColor);
-            _drawInto(id, t, hadColor ? t.veilJudge : t.veilBy, hadColor ? VEIL_TRUE_DRAW : VEIL_LIE_DRAW);
+        Table storage t = _tables[id];
+        bool veiled = _doubtOpen(t);
+        if (!veiled) _requireStage(id, Stage.AwaitChallenge);
+        bool hadColor = KryphoHand.verifyOne(FHE.toBytes32(_pendingBit(id, t)), cleartexts, proof) != 0;
+        if (veiled) {
+            uint8 loser = hadColor ? t.veilJudge & ~DOUBTED : t.veilBy;
             _closeVeil(t);
+            emit VeilResolved(id, hadColor);
+            _drawInto(id, t, loser, hadColor ? VEIL_TRUE_DRAW : VEIL_LIE_DRAW);
             _refreshDeadline(t);
             return;
         }
+        t.stage = Stage.Playing;
         emit ChallengeResolved(id, hadColor);
         if (hadColor) {
             _drawInto(id, t, t.drawFourBy, 4);
@@ -573,7 +552,12 @@ contract KryphoTable is IKryphoTable, ZamaEthereumConfig {
     }
 
     function hadColorOf(uint256 id) external view returns (ebool) {
-        return _hadColor[id];
+        return _pendingBit(id, _tables[id]);
+    }
+
+    /** The bit resolveChallenge checks next: an open veil doubt before a draw four challenge. */
+    function _pendingBit(uint256 id, Table storage t) internal view returns (ebool) {
+        return _doubtOpen(t) ? _veilTruth[id] : _hadColor[id];
     }
 
     function discardOf(uint256 id) external view returns (uint8[] memory cards) {
@@ -629,6 +613,11 @@ contract KryphoTable is IKryphoTable, ZamaEthereumConfig {
         if (!_isActor(id, t.turn)) revert NotYourTurn();
         if (t.veilJudge == t.turn) _closeVeil(t);
         return t.turn;
+    }
+
+    /** A doubted veil keeps its two seats and marks the judge with the high bit, so the open doubt rides in the table record every client already reads, and a judge marked this way never equals a seat on turn, which keeps the veil from being closed by play. */
+    function _doubtOpen(Table storage t) internal view returns (bool) {
+        return t.veilJudge != NONE && t.veilJudge & DOUBTED != 0;
     }
 
     function _closeVeil(Table storage t) internal {

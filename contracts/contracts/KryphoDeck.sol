@@ -2,6 +2,7 @@
 pragma solidity ^0.8.27;
 
 import {FHE, euint8, euint32} from "@fhevm/solidity/lib/FHE.sol";
+import {IKryphoTable} from "./interfaces/IKryphoTable.sol";
 
 library KryphoDeck {
     uint8 internal constant DECK_SIZE = 138;
@@ -9,6 +10,8 @@ library KryphoDeck {
     uint8 internal constant WILDS_AT = 130;
     uint8 internal constant FILL_CHUNK = 12;
     uint8 internal constant FILL_STEPS = (DECK_SIZE + FILL_CHUNK - 1) / FILL_CHUNK;
+    uint8 internal constant REFILL_AT = 48;
+    uint8 internal constant REFILL_MAX = 60;
 
     function cardAt(uint8 index) internal pure returns (uint8) {
         if (index >= WILDS_AT) {
@@ -49,5 +52,24 @@ library KryphoDeck {
             decks[id][at + i] = card;
             FHE.allowThis(card);
         }
+    }
+
+    /** A running deck is topped up with freshly drawn cards, never with the discard pile: cards are independent draws, so nothing has to be shuffled and no played card comes back in a known order. */
+    function refill(mapping(uint256 => euint8[138]) storage decks, IKryphoTable.Table storage t, uint256 id) public {
+        uint8 size = t.refillSize;
+        if (size == 0) {
+            bool front = t.deckPtr >= DECK_SIZE - t.deckEnd;
+            uint8 room = front ? t.deckPtr : DECK_SIZE - t.deckEnd;
+            size = room < REFILL_MAX ? room : REFILL_MAX;
+            if (size == 0 || t.deckEnd - t.deckPtr > REFILL_AT) revert IKryphoTable.ShuffleNotDone();
+            t.refillSize = size;
+            t.refillAt = front ? 0 : t.deckEnd;
+        }
+        uint8 step = t.refillStep;
+        uint8 fills = fillSteps(size);
+        if (step >= fills) revert IKryphoTable.ShuffleNotDone();
+        fillStep(decks, id, step, t.refillAt, size);
+        t.refillStep = step + 1;
+        emit IKryphoTable.ShuffleProgress(id, step + 1, fills);
     }
 }
