@@ -1,14 +1,50 @@
-# Kryphochroma
+<p align="center">
+  <a href="https://kryphochroma.unitynodes.com"><img src="apps/web/public/og.png" alt="Kryphochroma: the card game nobody can peek at" width="100%"></a>
+</p>
+
+<h1 align="center">Kryphochroma</h1>
+
+<p align="center">
+  <b>The card game nobody can peek at.</b><br>
+  A shedding card game in the Crazy Eights family where hands, the deck and every bluff stay encrypted on Ethereum Sepolia with Zama FHEVM.
+</p>
+
+<p align="center">
+  <a href="https://kryphochroma.unitynodes.com"><img src="https://img.shields.io/badge/play-live%20on%20Sepolia-e2a93b?style=flat-square" alt="Play live on Sepolia"></a>
+  <a href="https://sepolia.etherscan.io/address/0x26512e9708d904a9B96396C488040153e9d4d773"><img src="https://img.shields.io/badge/contract-KryphoTable-627eea?style=flat-square" alt="KryphoTable on Sepolia Etherscan"></a>
+  <img src="https://img.shields.io/badge/Zama-FHEVM-ffd208?style=flat-square" alt="Built with Zama FHEVM">
+  <img src="https://img.shields.io/badge/license-MIT-1f9e8a?style=flat-square" alt="MIT license">
+</p>
+
+<p align="center">
+  <a href="https://kryphochroma.unitynodes.com"><b>Play now</b></a> ·
+  <a href="https://youtu.be/VIDEO_ID"><b>Watch the demo</b></a> ·
+  <a href="https://kryphochroma.unitynodes.com/docs"><b>Docs</b></a> ·
+  <a href="https://kryphochroma.unitynodes.com/secret"><b>How it stays secret</b></a>
+</p>
+
+---
 
 A five colour shedding card game where hiding is the game. Bluff with a veiled card, spy on one sealed card with a spyglass, ping a rival hand with a sonar, chase a secret colour that doubles your round. Hands, the deck, veiled cards and secret colours live on Sepolia as Zama FHE ciphertexts: the contract draws, deals and checks every move without ever seeing a card.
 
-![A four seat table: sealed rival hands, the discard pile, your decrypted hand and the veil dialog](assets/table.gif)
+<p align="center">
+  <img src="assets/table-3d.webp" alt="The 3D table: you play Violet 7, Orin veils a card as Sun 6, you doubt it and the bluff draws four, then a spyglass shows one of Mira's cards" width="100%">
+  <br><sub>The 3D table, recorded on the practice table with local bots. On Sepolia the same moves are signed in the tab and settled on chain.</sub>
+</p>
 
-**[Play now](https://kryphochroma.unitynodes.com)** · **[Watch the 3 minute video](https://youtu.be/VIDEO_ID)** · **[Docs](https://kryphochroma.unitynodes.com/docs)** · **[How it stays secret](https://kryphochroma.unitynodes.com/secret)**
+## Why it needs FHE
+
+- **Your cards are yours alone.** Not the other players, not the relayer, not the contract and not the server that runs the bots can read them. Each hand is a list of `euint8` handles that only its own session key can decrypt.
+- **Bluffing is provable.** A veiled card is checked against its claim under encryption. A doubt opens exactly one bit with a Zama KMS proof, never the card.
+- **The deck can not be stacked.** Every card is its own `FHE.randEuint16` draw inside the contract; no server ever knows the order.
+- **Cheating does not pay.** Every move folds into an encrypted honesty bit per player, opened once at the end of the round. A liar can not win.
+
+## Play
 
 - **Quick game**: no wallet and no test ETH needed. Your tab makes a session key and signs its seat, a relayer puts it on chain, and you sit down with three bots at a table whose cards were already drawn.
-- **With friends**: open a table for 2 to 4 players and send the invite link. Play opens by itself when the last seat is taken, or the host starts earlier and bots take the empty seats. Open tables are listed so anyone can join. A wallet is optional; it signs one `join` for the session key.
+- **With friends**: open a table for 2 to 4 players and send the invite link or the table code. Play opens by itself when the last seat is taken, or the host starts earlier and bots take the empty seats. Open tables are listed so anyone can join. A wallet is optional; it signs one `join` for the session key.
 - **Practice offline**: the same rules engine against local bots, no chain.
+- **2D or 3D**: pick the flat table or the 3D one when a game opens, switch any time.
 - **Radio**: eleven free internet stations at the table, from old time jazz to lo-fi and synthwave, streamed straight from their operators. Nothing plays until you press play.
 
 Built for the Zama Developer Program, Mainnet Season 5, Confidential Gaming.
@@ -87,6 +123,9 @@ flowchart LR
 
 A full round on this deployment, table 9: four seats, four veils, one of them doubted and settled while 30 more moves were played, a spyglass peek, three sonar pings, Mono, a seat taken over after three timeouts and the reveal.
 
+<details>
+<summary><b>Every step of that round on Etherscan</b></summary>
+
 | Step | Transaction |
 |---|---|
 | Table created | [`0xafc0b9…897e`](https://sepolia.etherscan.io/tx/0xafc0b92441117d73b572c41b7ceb29af6be6b47fc32bd131ef33d52ccb83897e) |
@@ -105,7 +144,12 @@ The deck refill, which a short round does not reach, is in table 5 on the previo
 
 `pnpm --filter @kryphochroma/bots exec tsx scripts/round-trail.ts <table id>` prints the same trail for any table.
 
-## Cost on Sepolia
+</details>
+
+## Cost and speed on Sepolia
+
+<details>
+<summary><b>HCU and gas per action</b></summary>
 
 HCU limits on Sepolia: 20M per transaction, 5M depth.
 
@@ -121,6 +165,11 @@ HCU limits on Sepolia: 20M per transaction, 5M depth.
 | `makePubliclyDecryptable` / `checkSignatures` | 0 | 0.16M / 0.38M |
 | Relayed batch of 1 / 3 / 4 moves | | 0.06M / 0.82M / 0.93M |
 
+</details>
+
+<details>
+<summary><b>Latency, from click to proof</b></summary>
+
 | Latency | Time |
 |---|---:|
 | A signed move reaches every client | under 1 s |
@@ -132,6 +181,8 @@ HCU limits on Sepolia: 20M per transaction, 5M depth.
 | Round over to scores on screen at a table with bots: the table server sends the bot hands only after the chain has reached the reveal, then the browser scores them with the same rules | 16 s to 32 s, one or two blocks |
 | Scores on screen to scores proven on chain: Zama KMS decrypts every hand in public and `finishReveal` checks its signatures | 25 s to 45 s more; the table shows Verified on Sepolia when it lands |
 | Background draw of a fresh table | ~30 s |
+
+</details>
 
 ## What still shows, on purpose
 
