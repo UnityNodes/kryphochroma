@@ -18,7 +18,7 @@
 
 <p align="center">
   <a href="https://kryphochroma.unitynodes.com"><b>Play now</b></a> ·
-  <a href="https://youtu.be/VIDEO_ID"><b>Watch the demo</b></a> ·
+  <a href="https://youtu.be/eH9dr0byOyA"><b>Watch the demo</b></a> ·
   <a href="https://kryphochroma.unitynodes.com/docs"><b>Docs</b></a> ·
   <a href="https://kryphochroma.unitynodes.com/secret"><b>How it stays secret</b></a>
 </p>
